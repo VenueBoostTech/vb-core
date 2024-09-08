@@ -1,0 +1,17 @@
+image: php:8.2
+
+pipelines:
+  branches:
+    main:
+      - step:
+          name: Build and Deploy
+          runs-on:
+          - self.hosted
+          - linux.shell
+          script:
+            - cp -r * /var/www/html/snapfood-boost-core/    
+            - composer update --working-dir=/var/www/html/snapfood-boost-core/
+            - composer install --optimize-autoloader --no-dev --working-dir=/var/www/html/snapfood-boost-core/
+            - composer dump-autoload --working-dir=/var/www/html/snapfood-boost-core/
+            - php /var/www/html/snapfood-boost-core/ artisan optimize
+            - php /var/www/html/snapfood-boost-core/ artisan route:cache
