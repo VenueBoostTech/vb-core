@@ -471,6 +471,259 @@ class CompanySetupController extends Controller
         return response()->json($employees);
     }
 
+    public function listProjectManagers(): JsonResponse
+    {
+        $venue = $this->authorizeOwner();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $projectManagers = Employee::where('restaurant_id', $venue->id)
+            ->whereHas('role', function($query) {
+                $query->where('name', 'Project Manager');
+            })
+            ->with(['role', 'department'])
+            ->select(
+                'id',
+                'name',
+                'email',
+                'hire_date',
+                'status',
+                'profile_picture',
+                'company_phone',
+                'company_email',
+                'role_id',
+                'department_id'
+            )
+            ->get()
+            ->map(function ($employee) {
+                $activeProjects = $employee->assignedProjects()
+                    ->whereIn('status', [
+                        AppProject::STATUS_IN_PROGRESS,
+                        AppProject::STATUS_PLANNING
+                    ])
+                    ->count();
+
+                $totalTasks = $employee->assignedTasks()->count();
+                $completedTasks = $employee->assignedTasks()
+                    ->where('tasks.status', Task::STATUS_DONE)
+                    ->count();
+
+                $tasksCompletedOnTime = $employee->assignedTasks()
+                    ->where('tasks.status', Task::STATUS_DONE)
+                    ->where(function ($query) {
+                        $query->whereNull('tasks.due_date')
+                            ->orWhereRaw('tasks.updated_at <= tasks.due_date');
+                    })
+                    ->count();
+
+                $performanceScore = $totalTasks > 0
+                    ? round(($completedTasks / $totalTasks * 0.5 +
+                            $tasksCompletedOnTime / $totalTasks * 0.5) * 100)
+                    : 0;
+
+                $profilePicture = $employee->profile_picture
+                    ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5))
+                    : $this->getInitials($employee->name);
+
+                return [
+                    'id' => $employee->id,
+                    'name' => $employee->name,
+                    'email' => $employee->email,
+                    'status' => $employee->status,
+                    'start_date' => $employee->hire_date,
+                    'projects_assigned' => $activeProjects,
+                    'performance' => $performanceScore,
+                    'profile_picture' => $profilePicture,
+                    'company_phone' => $employee->company_phone,
+                    'company_email' => $employee->company_email,
+                    'role' => $employee->role ? [
+                        'id' => $employee->role->id,
+                        'name' => $employee->role->name
+                    ] : null,
+                    'department' => $employee->department ? [
+                        'id' => $employee->department->id,
+                        'name' => $employee->department->name
+                    ] : null,
+                    'stats' => [
+                        'total_tasks' => $totalTasks,
+                        'completed_tasks' => $completedTasks,
+                        'tasks_on_time' => $tasksCompletedOnTime,
+                        'active_projects' => $activeProjects
+                    ]
+                ];
+            });
+
+        return response()->json($projectManagers);
+    }
+
+    public function listTeamLeaders(): JsonResponse
+    {
+        $venue = $this->authorizeOwner();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $teamLeaders = Employee::where('restaurant_id', $venue->id)
+            ->whereHas('role', function($query) {
+                $query->where('name', 'Team Leader');
+            })
+            ->with(['role', 'department'])
+            ->select(
+                'id',
+                'name',
+                'email',
+                'hire_date',
+                'status',
+                'profile_picture',
+                'company_phone',
+                'company_email',
+                'role_id',
+                'department_id'
+            )
+            ->get()
+            ->map(function ($employee) {
+                $activeProjects = $employee->assignedProjects()
+                    ->whereIn('status', [
+                        AppProject::STATUS_IN_PROGRESS,
+                        AppProject::STATUS_PLANNING
+                    ])
+                    ->count();
+
+                $totalTasks = $employee->assignedTasks()->count();
+                $completedTasks = $employee->assignedTasks()
+                    ->where('tasks.status', Task::STATUS_DONE)
+                    ->count();
+
+                $tasksCompletedOnTime = $employee->assignedTasks()
+                    ->where('tasks.status', Task::STATUS_DONE)
+                    ->where(function ($query) {
+                        $query->whereNull('tasks.due_date')
+                            ->orWhereRaw('tasks.updated_at <= tasks.due_date');
+                    })
+                    ->count();
+
+                $performanceScore = $totalTasks > 0
+                    ? round(($completedTasks / $totalTasks * 0.5 +
+                            $tasksCompletedOnTime / $totalTasks * 0.5) * 100)
+                    : 0;
+
+                $profilePicture = $employee->profile_picture
+                    ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5))
+                    : $this->getInitials($employee->name);
+
+                return [
+                    'id' => $employee->id,
+                    'name' => $employee->name,
+                    'email' => $employee->email,
+                    'status' => $employee->status,
+                    'start_date' => $employee->hire_date,
+                    'projects_assigned' => $activeProjects,
+                    'performance' => $performanceScore,
+                    'profile_picture' => $profilePicture,
+                    'company_phone' => $employee->company_phone,
+                    'company_email' => $employee->company_email,
+                    'role' => $employee->role ? [
+                        'id' => $employee->role->id,
+                        'name' => $employee->role->name
+                    ] : null,
+                    'department' => $employee->department ? [
+                        'id' => $employee->department->id,
+                        'name' => $employee->department->name
+                    ] : null,
+                    'stats' => [
+                        'total_tasks' => $totalTasks,
+                        'completed_tasks' => $completedTasks,
+                        'tasks_on_time' => $tasksCompletedOnTime,
+                        'active_projects' => $activeProjects
+                    ]
+                ];
+            });
+
+        return response()->json($teamLeaders);
+    }
+
+    public function listOperationsManagers(): JsonResponse
+    {
+        $venue = $this->authorizeOwner();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $operationsManagers = Employee::where('restaurant_id', $venue->id)
+            ->whereHas('role', function($query) {
+                $query->whereIn('name', [
+                    'Operations Manager'
+                ]);
+            })
+            ->with(['role', 'department'])
+            ->select(
+                'id',
+                'name',
+                'email',
+                'hire_date',
+                'status',
+                'profile_picture',
+                'company_phone',
+                'company_email',
+                'role_id',
+                'department_id'
+            )
+            ->get()
+            ->map(function ($employee) {
+                $activeProjects = $employee->assignedProjects()
+                    ->whereIn('status', [
+                        AppProject::STATUS_IN_PROGRESS,
+                        AppProject::STATUS_PLANNING
+                    ])
+                    ->count();
+
+                $totalTasks = $employee->assignedTasks()->count();
+                $completedTasks = $employee->assignedTasks()
+                    ->where('tasks.status', Task::STATUS_DONE)
+                    ->count();
+
+                $tasksCompletedOnTime = $employee->assignedTasks()
+                    ->where('tasks.status', Task::STATUS_DONE)
+                    ->where(function ($query) {
+                        $query->whereNull('tasks.due_date')
+                            ->orWhereRaw('tasks.updated_at <= tasks.due_date');
+                    })
+                    ->count();
+
+                $performanceScore = $totalTasks > 0
+                    ? round(($completedTasks / $totalTasks * 0.5 +
+                            $tasksCompletedOnTime / $totalTasks * 0.5) * 100)
+                    : 0;
+
+                $profilePicture = $employee->profile_picture
+                    ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5))
+                    : $this->getInitials($employee->name);
+
+                return [
+                    'id' => $employee->id,
+                    'name' => $employee->name,
+                    'email' => $employee->email,
+                    'status' => $employee->status,
+                    'start_date' => $employee->hire_date,
+                    'projects_assigned' => $activeProjects,
+                    'performance' => $performanceScore,
+                    'profile_picture' => $profilePicture,
+                    'company_phone' => $employee->company_phone,
+                    'company_email' => $employee->company_email,
+                    'role' => $employee->role ? [
+                        'id' => $employee->role->id,
+                        'name' => $employee->role->name
+                    ] : null,
+                    'department' => $employee->department ? [
+                        'id' => $employee->department->id,
+                        'name' => $employee->department->name
+                    ] : null,
+                    'stats' => [
+                        'total_tasks' => $totalTasks,
+                        'completed_tasks' => $completedTasks,
+                        'tasks_on_time' => $tasksCompletedOnTime,
+                        'active_projects' => $activeProjects
+                    ]
+                ];
+            });
+
+        return response()->json($operationsManagers);
+    }
     public function getEmployee($id): JsonResponse
     {
         $venue = $this->authorizeOwner();
@@ -530,31 +783,56 @@ class CompanySetupController extends Controller
         $venue = $this->authorizeOwner();
         if ($venue instanceof JsonResponse) return $venue;
 
-        $employee = Employee::where('restaurant_id', $venue->id)->findOrFail($id);
+        $employee = Employee::with(['address', 'role', 'department'])
+            ->where('restaurant_id', $venue->id)
+            ->findOrFail($id);
 
-        // Handle profile picture: check if it exists or return initials if it doesn't
-        $profilePicture = null;
-        if ($employee->profile_picture) {
-            // Generate a temporary URL for the profile picture
-            $profilePicture = Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5));
+        $profilePicture = $employee->profile_picture
+            ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5))
+            : $this->getInitials($employee->name);
+
+        $roleData = null;
+        if ($employee->custom_role) {
+            $customRole = CustomRole::find($employee->role_id);
+            $roleData = [
+                'id' => $customRole?->id,
+                'name' => $customRole?->name,
+                'role_type' => 'custom'
+            ];
         } else {
-            // If no profile picture, return initials
-            $profilePicture = $this->getInitials($employee->name);
+            $roleData = [
+                'id' => $employee->role?->id,
+                'name' => $employee->role?->name,
+                'role_type' => 'system'
+            ];
         }
 
         return response()->json([
             'id' => $employee->id,
             'name' => $employee->name,
-            'profile_picture' => $profilePicture, // Include profile picture or initials
-            'role' => $employee->role->name,
-            'department' => $employee->department?->name,
+            'email' => $employee->email,
+            'profile_picture' => $profilePicture,
             'hire_date' => $employee->hire_date,
+            'personal_email' => $employee->personal_email,
+            'personal_phone' => $employee->personal_phone,
             'company_email' => $employee->company_email,
             'company_phone' => $employee->company_phone,
             'status' => $employee->status,
-            'projects_assigned' => 0, // TODO: Implement project assignment tracking
-            'performance' => 0, // TODO: Implement performance tracking
-            'activities' => [], // TODO: Implement activities
+            'role' => $roleData,
+            'department_id' => $employee->department_id,
+            'department' => [
+                'id' => $employee->department?->id,
+                'name' => $employee->department?->name
+            ],
+            'manager_id' => $employee->manager_id,
+            'is_custom' => $employee->custom_role,
+            'address' => [
+                'address_line1' => $employee->address?->address_line1,
+                'city_id' => $employee->address?->city_id,
+                'state_id' => $employee->address?->state_id,
+                'country_id' => $employee->address?->country_id,
+                'postal_code' => $employee->address?->postcode
+            ]
         ]);
     }
 
@@ -585,7 +863,7 @@ class CompanySetupController extends Controller
             'manager_id' => 'nullable|integer|exists:employees,id', // Ensure the manager_id is an employee
             'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'create_user' => 'required|boolean', // New property to indicate if a user should be created
-            'employee_password' => 'required_if:create_user,true|string|min:6', // Password is required if create_user is true
+            // 'employee_password' => 'required_if:create_user,1|string|min:6', // Password is required if create_user is true
         ]);
 
         if ($validator->fails()) {
@@ -710,8 +988,9 @@ class CompanySetupController extends Controller
             // Create the employee
             $employee = Employee::create($employeeData);
 
+            $validatedData['create_user'] = (int) $validatedData['create_user'];
             // Check if user creation is required
-            if ($validatedData['create_user']) {
+            if ($validatedData['create_user'] === 1) {
                 $userCreated = User::create([
                     'name' => $employee->name,
                     'email' => $employee->email,
@@ -765,7 +1044,9 @@ class CompanySetupController extends Controller
         if ($venue instanceof JsonResponse) return $venue;
 
         try {
-            $employee = Employee::where('restaurant_id', $venue->id)->findOrFail($id);
+            $employee = Employee::with('address')
+                ->where('restaurant_id', $venue->id)
+                ->findOrFail($id);
         } catch (ModelNotFoundException $e) {
             return response()->json(['error' => 'Employee not found'], 404);
         }
@@ -778,7 +1059,7 @@ class CompanySetupController extends Controller
                 'email',
                 Rule::unique('employees', 'email')->ignore($employee->id),
             ],
-            'role_id' => 'sometimes|integer',
+            'role_id' => 'sometimes|integer|exists:roles,id',
             'is_custom' => 'sometimes|boolean',
             'department_id' => 'sometimes|exists:departments,id',
             'hire_date' => 'sometimes|date',
@@ -786,14 +1067,14 @@ class CompanySetupController extends Controller
             'personal_phone' => 'sometimes|string|max:20',
             'company_email' => 'sometimes|email',
             'company_phone' => 'sometimes|string|max:20',
-            'address' => 'sometimes|array',
-            'address.address_line1' => 'sometimes|string|max:255',
-            'address.city_id' => 'sometimes|exists:cities,id',
-            'address.state_id' => 'sometimes|exists:states,id',
-            'address.country_id' => 'sometimes|exists:countries,id',
-            'address.postal_code' => 'sometimes|string|max:20',
-            'manager_id' => 'nullable|exists:employees,id',
             'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'manager_id' => 'nullable|exists:employees,id',
+            'address' => 'sometimes|array',
+            'address.address_line1' => 'required_with:address|string|max:255',
+            'address.city_id' => 'required_with:address|exists:cities,id',
+            'address.state_id' => 'required_with:address|exists:states,id',
+            'address.country_id' => 'required_with:address|exists:countries,id',
+            'address.postal_code' => 'required_with:address|string|max:20',
         ]);
 
         if ($validator->fails()) {
@@ -805,57 +1086,68 @@ class CompanySetupController extends Controller
 
             $validatedData = $validator->validated();
 
-            // Check if the department belongs to the venue
+            // Handle manager relationship
+            if (isset($validatedData['manager_id'])) {
+                $manager = Employee::where('id', $validatedData['manager_id'])
+                    ->where('restaurant_id', $venue->id)
+                    ->first();
+
+                if (!$manager) {
+                    return response()->json(['error' => 'Invalid manager selected'], 422);
+                }
+            }
+
+            // Handle department verification
             if (isset($validatedData['department_id'])) {
                 $department = Department::where('id', $validatedData['department_id'])
                     ->where('venue_id', $venue->id)
                     ->first();
 
                 if (!$department) {
-                    return response()->json(['error' => 'The department does not belong to the venue.'], 422);
+                    return response()->json(['error' => 'Invalid department selected'], 422);
                 }
-            }
-
-            // Handle role verification (custom or regular role)
-            if (isset($validatedData['is_custom']) && isset($validatedData['role_id'])) {
-                if ($validatedData['is_custom']) {
-                    // Custom role logic...
-                } else {
-                    // Regular role logic...
-                }
-            }
-
-            // Verify manager_id belongs to the venue (if provided)
-            if (isset($validatedData['manager_id'])) {
-                // Manager verification logic...
-            }
-
-            // Update the address
-            if (isset($validatedData['address'])) {
-                // Address update logic...
             }
 
             // Handle profile picture upload
             if ($request->hasFile('profile_picture')) {
+                // Delete old picture if exists
                 if ($employee->profile_picture) {
                     Storage::disk('s3')->delete($employee->profile_picture);
                 }
                 $path = Storage::disk('s3')->putFile('profile_pictures', $request->file('profile_picture'));
                 $validatedData['profile_picture'] = $path;
-            } else {
-                // Exclude profile_picture from the update if it's not part of the request
-                unset($validatedData['profile_picture']);
             }
 
-            // Update the employee
+            // Handle address update
+            if (isset($validatedData['address'])) {
+                if ($employee->address) {
+                    // Update existing address
+                    $employee->address->update($validatedData['address']);
+                } else {
+                    // Create new address
+                    $address = new Address($validatedData['address']);
+                    $employee->address()->save($address);
+                }
+                // Remove address from validatedData since we've handled it separately
+                unset($validatedData['address']);
+            }
+
+            // Update employee
             $employee->update($validatedData);
 
             DB::commit();
 
-            return response()->json($employee->load('address', 'role', 'department', 'manager'), 200);
+            // Reload employee with relationships
+            $employee->load(['address', 'role', 'department', 'manager']);
+
+            return response()->json($employee, 200);
+
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => 'Failed to update employee: ' . $e->getMessage()], 500);
+            return response()->json([
+                'error' => 'Failed to update employee',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 

@@ -54,6 +54,12 @@ class AuthenticationController extends Controller
         // Generate JWT token for the user
         $token = JWTAuth::fromUser($user);
 
+        // Generate refresh token with longer expiry
+        $refreshToken = JWTAuth::customClaims([
+            'refresh' => true,
+            'exp' => now()->addDays(30)->timestamp // 30 days expiry for refresh token
+        ])->fromUser($user);
+
         $employee = Employee::where('user_id', $user->id)->first();
 
         // Return user data, venue data, and the token
@@ -72,7 +78,8 @@ class AuthenticationController extends Controller
                 // Add other venue fields as needed
             ],
             'supabase_id' => $connection->supabase_id,
-            'token' => $token
+            'token' => $token,
+            'refresh_token' => $refreshToken
         ]);
     }
 }

@@ -1079,6 +1079,9 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
                 // Employee Management
                 Route::get('employees', [CompanySetupController::class, 'listEmployees']);
+                Route::get('employees/managers', [CompanySetupController::class, 'listProjectManagers']);
+                Route::get('employees/team-leaders', [CompanySetupController::class, 'listTeamLeaders']);
+                Route::get('employees/operations-managers', [CompanySetupController::class, 'listOperationsManagers']);
                 // todo: make this better -- activities
                 Route::get('employees/{id}', [CompanySetupController::class, 'getEmployee']);
                 // todo: add what requires the admin side on full
