@@ -863,7 +863,6 @@ class CompanySetupController extends Controller
             'manager_id' => 'nullable|integer|exists:employees,id', // Ensure the manager_id is an employee
             'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'create_user' => 'required|boolean', // New property to indicate if a user should be created
-            // 'employee_password' => 'required_if:create_user,1|string|min:6', // Password is required if create_user is true
         ]);
 
         if ($validator->fails()) {
