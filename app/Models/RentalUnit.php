@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class RentalUnit extends Model
 {
@@ -30,7 +31,8 @@ class RentalUnit extends Model
         'unit_floor',
         'year_built',
         'accommodation_venue_type',
-        'vr_link'
+        'vr_link',
+        'ics_token',
     ];
 
     public function venue(): \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -132,4 +134,46 @@ class RentalUnit extends Model
     {
         return $this->hasMany(Booking::class);
     }
+
+    public function calendarConnections(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CalendarConnection::class);
+    }
+
+    public function generateIcsToken()
+    {
+        $this->ics_token = Str::random(32);
+        $this->save();
+    }
+
+    public function getIcsUrl()
+    {
+        if (!$this->ics_token) {
+            $this->generateIcsToken();
+        }
+        $obfuscatedId = $this->obfuscateId();
+        return route('rental-unit.ics', [
+            'obfuscatedId' => $obfuscatedId,
+            'token' => $this->ics_token
+        ]);
+    }
+
+    private function obfuscateId()
+    {
+        $timestamp = now()->timestamp;
+        return base64_encode($this->id . '|' . $timestamp);
+    }
+
+    public static function deobfuscateId($obfuscatedId)
+    {
+        $decodedString = base64_decode($obfuscatedId);
+        list($id, $timestamp) = explode('|', $decodedString);
+        return $id;
+    }
+
+    public function connectionRefreshLogs(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ConnectionRefreshLog::class);
+    }
+
 }

@@ -4,6 +4,9 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\App;
+use Ramsey\Uuid\Type\Time;
 use Stripe\Plan;
 
 class Restaurant extends Model
@@ -22,7 +25,8 @@ class Restaurant extends Model
         'physical_stores',
         'reservation_start_time',
         'reservation_end_time',
-        'timezone'
+        'timezone',
+        'vt_id'
     ];
 
     public function blogs()
@@ -582,4 +586,199 @@ class Restaurant extends Model
         return $this->hasMany(DailySalesLcReport::class, 'venue_id');
     }
 
+    public function calendarConnections(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CalendarConnection::class);
+    }
+
+    public function bbsliders(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Bbslider::class, 'venue_id');
+    }
+
+    public function menuChildrenTypes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BbMenuChildrenType::class, 'venue_id');
+    }
+
+    public function menuTypes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BbMenuType::class, 'venue_id');
+    }
+
+    public function mainMenus(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(BbMainMenu::class, 'venue_id');
+    }
+
+    public function productStocks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ProductStock::class, 'venue_id');
+    }
+
+    public function productCrossSells(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ProductCrossSell::class, 'venue_id');
+    }
+
+    public function productVariantAttributes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(VbStoreProductVariantAttribute::class, 'venue_id');
+    }
+
+
+    public function carts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Cart::class, 'venue_id');
+    }
+
+    public function vtSubscription()
+    {
+        return $this->hasOne(VtSubscription::class);
+    }
+
+    public function appSubscriptions()
+    {
+        return $this->hasMany(AppSubscription::class, 'venue_id');
+    }
+
+    public function appConfigurations()
+    {
+        return $this->hasMany(AppSubscription::class, 'venue_id');
+    }
+
+    public function vbApps()
+    {
+        return $this->belongsToMany(VbApp::class, 'app_subscriptions', 'venue_id', 'vb_app_id')
+            ->withPivot('status', 'start_date', 'end_date', 'price_per_user', 'initial_fee_paid');
+    }
+
+    public function feedback(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Feedback::class, 'venue_id');
+    }
+
+    public function loginActivities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LoginActivity::class, 'venue_id');
+    }
+
+    protected $casts = [
+        'geofence_coordinates' => 'array',
+    ];
+
+    public function shifts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Shift::class, 'venue_id');
+    }
+
+    public function attendanceRecords(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class, 'venue_id');
+    }
+
+    public function notifications(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Notification::class, 'venue_id');
+    }
+
+    public function projects(): HasMany
+    {
+        return $this->hasMany(AppProject::class, 'venue_id');
+    }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class, 'venue_id');
+    }
+
+    public function timeEntries(): HasMany
+    {
+        return $this->hasMany(TimeEntry::class, 'venue_id');
+    }
+
+    public function departments(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Department::class, 'venue_id');
+    }
+
+    // BelongsToMany relationship for roles
+    public function roles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Role::class, 'restaurant_role', 'restaurant_id', 'role_id');
+    }
+
+    // Define the relationship for custom roles
+    public function customRoles(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(CustomRole::class, 'restaurant_role', 'restaurant_id', 'role_id');
+    }
+
+    // Define the relationship to track which venue created a specific role (inverse of CustomRole's relationship)
+    public function createdRoles(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(CustomRole::class, 'created_by_venue_id');
+    }
+
+    public function teams(): HasMany
+    {
+        return $this->hasMany(Team::class, 'venue_id');
+    }
+
+    public function clients(): HasMany
+    {
+        return $this->hasMany(AppClient::class, 'venue_id');
+    }
+
+    // Relation to AppGallery
+    public function appGalleries(): HasMany
+    {
+        return $this->hasMany(AppGallery::class, 'venue_id'); // If venue_id is in AppGallery
+    }
+
+
+    public function suppliesRequests(): HasMany
+    {
+        return $this->hasMany(SuppliesRequest::class, 'venue_id');
+    }
+
+    public function projectIssues(): HasMany
+    {
+        return $this->hasMany(ProjectIssue::class, 'venue_id');
+    }
+
+    public function qualityInspections(): HasMany
+    {
+        return $this->hasMany(QualityInspection::class, 'venue_id');
+    }
+
+    public function workOrders(): HasMany
+    {
+        return $this->hasMany(WorkOrder::class, 'venue_id');
+    }
+
+    public function timesheets(): HasMany
+    {
+        return $this->hasMany(AppProjectTimesheet::class, 'venue_id');
+    }
+
+    public function timesheetBreaks(): HasMany
+    {
+        return $this->hasMany(TimesheetBreak::class, 'venue_id');
+    }
+
+    public function employeeClassifications(): HasMany
+    {
+        return $this->hasMany(EmployeeWorkClassification::class, 'venue_id');
+    }
+
+    public function complianceLogs(): HasMany
+    {
+        return $this->hasMany(LaborComplianceLog::class, 'venue_id');
+    }
+
+    public function connectionRefreshLogs(): HasMany
+    {
+        return $this->hasMany(ConnectionRefreshLog::class, 'venue_id');
+    }
 }

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\OnboardingVerifyEmail;
 use App\Mail\PostOnboardingSurveyFeedbackEmail;
 use App\Mail\PostOnboardingWelcomeEmail;
+use App\Mail\CompletedPreOnboardingEmail;
 use App\Models\Address;
 use App\Models\Affiliate;
 use App\Models\AffiliatePlan;
@@ -41,6 +42,7 @@ use App\Models\Waitlist;
 use App\Models\WalletHistory;
 use App\Services\MondayAutomationsService;
 use App\Services\TMActivePiecesAutomationsService;
+use App\Traits\TracksOnboardingErrors;
 use Carbon\Carbon;
 use Firebase\JWT\ExpiredException;
 use Firebase\JWT\JWT;
@@ -53,12 +55,14 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\ValidationException;
 use JetBrains\PhpStorm\NoReturn;
 
 class OnboardingController extends Controller
 {
     protected $mondayAutomationService;
     protected $tmActivePiecersAutomationService;
+    use TracksOnboardingErrors;
 
     public function __construct(MondayAutomationsService $mondayAutomationService, TMActivePiecesAutomationsService $tmActivePiecersAutomationService)
     {
@@ -130,7 +134,7 @@ class OnboardingController extends Controller
 
 
         $created_at = Carbon::now();
-        $expired_at = $created_at->addMinutes(240); // Add 240mins
+        $expired_at = $created_at->addMinutes(1140); // Add 24 hours
         $serverName = 'VenueBoost';
 
         $data = [
@@ -238,6 +242,7 @@ class OnboardingController extends Controller
         ]);
 
         if ($validator->fails()) {
+            $this->logValidationError(null, 'verifyEmailLink', new ValidationException($validator));
             return response()->json(['message' => $validator->errors()->first()], 400);
         }
 
@@ -249,89 +254,103 @@ class OnboardingController extends Controller
                 $decoded = JWT::decode($token, new Key(env('JWT_SECRET'), 'HS256'));
                 $id = $decoded->id;
             } catch (ExpiredException|\Exception $expiredException) {
+                $this->logOnboardingError(
+                    $id,
+                    'verifyEmailLink',
+                    'TokenException',
+                    'Invalid onboarding link',
+                    $expiredException->getTraceAsString()
+                );
                 return response()->json(['message' => 'Invalid onboarding link'], 400);
             }
 
             $potentialVenueLead = PotentialVenueLead::where('id', $id)->first();
             if (!$potentialVenueLead) {
+                $this->logOnboardingError(
+                    $id,
+                    'verifyEmailLink',
+                    'NotFoundError',
+                    'Invalid onboarding link - PotentialVenueLead not found',
+                    null
+                );
                 return response()->json(['message' => 'Invalid onboarding link'], 404);
             }
 
             $currentOnboardingStep = $potentialVenueLead->current_onboarding_step;
 
             $potentialVenueLead->started_onboarding = true;
-
             $potentialVenueLead->current_onboarding_step = $currentOnboardingStep === 'initial_form_submitted' ? 'email_verified' : $currentOnboardingStep;
             $potentialVenueLead->email_verified = true;
-
             $potentialVenueLead->save();
 
+            $responseData = [
+                'message' => 'Valid link',
+                'email' => $potentialVenueLead->email,
+                'current_onboarding_step' => $currentOnboardingStep,
+            ];
 
-            $recommended_pricing_plan = null;
-            $onboarding_pricing_plans = [];
-            $industryShortName = null;
+            $user = User::where('email', $potentialVenueLead->email)->first();
+            if ($user) {
+                $venue = Restaurant::with(['addresses', 'venueCustomizedExperience', 'venueIndustry', 'venueType'])
+                    ->where('user_id', $user->id)
+                    ->first();
 
-            $userRetrieved = User::where('email', $potentialVenueLead->email)->first();
-            if ($userRetrieved) {
-                $userRetrieved = $userRetrieved->id;
-                $venue = Restaurant::with(['addresses', 'venueCustomizedExperience'])->where('user_id', $userRetrieved)->first();
-                $venueIndustry = $venue->venueIndustry->name;
+                if ($venue) {
+                    // Business details data
+                    $responseData['business_details'] = [
+                        'restaurant_name' => $venue->name,
+                        'venue_type' => $venue->venueType->short_name,
+                        'venue_industry' => $venue->venueIndustry->short_name,
+                        'years_in_business' => $venue->years_in_business,
+                        'address' => $venue->addresses->first(),
+                    ];
 
-                // create a combination of industry name and short name
-                $venueIndustryCombinations = [
-                    'Food' => 'food',
-                    'Sport & Entertainment' => 'sport_entertainment',
-                    'Accommodation' => 'accommodation',
-                    'Retail' => 'retail',
-                ];
+                    // Industry data
+                    $venueIndustry = $venue->venueIndustry->name;
+                    $venueIndustryCombinations = [
+                        'Food' => 'food',
+                        'Sport & Entertainment' => 'sport_entertainment',
+                        'Accommodation' => 'accommodation',
+                        'Retail' => 'retail',
+                    ];
+                    $responseData['industry'] = $venueIndustryCombinations[$venueIndustry] ?? null;
 
-                $industryShortName = $venueIndustryCombinations[$venueIndustry];
+                    // Interest and engagement data
+                    if ($venue->venueCustomizedExperience) {
+                        $responseData['interest_engagement'] = $venue->venueCustomizedExperience->toArray();
+                    }
 
-                $pricingPlans =
-                    PricingPlan::where('category', $venueIndustry === 'Sport & Entertainment' ? 'sport_entertainment' : $venueIndustry)
+                    // Pricing plans
+                    $pricingPlans = PricingPlan::where('category', $venueIndustry === 'Sport & Entertainment' ? 'sport_entertainment' : $venueIndustry)
                         ->with('pricingPlanPrices')
                         ->where('is_custom', 0)
                         ->where('active', 1)
                         ->where('stripe_id', '!=', null)
                         ->get();
 
-                $returnedPricingPlans = [];
+                    $responseData['onboarding_pricing_plans'] = $pricingPlans->map(function ($plan) {
+                        return [
+                            'name' => $plan->name,
+                            'description' => $plan->description,
+                            'prices' => $plan->pricingPlanPrices()->select('unit_amount', 'recurring', 'trial_period_days', 'stripe_id')->get()
+                        ];
+                    });
 
-                // format returned pricing plans to return
-                foreach ($pricingPlans as $plan) {
-
-                    $prices = $plan->pricingPlanPrices()->select('unit_amount', 'recurring', 'trial_period_days', 'stripe_id')->get();
-
-                    $planData = [
-                        'name' => $plan->name,
-                        'description' => $plan->description,
-                        'prices' => $prices
-                    ];
-
-                    $returnedPricingPlans[] = $planData;
+                    // Recommended pricing plan
+                    $venueLeadInfo = VenueLeadInfo::where('venue_id', $venue->id)->first();
+                    $responseData['recommended_pricing_plan'] = $venueLeadInfo ? $venueLeadInfo->gpt_plan_suggested : 'Elevate';
                 }
-
-                // check if it has one reply with venue_id do not send request to openai but get the reply from db
-                $venueLeadInfo = VenueLeadInfo::where('venue_id', $venue->id)->first();
-
-                if ($venueLeadInfo) {
-
-                    $recommended_pricing_plan = $venueLeadInfo->gpt_plan_suggested;
-                    $onboarding_pricing_plans = $returnedPricingPlans;
-                }
-
             }
 
-            return response()->json([
-                'message' => 'Valid link',
-                'email' => $potentialVenueLead->email,
-                'current_onboarding_step' => $currentOnboardingStep,
-                // 'recommended_pricing_plan' => $recommended_pricing_plan,
-                'recommended_pricing_plan' => 'Elevate',
-                'onboarding_pricing_plans' => $onboarding_pricing_plans,
-                'industry' => $industryShortName
-            ], 200);
+            return response()->json($responseData, 200);
         } catch (\Exception $e) {
+            $this->logOnboardingError(
+                $id ?? null,
+                'verifyEmailLink',
+                get_class($e),
+                $e->getMessage(),
+                $e->getTraceAsString()
+            );
             \Sentry\captureException($e);
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -690,7 +709,7 @@ class OnboardingController extends Controller
         }
 
         if ($request->input('step') === 'interest_engagement') {
-            $validator->sometimes('nr_of_employees', 'required|integer', function ($input) {
+            $validator->sometimes('number_of_employees', 'required|integer', function ($input) {
                 return $input->step === 'interest_engagement';
             });
 
@@ -739,6 +758,7 @@ class OnboardingController extends Controller
 
 
         if ($validator->fails()) {
+            $this->logValidationError($request->input('email'), 'trackOnboarding', new ValidationException($validator));
             return response()->json(['error' => $validator->errors()->first()], 400);
         }
 
@@ -756,29 +776,31 @@ class OnboardingController extends Controller
                 $userId = User::where('email', $email)->first()->id;
                 $venue = Restaurant::where('user_id', $userId)->first();
 
+                // Convert business_challenge to string if it's an array
+                $businessChallenge = $request->input('business_challenge');
+                if (is_array($businessChallenge)) {
+                    $businessChallenge = implode(', ', $businessChallenge);
+                }
+
                 // Find or create a new VenueCustomizedExperience entry
-                $venueCustomizedExperience = VenueCustomizedExperience::firstOrCreate(
+                $venueCustomizedExperience = VenueCustomizedExperience::updateOrCreate(
                     [
                         'venue_id' => $venue->id,
                         'potential_venue_lead_id' => $potentialVenueLead->id,
-                        'contact_reason' => $request->input('contact_reason')
-                        // Add other default values if needed
+                    ],
+                    [
+                        'contact_reason' => $request->input('contact_reason'),
+                        'number_of_employees' => $request->input('number_of_employees'),
+                        'annual_revenue' => $request->input('annual_revenue'),
+                        'website' => $request->input('website'),
+                        'social_media' => json_encode($request->input('social_media')),
+                        'business_challenge' => $businessChallenge,
+                        'other_business_challenge' => $request->input('other_business_challenge'),
+                        'how_did_you_hear_about_us' => $request->input('how_did_you_hear_about_us'),
+                        'how_did_you_hear_about_us_other' => $request->input('how_did_you_hear_about_us_other'),
+                        'biggest_additional_change' => $request->input('biggest_additional_change'),
                     ]
                 );
-
-                // Update the fields
-                $venueCustomizedExperience->number_of_employees = $request->input('nr_of_employees');
-                $venueCustomizedExperience->annual_revenue = $request->input('annual_revenue');
-                $venueCustomizedExperience->website = $request->input('website');
-                $venueCustomizedExperience->social_media = $request->input('social_media');
-                $venueCustomizedExperience->business_challenge = $request->input('business_challenge');
-                $venueCustomizedExperience->other_business_challenge = $request->input('other_business_challenge');
-                $venueCustomizedExperience->how_did_you_hear_about_us = $request->input('how_did_you_hear_about_us');
-                $venueCustomizedExperience->how_did_you_hear_about_us_other = $request->input('how_did_you_hear_about_us_other');
-                $venueCustomizedExperience->biggest_additional_change = $request->input('biggest_additional_change');
-
-                // Save the updated record
-                $venueCustomizedExperience->save();
 
                 // update potential venue lead onboarding step
                 $potentialVenueLead->current_onboarding_step = $request->input('step');
@@ -797,12 +819,21 @@ class OnboardingController extends Controller
 
                 // find state name based on state id
                 $state = State::where('id', $request->input('state'))->first();
+                if (!$state) {
+                    return response()->json(['error' => 'Invalid state ID'], 400);
+                }
 
                 // find country name based on country id
                 $country = Country::where('id', $request->input('country'))->first();
+                if (!$country) {
+                    return response()->json(['error' => 'Invalid country ID'], 400);
+                }
 
                 // find city name based on city id
                 $city = City::where('id', $request->input('city'))->first();
+                if (!$city) {
+                    return response()->json(['error' => 'Invalid city ID'], 400);
+                }
 
                 $restaurantAddressData = [
                     'address_line1' => $request->input('address_line1'),
@@ -815,77 +846,104 @@ class OnboardingController extends Controller
                     'city_id' => $request->input('city'),
                     'country_id' => $request->input('country'),
                 ];
+
                 $venueType = VenueType::where('short_name', $venue_type)->first();
+                if (!$venueType) {
+                    return response()->json(['error' => 'Invalid venue type'], 400);
+                }
+
                 $venueIndustry = VenueIndustry::where('short_name', $request->input('venue_industry'))->first();
-
-                $address = Address::create($restaurantAddressData);
-
-                $owner_user = User::where('email', )->first();
-                if ($owner_user) {
-                    return response()->json(['message' => 'Email is already exist'], 400);
+                if (!$venueIndustry) {
+                    return response()->json(['error' => 'Invalid venue industry'], 400);
                 }
 
-                // generate random password for the user with 8 characters without a function
-                $generatePassword = substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') , 0, 8);
-                $hashedPassword = Hash::make($generatePassword);
-                $newUserID = DB::table('users')->insertGetId([
-                    'name' => $potentialVenueLead->representative_first_name . ' ' . $potentialVenueLead->representative_last_name,
-                    'country_code' => Country::where('id', $request->input('country'))->first()->code,
-                    'email' => $email,
-                    'password' => $hashedPassword,
-                ]);
+                // Create new restaurant
+                $owner_user = User::where('email', $email)->first();
+                if (!$owner_user) {
+                    // generate random password for the user with 8 characters without a function
+                    $generatePassword = substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 8);
+                    $hashedPassword = Hash::make($generatePassword);
+                    $newUserID = DB::table('users')->insertGetId([
+                        'name' => $potentialVenueLead->representative_first_name . ' ' . $potentialVenueLead->representative_last_name,
+                        'country_code' => Country::where('id', $request->input('country'))->first()->code,
+                        'email' => $email,
+                        'password' => $hashedPassword,
+                    ]);
 
-                $owner_user = User::where('id', $newUserID)->first();
+                    $owner_user = User::where('id', $newUserID)->first();
+                }
 
-                $restaurant_name = $request->input('restaurant_name');
+                $restaurant = Restaurant::where('user_id', $owner_user->id)->first();
 
-                $restaurant = new Restaurant();
-                $restaurant->name = $restaurant_name;
-                $restaurant->email = $email;
-                $restaurant->logo = '';
-                $restaurant->cover = '';
-                $restaurant->short_code = generateStringShortCode($restaurant_name);
-                $restaurant->app_key = generateStringAppKey($restaurant_name);;
-                $restaurant->venue_type = $venueType->id;
-                $restaurant->venue_industry = $venueIndustry->id;
-                $restaurant->is_main_venue = 1;
-                $restaurant->phone_number = '-';
-                $restaurant->website = "";
-                $restaurant->pricing = "";
-                $restaurant->capacity = $capacity ?? 0;
-                $restaurant->user_id = $owner_user->id;
-                $restaurant->years_in_business = $request->input('years_in_business');
-                $restaurant->status = 'completed';
-                $restaurant->save();
+                if ($restaurant) {
+                    // Update existing restaurant
+                    $restaurant->update([
+                        'name' => $request->input('restaurant_name'),
+                        'venue_type' => $venueType->id,
+                        'venue_industry' => $venueIndustry->id,
+                        'years_in_business' => $request->input('years_in_business'),
+                    ]);
 
-                $venueConfiguration = RestaurantConfiguration::where('venue_id', $restaurant->id)->first();
+                    $rest_address = DB::table('restaurant_addresses')->where('restaurants_id', $restaurant->id)->first();
 
-                if ($venueConfiguration) {
-                    $venueConfiguration->allow_reservation_from = $venueIndustry  === 'Food' ? 1 : 0;
-                    $venueConfiguration->save();
+                    if ($rest_address) {
+                        // Update existing address
+                        Address::where('id', $rest_address->address_id)->update($restaurantAddressData);
+                    } else {
+                        // Create new address if it doesn't exist
+                        $address = Address::create($restaurantAddressData);
+                        DB::table('restaurant_addresses')->insert([
+                            'address_id' => $address->id,
+                            'restaurants_id' => $restaurant->id
+                        ]);
+                    }
                 } else {
-                    $venueConfiguration = new RestaurantConfiguration();
-                    $venueConfiguration->venue_id = $restaurant->id;
-                    $venueConfiguration->allow_reservation_from = $venueIndustry  === 'Food' ? 1 : 0;
-                    $venueConfiguration->save();
-                }
 
-                if ($address) {
-                    DB::table('restaurant_addresses')->insert([
-                        'address_id' => $address->id,
-                        'restaurants_id' => $restaurant->id
+                    $restaurant_name = $request->input('restaurant_name');
+
+                    $restaurant = new Restaurant();
+                    $restaurant->name = $restaurant_name;
+                    $restaurant->email = $email;
+                    $restaurant->logo = '';
+                    $restaurant->cover = '';
+                    $restaurant->short_code = generateStringShortCode($restaurant_name);
+                    $restaurant->app_key = generateStringAppKey($restaurant_name);
+                    $restaurant->venue_type = $venueType->id;
+                    $restaurant->venue_industry = $venueIndustry->id;
+                    $restaurant->is_main_venue = 1;
+                    $restaurant->phone_number = '-';
+                    $restaurant->website = "";
+                    $restaurant->pricing = "";
+                    $restaurant->capacity = $capacity ?? 0;
+                    $restaurant->user_id = $owner_user->id;
+                    $restaurant->years_in_business = $request->input('years_in_business');
+                    $restaurant->status = 'completed';
+                    $restaurant->save();
+
+                    $address = Address::create($restaurantAddressData);
+
+                    if ($address) {
+                        DB::table('restaurant_addresses')->insert([
+                            'address_id' => $address->id,
+                            'restaurants_id' => $restaurant->id
+                        ]);
+                    }
+
+                    DB::table('employees')->insert([
+                        'name' => $owner_user->name,
+                        'email' => $owner_user->email,
+                        'role_id' => $venue_type === 'Hotel' ? 5 : ($venue_type === 'Golf Venue' ? 13 : 2),
+                        'salary' => 0,
+                        'salary_frequency' => 'monthly',
+                        'restaurant_id' => $restaurant->id,
+                        'user_id' => $owner_user->id
                     ]);
                 }
 
-                DB::table('employees')->insert([
-                    'name' => $owner_user->name,
-                    'email' => $owner_user->email,
-                    'role_id' => $venue_type === 'Hotel' ? 5 : ($venue_type === 'Golf Venue' ? 13 : 2),
-                    'salary' => 0,
-                    'salary_frequency' => 'monthly',
-                    'restaurant_id' => $restaurant->id,
-                    'user_id' => $owner_user->id
-                ]);
+                RestaurantConfiguration::updateOrCreate(
+                    ['venue_id' => $restaurant->id],
+                    ['allow_reservation_from' => $venueIndustry->short_name === 'Food' ? 1 : 0]
+                );
 
                 // update potential venue lead onboarding step and venue id
                 $potentialVenueLead->current_onboarding_step = $request->input('step');
@@ -899,22 +957,22 @@ class OnboardingController extends Controller
                     // do nothing
                 }
 
-
                 // check if potential_venue id has affiliate
                 $affiliate_id = $potentialVenueLead->affiliate_id;
                 // Check if an affiliate is associated with this lead
                 if (!is_null($affiliate_id)) {
-
                     // Update the affiliate_status to 'started'
                     $potentialVenueLead->affiliate_status = 'started';
 
-                    // Create a record in the venue_affiliate table
-                    DB::table('venue_affiliate')->insert([
-                        'venue_id' => $restaurant->id, // Assuming $restaurant is the created venue
-                        'affiliate_id' => $affiliate_id,
-                        'affiliate_code' => $potentialVenueLead->affiliate_code,
-                        'potential_venue_lead_id' => $potentialVenueLead->id,
-                    ]);
+                    // Create or update a record in the venue_affiliate table
+                    DB::table('venue_affiliate')->updateOrInsert(
+                        ['venue_id' => $restaurant->id],
+                        [
+                            'affiliate_id' => $affiliate_id,
+                            'affiliate_code' => $potentialVenueLead->affiliate_code,
+                            'potential_venue_lead_id' => $potentialVenueLead->id,
+                        ]
+                    );
                 }
 
                 // check if potential_venue id has referral
@@ -925,20 +983,23 @@ class OnboardingController extends Controller
                     // Update the referral status to 'started'
                     $potentialVenueLead->referral_status = 'started';
 
-                    $referral_id = DB::table('restaurant_referrals')
-                        ->insertGetId([
-                            'restaurant_id' => $referer_id,
-                            'referral_code' => $potentialVenueLead->referral_code,
-                            'register_id' => $restaurant->id,
-                            'potential_venue_lead_id' => $potentialVenueLead->id,
-                            'used_time' => Carbon::now(),
-                            'is_used' => 1,
-                        ]);
+                    $referral = DB::table('restaurant_referrals')
+                        ->updateOrInsert(
+                            ['register_id' => $restaurant->id],
+                            [
+                                'restaurant_id' => $referer_id,
+                                'referral_code' => $potentialVenueLead->referral_code,
+                                'potential_venue_lead_id' => $potentialVenueLead->id,
+                                'used_time' => Carbon::now(),
+                                'is_used' => 1,
+                            ]
+                        );
 
-                    $restaurant->used_referral_id = $referral_id;
-                    $restaurant->save();
+                    if (!$restaurant->used_referral_id) {
+                        $restaurant->used_referral_id = $referral->id ?? null;
+                        $restaurant->save();
+                    }
                 }
-
             }
 
             if ($request->input('step') === 'subscription_plan_selection') {
@@ -957,6 +1018,12 @@ class OnboardingController extends Controller
 
             return response()->json(['message' => 'Business details saved successfully', 'potentialVenueLead' => $potentialVenueLead], 200);
         } catch (\Exception $e) {
+            $this->logOnboardingError(
+                $request->input('email'),
+                'trackOnboarding',
+                $e->getMessage(),
+                $e->getTraceAsString()
+            );
             \Sentry\captureException($e);
             return response()->json(['error' => $e->getMessage()], 500);
         }
@@ -972,11 +1039,13 @@ class OnboardingController extends Controller
         ]);
 
         if ($validator->fails()) {
+            $this->logValidationError($request->input('email'), 'completeSubscriptionChosenDuringOnboarding', new ValidationException($validator));
             return response()->json(['error' => $validator->errors()], 400);
         }
 
         $userId = User::where('email', $request->input('email'))->first()->id;
         $venue = Restaurant::where('user_id', $userId)->first();
+        $userExists = User::where('id', $userId)->first();
 
         if($request->input('freemium') === true) {
 
@@ -1361,9 +1430,18 @@ class OnboardingController extends Controller
 
             }
         } catch (\Exception $e) {
+            $this->logOnboardingError(
+                $request->input('email'),
+                'completeSubscriptionChosenDuringOnboarding',
+                $e->getMessage(),
+                $e->getTraceAsString()
+            );
             \Sentry\captureException($e);
             // do nothing
         }
+
+        // send completed onboarding email
+        Mail::to($request->input('email'))->send(new CompletedPreOnboardingEmail(  $userExists->name ?? $userExists->first_name .' '. $userExists->last_name));
 
         // return success 200
         return response()->json(['message' => 'Subscription plan saved successfully'], 200);
@@ -1828,6 +1906,7 @@ class OnboardingController extends Controller
 
     public function getStartedLeads(Request $request): \Illuminate\Http\JsonResponse
     {
+        $excludedIds = [113, 114, 115, 116, 117, 118, 119, 120, 121, 122];
         $query = PotentialVenueLead::with([
             'venue',
             'venueCustomizedExperience',
@@ -1837,7 +1916,7 @@ class OnboardingController extends Controller
             'affiliate',
             'promoCode',
             'referrer'
-        ])->where('from_september_new', true)
+        ])->whereNotIn('id', $excludedIds)->where('from_september_new', true)
             ->orderBy('created_at', 'desc');
 
         // Add pagination

@@ -148,4 +148,46 @@ class User extends Authenticatable implements JWTSubject
     public function member(): \Illuminate\Database\Eloquent\Relations\HasOne {
         return $this->hasOne(Member::class);
     }
+
+    public function appAccesses(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(UserAppAccess::class);
+    }
+
+    public function accessibleApps(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(VbApp::class, 'user_app_access')
+            ->withPivot('access_granted_at', 'access_revoked_at');
+    }
+
+    public function feedback(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Feedback::class, 'sales_associate_id');
+    }
+
+    public function loginActivities(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(LoginActivity::class);
+    }
+
+    //hasOne with EndUserPreference
+    public function endUserPreference(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(EndUserPreference::class);
+    }
+    //end_user_addresses
+    public function endUserAddresses(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(EndUserAddress::class);
+    }
+
+    public function notifications(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    public function notificationSettings(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(NotificationSetting::class);
+    }
 }

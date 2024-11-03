@@ -11,7 +11,9 @@ class Blog extends Model
 
     protected $fillable = [
         'title',
+        'title_al',
         'content',
+        'content_al',
         'restaurant_id',
         'image',
         'views',
@@ -35,6 +37,20 @@ class Blog extends Model
         'body',
         'tags',
         'category_text',
+        'bybest_id',
+        // New language fields
+        'title_es',
+        'title_fr',
+        'title_it',
+        'title_de',
+        'title_pt',
+        'body_es',
+        'body_fr',
+        'body_it',
+        'body_de',
+        'body_pt',
+        'is_featured',
+        'is_draft'
     ];
 
     public function restaurant()

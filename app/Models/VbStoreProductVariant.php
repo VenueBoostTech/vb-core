@@ -21,7 +21,8 @@ class VbStoreProductVariant extends Model
         'product_stock_status', 'name', 'variation_image', 'sale_price', 'date_sale_start',
         'date_sale_end', 'price', 'stock_quantity', 'manage_stock', 'sell_eventually',
         'allow_back_orders', 'weight', 'length', 'width', 'height', 'product_long_description',
-        'short_description'
+        'short_description', 'product_long_description_al', 'bybest_id',
+        'price_without_tax_alpha', 'gender_id', 'bb_points', 'shipping_class', 'synchronize_at'
     ];
 
     protected $casts = [
@@ -54,5 +55,10 @@ class VbStoreProductVariant extends Model
         return $this->belongsToMany(VbStoreAttributeOption::class, 'vb_store_product_variant_attributes', 'variant_id', 'attribute_id')
             ->withPivot('venue_id')
             ->withTimestamps();
+    }
+
+    public function productVariantAttributes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(VbStoreProductVariantAttribute::class, 'variant_id');
     }
 }

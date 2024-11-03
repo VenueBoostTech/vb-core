@@ -10,7 +10,7 @@ class BlogCategory extends Model
     use HasFactory;
     protected $table = 'blog_categories';
     protected $fillable = [
-        'name', 'description', 'venue_id'
+        'name', 'name_al', 'description', 'description_al', 'venue_id', 'bybest_id'
     ];
 
     public function blogs()

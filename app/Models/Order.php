@@ -34,6 +34,40 @@ class Order extends Model
         'hospital_room_id',
         'added_by_restaurant',
         'physical_store_id',
+        'bybest_id',
+        'source_id',
+        'postal',
+        'ip',
+        'shipping_id',
+        'shipping_name',
+        'shipping_surname',
+        'shipping_state',
+        'shipping_city',
+        'bb_shipping_state',
+        'bb_shipping_city',
+        'shipping_phone_no',
+        'shipping_email',
+        'shipping_address',
+        'shipping_postal_code',
+        'billing_name',
+        'billing_surname',
+        'billing_state',
+        'billing_city',
+        'bb_billing_state',
+        'bb_billing_city',
+        'billing_phone_no',
+        'billing_email',
+        'billing_address',
+        'billing_postal_code',
+        'exchange_rate_eur',
+        'exchange_rate_all',
+        'has_postal_invoice',
+        'tracking_latitude',
+        'tracking_longtitude',
+        'tracking_countryCode',
+        'tracking_cityName',
+        'internal_note',
+        'bb_coupon_id'
     ];
 
     public function customer()
@@ -107,7 +141,7 @@ class Order extends Model
         return $this->hasMany(OrderStatusChange::class);
     }
 
-    public function orderSplitPayments() :\Illuminate\Database\Eloquent\Relations\HasMany
+    public function orderSplitPayments(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(OrderSplitPayment::class);
     }
@@ -115,6 +149,11 @@ class Order extends Model
     public function physicalStore(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(PhysicalStore::class);
+    }
+
+    public function chat(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Chat::class);
     }
 
 }

@@ -296,8 +296,8 @@ class RestaurantPreOnboardingController extends Controller
             // TODO: after v1 testing fix this for italy
             // TODO: after v1 testing fix this for pricing range and maybe capacity, cusine types etc
             $restaurant->name = $restaurant_name;
-            $restaurant->short_code = generateStringShortCode($restaurant_name);
-            $restaurant->app_key = generateStringAppKey($restaurant_name);;
+            $restaurant->short_code = $this->generateStringShortCode($restaurant_name);
+            $restaurant->app_key = $this->generateStringAppKey($restaurant_name);;
             $restaurant->venue_type = $venueType->id;
             $restaurant->venue_industry = $venueIndustry->id;
             $restaurant->is_main_venue = 1;
@@ -1350,10 +1350,7 @@ class RestaurantPreOnboardingController extends Controller
         }
     }
 
-}
-
-
-function generateStringShortCode($providerName) {
+    private function generateStringShortCode($providerName) {
     $prefix = strtoupper(substr($providerName, 0, 3));
     $randomNumbers = sprintf('%04d', mt_rand(0, 9999));
     $suffix = 'SCD';
@@ -1361,9 +1358,9 @@ function generateStringShortCode($providerName) {
     $randomChar = $alphabet[rand(0, strlen($alphabet) - 1)];
 
     return $prefix . $randomNumbers . $suffix . $randomChar;
-}
+    }
 
-function generateStringAppKey($providerName) {
+    private function generateStringAppKey($providerName) {
     $prefix = strtoupper(substr($providerName, 0, 3));
     $randomNumbers = sprintf('%04d', mt_rand(0, 9999));
     $suffix = 'APP';
@@ -1372,3 +1369,7 @@ function generateStringAppKey($providerName) {
 
     return $prefix . $randomNumbers . $suffix . $randomChar;
 }
+
+}
+
+

@@ -2,6 +2,7 @@
 
 namespace App\Models\AccountingFinance;
 
+use App\Models\Cart;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,7 +13,8 @@ class Currency extends Model
     protected $fillable = [
         'code',
         'name',
-        'exchange_rate'
+        'exchange_rate',
+        'currency_alpha',
     ];
 
     protected $casts = [
@@ -81,5 +83,10 @@ class Currency extends Model
     {
         $other = self::byCode($otherCurrencyCode)->first();
         return $this->exchange_rate < $other->exchange_rate;
+    }
+
+    public function carts()
+    {
+        return $this->hasMany(Cart::class);
     }
 }

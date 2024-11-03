@@ -42,4 +42,14 @@ class PhysicalStore extends Model
     {
         return $this->hasMany(Order::class);
     }
+
+    public function feedback(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Feedback::class, 'store_id');
+    }
+
+    public function giftSuggestions(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(GiftSuggestion::class);
+    }
 }

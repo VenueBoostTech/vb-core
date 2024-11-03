@@ -47,4 +47,19 @@ class Customer extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function carts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Cart::class, 'venue_id');
+    }
+
+    public function feedback(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Feedback::class);
+    }
+
+    public function wishlistItems(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(WishlistItem::class);
+    }
 }

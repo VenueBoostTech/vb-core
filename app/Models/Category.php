@@ -10,7 +10,26 @@ class Category extends Model
     use HasFactory;
 
     protected $table = 'categories';
-    protected $fillable = ['title', 'description', 'available', 'parent_id', 'restaurant_id'];
+    protected $fillable = [
+        'title',
+        'title_al',
+        'description',
+        'description_al',
+        'available',
+        'parent_id',
+        'restaurant_id',
+        'bybest_id',
+        'category',
+        'category_al',
+        'category_url',
+        'subtitle',
+        'subtitle_al',
+        'photo',
+        'order_no',
+        'visible',
+        'created_at',
+        'updated_at',
+    ];
 
     public function restaurant()
     {

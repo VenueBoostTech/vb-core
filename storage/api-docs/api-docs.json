@@ -2587,6 +2587,295 @@
                 }
             }
         },
+        "/loyalty/enrolled-guests": {
+            "get": {
+                "tags": [
+                    "Loyalty"
+                ],
+                "summary": "Get list of enrolled guests by Loyalty ID",
+                "operationId": "c83d674bd9410810884ad2ae5bbe81f8",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Loyalty Program ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "venue_short_code",
+                        "in": "query",
+                        "description": "Venue Short Code",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Enrolled guests retrieved successfully"
+                                        },
+                                        "data": {}
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request"
+                    },
+                    "404": {
+                        "description": "Not Found"
+                    },
+                    "500": {
+                        "description": "Internal Server Error"
+                    }
+                }
+            }
+        },
+        "/loyalty": {
+            "put": {
+                "tags": [
+                    "Loyalty"
+                ],
+                "summary": "Update a loyalty program",
+                "operationId": "6592850d2c335a28e7dcb01672ac8a3d",
+                "requestBody": {
+                    "description": "Promotion status details",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "discount_id": {
+                                        "description": "Discount ID",
+                                        "type": "integer",
+                                        "example": "1"
+                                    },
+                                    "status": {
+                                        "description": "Discount status",
+                                        "type": "integer",
+                                        "enum": [
+                                            0,
+                                            1
+                                        ],
+                                        "example": "1"
+                                    },
+                                    "title": {
+                                        "description": "Promotion title",
+                                        "type": "string",
+                                        "example": "Promotion title"
+                                    },
+                                    "Description": {
+                                        "description": "Promotion Description",
+                                        "type": "string",
+                                        "example": "Promotion Description"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Promotion not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Loyalty"
+                ],
+                "summary": "Store a new loyalty",
+                "operationId": "71b23588e353462a82d1beffd3530c5c",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "venue_short_code": {
+                                        "description": "Venue short code",
+                                        "type": "string"
+                                    },
+                                    "title": {
+                                        "description": "Title",
+                                        "type": "string"
+                                    },
+                                    "description": {
+                                        "description": "Description",
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Loyalty program created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "description": "Success message",
+                                            "type": "string"
+                                        },
+                                        "data": {
+                                            "description": "Loyalty program details",
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "description": "Error message",
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Venue not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "description": "Error message",
+                                            "type": "string"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/loyalty/{id}": {
+            "get": {
+                "tags": [
+                    "Loyalty"
+                ],
+                "summary": "Show loyalty details",
+                "operationId": "2e9d3325973303bf51fbc31b58213022",
+                "parameters": [
+                    {
+                        "name": "id",
+                        "in": "path",
+                        "description": "Loyalty ID",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int64"
+                        }
+                    },
+                    {
+                        "name": "venue_short_code",
+                        "in": "query",
+                        "description": "Venue short code",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful operation",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Loyalty not found",
+                        "content": {
+                            "application/json": {
+                                "schema": {}
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/ml/tsa-occupancy-rates-forecast/model-evaluations": {
             "get": {
                 "tags": [
@@ -2929,6 +3218,277 @@
                                         "error": {
                                             "type": "string",
                                             "example": "Restaurant not found for the user making the API call"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/create-customer": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Create a new customer",
+                "operationId": "a6f83226616c0851aef8e799ed324bdb",
+                "requestBody": {
+                    "description": "Data for the new customer",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "customer",
+                                    "shipping_address"
+                                ],
+                                "properties": {
+                                    "customer": {
+                                        "required": [
+                                            "first_name",
+                                            "last_name",
+                                            "phone",
+                                            "email"
+                                        ],
+                                        "properties": {
+                                            "first_name": {
+                                                "type": "string",
+                                                "example": "string"
+                                            },
+                                            "last_name": {
+                                                "type": "string",
+                                                "example": "string"
+                                            },
+                                            "phone": {
+                                                "type": "string",
+                                                "example": "0685555555"
+                                            },
+                                            "email": {
+                                                "type": "string",
+                                                "format": "email",
+                                                "example": "strin@string.com"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "shipping_address": {
+                                        "required": [
+                                            "line1",
+                                            "state",
+                                            "city",
+                                            "postal_code"
+                                        ],
+                                        "properties": {
+                                            "line1": {
+                                                "type": "string",
+                                                "example": "Sheshi Skenderbeu"
+                                            },
+                                            "line2": {
+                                                "type": "string",
+                                                "example": ""
+                                            },
+                                            "state": {
+                                                "type": "string",
+                                                "example": "TR"
+                                            },
+                                            "city": {
+                                                "type": "string",
+                                                "example": "Tirana"
+                                            },
+                                            "postal_code": {
+                                                "type": "string",
+                                                "example": "1013"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Customer created successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Customer created successfully"
+                                        },
+                                        "customer_id": {
+                                            "type": "integer",
+                                            "example": 123
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Validation error"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Unauthorized access"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/orders/finalize-order": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Finalize an order",
+                "description": "Finalizes the details of an order including processing payments, inventory, and sending confirmation.",
+                "operationId": "2518ea9c18a0b72f2c63ec21fe6561f2",
+                "requestBody": {
+                    "description": "Data needed to finalize the order",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "subtotal",
+                                    "order_products",
+                                    "customer_id",
+                                    "is_for_self",
+                                    "split_payments"
+                                ],
+                                "properties": {
+                                    "subtotal": {
+                                        "type": "number",
+                                        "example": 100.5
+                                    },
+                                    "order_products": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "product_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "product_quantity": {
+                                                    "type": "integer",
+                                                    "example": 2
+                                                },
+                                                "product_total_price": {
+                                                    "type": "number",
+                                                    "example": 50.25
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "customer_id": {
+                                        "type": "integer",
+                                        "example": 123
+                                    },
+                                    "is_for_self": {
+                                        "type": "boolean",
+                                        "example": true
+                                    },
+                                    "split_payments": {
+                                        "type": "array",
+                                        "items": {
+                                            "properties": {
+                                                "payment_type": {
+                                                    "type": "string",
+                                                    "example": "card"
+                                                },
+                                                "amount": {
+                                                    "type": "number",
+                                                    "example": 100.5
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "notes": {
+                                        "type": "string",
+                                        "example": "Leave at front door."
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Order added successfully",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order has been finalized successfully."
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Invalid input data"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "error": {
+                                            "type": "string",
+                                            "example": "An unexpected error occurred"
                                         }
                                     },
                                     "type": "object"
@@ -10464,12 +11024,1471 @@
                     }
                 }
             }
+        },
+        "/inventory-reports/orders-by-brand": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get orders by brand",
+                "operationId": "b1ae8e3f390090b7e8042ba7cdbf60ff",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    },
+                    {
+                        "$ref": "#/components/parameters/report_type"
+                    },
+                    {
+                        "name": "start_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "end_date",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "nr_orders": {
+                                            "type": "integer"
+                                        },
+                                        "total_amount_eur": {
+                                            "type": "number"
+                                        },
+                                        "subtotal_eur": {
+                                            "type": "number"
+                                        },
+                                        "total_discount_used_eur": {
+                                            "type": "number"
+                                        },
+                                        "total_coupon_used_eur": {
+                                            "type": "number"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/orders-by-brand-and-country": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get orders by brand and country",
+                "operationId": "caefe70590aaeecb318dcaf85dcbbf74",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    },
+                    {
+                        "$ref": "#/components/parameters/report_type"
+                    },
+                    {
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "country": {
+                                                "type": "string"
+                                            },
+                                            "data": {
+                                                "type": "array",
+                                                "items": {
+                                                    "properties": {
+                                                        "period": {
+                                                            "type": "string"
+                                                        },
+                                                        "order_count": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/orders-by-brand-and-city": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get orders by brand and city",
+                "description": "Retrieves order statistics grouped by cities in Albania",
+                "operationId": "45f69c1fce6fd6096d45626eea08bcc0",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    },
+                    {
+                        "$ref": "#/components/parameters/report_type"
+                    },
+                    {
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "city": {
+                                                "type": "string"
+                                            },
+                                            "data": {
+                                                "type": "array",
+                                                "items": {
+                                                    "properties": {
+                                                        "period": {
+                                                            "type": "string"
+                                                        },
+                                                        "order_count": {
+                                                            "type": "integer"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/inventory-data": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get inventory data summary",
+                "description": "Retrieves summary of products, categories, and collections",
+                "operationId": "5fff92e786142d00ad1938686c5ec353",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "products": {
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "active": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "categories": {
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "active": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "collections": {
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "active": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/locations": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get locations summary",
+                "description": "Retrieves summary of warehouses, physical stores, and ecommerce sites",
+                "operationId": "bef1c97bc7ca76f2fa7b431ed8e1cdf3",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "warehouses": {
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "active": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "physical_stores": {
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "active": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "ecommerce_sites": {
+                                            "properties": {
+                                                "total": {
+                                                    "type": "integer"
+                                                },
+                                                "active": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/upcoming-launches": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get upcoming product launches",
+                "description": "Retrieves list of upcoming product launches",
+                "operationId": "b9fd5db88700b42abb371a3e0e9ea225",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "title": {
+                                                "type": "string"
+                                            },
+                                            "category": {
+                                                "type": "string"
+                                            },
+                                            "launch_date": {
+                                                "type": "string",
+                                                "format": "date"
+                                            },
+                                            "initial_stock": {
+                                                "type": "integer"
+                                            },
+                                            "pre_orders": {
+                                                "type": "integer"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/inventory-distribution": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get inventory distribution",
+                "description": "Retrieves inventory distribution across physical stores",
+                "operationId": "7734ef071cbe5cf91d8245495ac41218",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "location": {
+                                                "type": "string"
+                                            },
+                                            "value": {
+                                                "type": "integer"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/channel-performance": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get channel performance",
+                "description": "Retrieves performance metrics for different sales channels",
+                "operationId": "68031d50492e494518f13077dc9e8ce6",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    },
+                    {
+                        "name": "start_date",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "end_date",
+                        "in": "query",
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "channel": {
+                                                "type": "string"
+                                            },
+                                            "sales_volume": {
+                                                "type": "integer"
+                                            },
+                                            "revenue": {
+                                                "type": "number"
+                                            },
+                                            "growth": {
+                                                "type": "number"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/data-quality": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get data quality score",
+                "description": "Retrieves data quality metrics for inventory data",
+                "operationId": "a7f7f3910d28dd235f09b26393928d83",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "overallScore": {
+                                            "type": "integer"
+                                        },
+                                        "factors": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string"
+                                                    },
+                                                    "score": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/inventory-reports/all-report-data": {
+            "get": {
+                "tags": [
+                    "Inventory Reports"
+                ],
+                "summary": "Get all report data",
+                "description": "Retrieves comprehensive report including all inventory metrics",
+                "operationId": "ea2080a1fcb2e61251fba5864ff44b98",
+                "parameters": [
+                    {
+                        "$ref": "#/components/parameters/venue_short_code"
+                    },
+                    {
+                        "$ref": "#/components/parameters/brand_id"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "inventory_data": {
+                                            "$ref": "#/components/schemas/InventoryData"
+                                        },
+                                        "locations": {
+                                            "$ref": "#/components/schemas/LocationsSummary"
+                                        },
+                                        "sync_status": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "venue_id": {
+                                                        "type": "integer"
+                                                    },
+                                                    "sync_type": {
+                                                        "type": "integer"
+                                                    },
+                                                    "method": {
+                                                        "type": "string"
+                                                    },
+                                                    "third_party": {
+                                                        "type": "string"
+                                                    },
+                                                    "created_at": {
+                                                        "type": "string",
+                                                        "format": "datetime"
+                                                    },
+                                                    "completed_at": {
+                                                        "type": "string",
+                                                        "format": "datetime",
+                                                        "nullable": true
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "upcoming_launches": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "title": {
+                                                        "type": "string"
+                                                    },
+                                                    "category": {
+                                                        "type": "string"
+                                                    },
+                                                    "launch_date": {
+                                                        "type": "string",
+                                                        "format": "date"
+                                                    },
+                                                    "initial_stock": {
+                                                        "type": "integer"
+                                                    },
+                                                    "pre_orders": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "inventory_distribution": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "location": {
+                                                        "type": "string"
+                                                    },
+                                                    "value": {
+                                                        "type": "integer"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "channel_performance": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "channel": {
+                                                        "type": "string"
+                                                    },
+                                                    "sales_volume": {
+                                                        "type": "integer"
+                                                    },
+                                                    "revenue": {
+                                                        "type": "number"
+                                                    },
+                                                    "growth": {
+                                                        "type": "number"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "sync_health": {
+                                            "properties": {
+                                                "overview": {
+                                                    "properties": {
+                                                        "total_syncs": {
+                                                            "type": "integer"
+                                                        },
+                                                        "successful_syncs": {
+                                                            "type": "integer"
+                                                        },
+                                                        "failed_syncs": {
+                                                            "type": "integer"
+                                                        },
+                                                        "success_rate": {
+                                                            "type": "number"
+                                                        },
+                                                        "average_duration": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "by_type": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "error_summary": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "performance_trend": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "data_quality": {
+                                            "properties": {
+                                                "overallScore": {
+                                                    "type": "integer"
+                                                },
+                                                "factors": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "score": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/synchronizations": {
+            "get": {
+                "tags": [
+                    "Synchronizations"
+                ],
+                "summary": "Get all synchronizations",
+                "operationId": "3d87ff62526f973dffee892197b57d1c",
+                "parameters": [
+                    {
+                        "name": "venue_short_code",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "date": {
+                                                "type": "string",
+                                                "example": "2024-07-15"
+                                            },
+                                            "time_completed": {
+                                                "type": "string",
+                                                "example": "16:40 PM"
+                                            },
+                                            "type": {
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string",
+                                                        "example": "Prices Sync"
+                                                    },
+                                                    "color": {
+                                                        "type": "string",
+                                                        "example": "#cd8438"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            },
+                                            "method": {
+                                                "type": "string",
+                                                "example": "Manual - API"
+                                            },
+                                            "errors_count": {
+                                                "type": "integer",
+                                                "example": 0
+                                            },
+                                            "third_party": {
+                                                "type": "string",
+                                                "example": "BookMaster"
+                                            },
+                                            "status": {
+                                                "type": "string",
+                                                "example": "completed"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/synchronizations/{sync}/errors": {
+            "get": {
+                "tags": [
+                    "Synchronizations"
+                ],
+                "summary": "Get errors for a specific sync",
+                "operationId": "00a70cd94e55bff40695cbfbfb9b3c14",
+                "parameters": [
+                    {
+                        "name": "sync",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "array",
+                                    "items": {
+                                        "properties": {
+                                            "type": {
+                                                "type": "string"
+                                            },
+                                            "message": {
+                                                "type": "string"
+                                            },
+                                            "created_at": {
+                                                "type": "string"
+                                            },
+                                            "context": {
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/synchronizations/health": {
+            "get": {
+                "tags": [
+                    "Synchronizations"
+                ],
+                "summary": "Get synchronization health metrics",
+                "operationId": "3675da3676e49a5e0de19067b8ee0a04",
+                "parameters": [
+                    {
+                        "name": "venue_short_code",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "date_range",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "24h",
+                            "enum": [
+                                "24h",
+                                "7d",
+                                "30d"
+                            ]
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "overview": {
+                                            "properties": {
+                                                "total_syncs": {
+                                                    "type": "integer",
+                                                    "example": 150
+                                                },
+                                                "successful_syncs": {
+                                                    "type": "integer",
+                                                    "example": 142
+                                                },
+                                                "failed_syncs": {
+                                                    "type": "integer",
+                                                    "example": 8
+                                                },
+                                                "success_rate": {
+                                                    "type": "number",
+                                                    "format": "float",
+                                                    "example": 94.67
+                                                },
+                                                "average_duration": {
+                                                    "type": "string",
+                                                    "example": "2m 30s"
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "by_type": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "type": {
+                                                        "type": "string",
+                                                        "example": "Price Sync"
+                                                    },
+                                                    "total": {
+                                                        "type": "integer",
+                                                        "example": 50
+                                                    },
+                                                    "successful": {
+                                                        "type": "integer",
+                                                        "example": 48
+                                                    },
+                                                    "failed": {
+                                                        "type": "integer",
+                                                        "example": 2
+                                                    },
+                                                    "success_rate": {
+                                                        "type": "number",
+                                                        "example": 96
+                                                    },
+                                                    "average_duration": {
+                                                        "type": "string",
+                                                        "example": "1m 45s"
+                                                    },
+                                                    "last_sync_status": {
+                                                        "type": "string",
+                                                        "example": "successful"
+                                                    },
+                                                    "last_sync_time": {
+                                                        "type": "string",
+                                                        "example": "2024-03-27 14:30:00"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "error_summary": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "type": {
+                                                        "type": "string",
+                                                        "example": "API"
+                                                    },
+                                                    "count": {
+                                                        "type": "integer",
+                                                        "example": 5
+                                                    },
+                                                    "percentage": {
+                                                        "type": "number",
+                                                        "example": 62.5
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "performance_trend": {
+                                            "type": "array",
+                                            "items": {
+                                                "properties": {
+                                                    "date": {
+                                                        "type": "string",
+                                                        "example": "2024-03-27"
+                                                    },
+                                                    "success_rate": {
+                                                        "type": "number",
+                                                        "example": 95
+                                                    },
+                                                    "average_duration": {
+                                                        "type": "string",
+                                                        "example": "2m 15s"
+                                                    },
+                                                    "total_syncs": {
+                                                        "type": "integer",
+                                                        "example": 10
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/synchronizations/do-sync/price": {
+            "post": {
+                "tags": [
+                    "Alpha Synchronization"
+                ],
+                "summary": "Synchronize prices from Alpha system",
+                "description": "Fetches and updates product prices from Alpha system",
+                "operationId": "ec7e8453b9ab52da7ddfdae635ba1bea",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "sync_date": {
+                                        "description": "Date to sync from",
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2024-10-26"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful synchronization",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Synchronization completed successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "products_synced": {
+                                                    "type": "integer",
+                                                    "example": 100
+                                                },
+                                                "variants_synced": {
+                                                    "type": "integer",
+                                                    "example": 150
+                                                },
+                                                "sync_time": {
+                                                    "type": "string",
+                                                    "example": "2024-10-26 12:00:00"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid sync_date format"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to connect to Alpha system"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/synchronizations/do-sync/stock": {
+            "post": {
+                "tags": [
+                    "Alpha Synchronization"
+                ],
+                "summary": "Synchronize SKUs from Alpha system",
+                "description": "Fetches and updates product SKUs from Alpha system",
+                "operationId": "701578e86d047d09b4597ab3d3358ecd",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "sync_date": {
+                                        "description": "Date to sync from",
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2024-10-26"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful synchronization",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Synchronization completed successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "products_synced": {
+                                                    "type": "integer",
+                                                    "example": 100
+                                                },
+                                                "variants_synced": {
+                                                    "type": "integer",
+                                                    "example": 150
+                                                },
+                                                "sync_time": {
+                                                    "type": "string",
+                                                    "example": "2024-10-26 12:00:00"
+                                                },
+                                                "sync_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid sync_date format"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "error"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to connect to Alpha system"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/synchronizations/do-sync/stocks": {
+            "post": {
+                "tags": [
+                    "Alpha Synchronization"
+                ],
+                "summary": "Synchronize stock quantities from Alpha system",
+                "description": "Fetches and updates product stock levels from Alpha system",
+                "operationId": "1d2e89ccd4d9efe082c0f7918fed3e8b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "sync_date": {
+                                        "description": "Date to sync from",
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2024-10-26"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful synchronization",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "status": {
+                                            "type": "string",
+                                            "example": "success"
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Stock synchronization completed successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "products_synced": {
+                                                    "type": "integer"
+                                                },
+                                                "variants_synced": {
+                                                    "type": "integer"
+                                                },
+                                                "zero_stock": {
+                                                    "type": "integer"
+                                                },
+                                                "without_stock": {
+                                                    "type": "integer"
+                                                },
+                                                "sync_time": {
+                                                    "type": "string"
+                                                },
+                                                "sync_id": {
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/synchronizations/do-sync/calculate-stock": {
+            "post": {
+                "tags": [
+                    "Alpha Synchronization"
+                ],
+                "summary": "Calculate total stock for products and variants",
+                "operationId": "7676585715637ad1e66107349464a40b",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "sync_date": {
+                                        "type": "string",
+                                        "format": "date"
+                                    },
+                                    "type": {
+                                        "type": "string",
+                                        "enum": [
+                                            "variants",
+                                            "single"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Success"
+                    }
+                }
+            }
         }
     },
     "components": {
+        "schemas": {
+            "InventoryData": {
+                "properties": {
+                    "products": {
+                        "properties": {
+                            "total": {
+                                "type": "integer"
+                            },
+                            "active": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "categories": {
+                        "properties": {
+                            "total": {
+                                "type": "integer"
+                            },
+                            "active": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "collections": {
+                        "properties": {
+                            "total": {
+                                "type": "integer"
+                            },
+                            "active": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "LocationsSummary": {
+                "properties": {
+                    "warehouses": {
+                        "properties": {
+                            "total": {
+                                "type": "integer"
+                            },
+                            "active": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "physical_stores": {
+                        "properties": {
+                            "total": {
+                                "type": "integer"
+                            },
+                            "active": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "ecommerce_sites": {
+                        "properties": {
+                            "total": {
+                                "type": "integer"
+                            },
+                            "active": {
+                                "type": "integer"
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            }
+        },
         "responses": {
             "404": {
                 "description": "Waitlist guests not found"
+            }
+        },
+        "parameters": {
+            "venue_short_code": {
+                "name": "venue_short_code",
+                "in": "query",
+                "description": "Venue short code for filtering data",
+                "required": true,
+                "schema": {
+                    "type": "string"
+                }
+            },
+            "brand_id": {
+                "name": "brand_id",
+                "in": "query",
+                "description": "Brand ID for filtering data",
+                "required": true,
+                "schema": {
+                    "type": "integer"
+                }
+            },
+            "report_type": {
+                "name": "type",
+                "in": "query",
+                "description": "Report aggregation type",
+                "schema": {
+                    "type": "string",
+                    "default": "total",
+                    "enum": [
+                        "daily",
+                        "weekly",
+                        "monthly",
+                        "yearly",
+                        "total"
+                    ]
+                }
             }
         }
     },
@@ -10477,6 +12496,14 @@
         {
             "name": "AI",
             "description": "AI"
+        },
+        {
+            "name": "Accommodation",
+            "description": "Operations related to Accommodation"
+        },
+        {
+            "name": "Affiliate",
+            "description": "Operations related to Affiliate"
         },
         {
             "name": "Analytics",
@@ -10495,8 +12522,20 @@
             "description": "Operations related to Menu Management"
         },
         {
+            "name": "Customers",
+            "description": "Operations related to Customers"
+        },
+        {
+            "name": "Dashboard",
+            "description": "Operations related to Dashboard"
+        },
+        {
             "name": "Staff Management",
             "description": "Operations related to Staff Management"
+        },
+        {
+            "name": "End User Card API",
+            "description": "Operations related to End User Car"
         },
         {
             "name": "Staff Management",
@@ -10511,16 +12550,32 @@
             "description": "Operations related to Faqs"
         },
         {
+            "name": "Feature Feedback API",
+            "description": "Operations related to Feature Feedback"
+        },
+        {
             "name": "Guests",
             "description": "Operations related to Guests"
         },
         {
+            "name": "Housekeeping Task",
+            "description": "Operations related to Housekeeping Task"
+        },
+        {
             "name": "Inventory",
             "description": "Operations related to Inventory Management"
         },
         {
             "name": "Inventory",
             "description": "Operations related to Inventory Management"
+        },
+        {
+            "name": "Legal API",
+            "description": "Operations related to Legal Requests"
+        },
+        {
+            "name": "Loyalty",
+            "description": "Operations related to Loyalty"
         },
         {
             "name": "OccupancyRatesForecast",
@@ -10529,6 +12584,10 @@
         {
             "name": "Orders",
             "description": "Operations related to Orders"
+        },
+        {
+            "name": "Payment Links",
+            "description": "Operations related to Payment Links"
         },
         {
             "name": "Staff Management",
@@ -10567,6 +12626,10 @@
             "description": "Operations related to Restaurant PreOnboarding"
         },
         {
+            "name": "Retail",
+            "description": "Operations related to Retail"
+        },
+        {
             "name": "Staff Management",
             "description": "Operations related to Staff Management"
         },
@@ -10581,6 +12644,10 @@
         {
             "name": "Table Management",
             "description": "Operations related to Table Management"
+        },
+        {
+            "name": "Template API",
+            "description": "Operations related to Template"
         },
         {
             "name": "DoorDashDriveIntegration",
@@ -10601,6 +12668,18 @@
         {
             "name": "Waitlist Management",
             "description": "Operations related to Waitlist Management"
+        },
+        {
+            "name": "Entertainment Venues",
+            "description": "Operations related to Entertainment Venues"
+        },
+        {
+            "name": "Inventory Reports",
+            "description": "API endpoints for inventory reporting and analytics"
+        },
+        {
+            "name": "Alpha Synchronization",
+            "description": "API endpoints for syncing data with Alpha system"
         }
     ]
 }

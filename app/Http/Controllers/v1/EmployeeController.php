@@ -1,5 +1,7 @@
 <?php
+
 namespace App\Http\Controllers\v1;
+
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\EmployeeSalaryHistory;
@@ -8,6 +10,7 @@ use App\Models\User;
 use App\Models\VenueType;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use function response;
@@ -26,8 +29,6 @@ use function response;
  *   description="Operations related to Staff Management"
  * )
  */
-
-
 class EmployeeController extends Controller
 {
     /**
@@ -68,9 +69,9 @@ class EmployeeController extends Controller
             ->get();
 
 
-        foreach($employees as $employee) {
+        foreach ($employees as $employee) {
             if ($employee->role_id == 2 || $employee->role_id == 5 || $employee->role_id == 13) { // owner
-                $employee->load(['employees', 'manager' => function($query) {
+                $employee->load(['employees', 'manager' => function ($query) {
                     $query->with('employees');
                 }]);
             } elseif ($employee->role_id == 1 || $employee->role_id == 6 || $employee->role_id == 9 || $employee->role_id == 14) { // manager
@@ -216,7 +217,8 @@ class EmployeeController extends Controller
             'salary_frequency' => 'required|in:daily,weekly,bi-weekly,monthly,annual,custom,hourly',
             'frequency_number' => 'required_if:salary_frequency,custom|min:1',
             'frequency_unit' => 'required_if:salary_frequency,custom|in:days,weeks,months,years,hours',
-            'custom_role'=> 'nullable|string|max:255',
+            'custom_role' => 'nullable|string|max:255',
+            'profile_picture' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'manager_id' => (
                 $request->input('role_id') == 3 ||
                 $request->input('role_id') == 4 ||
@@ -228,7 +230,7 @@ class EmployeeController extends Controller
                 $request->input('role_id') == 15 ||
                 $request->input('role_id') == 16 ||
                 $request->input('role_id') == 17
-            )  ? 'required|exists:employees,id' : 'nullable',
+            ) ? 'required|exists:employees,id' : 'nullable',
 //            'employee_password' => (
 //                $request->input('role_id') == 3 ||
 //                $request->input('role_id') == 4 ||
@@ -258,7 +260,7 @@ class EmployeeController extends Controller
         }
 
         // check if custom role is set and then set the custom_role string
-        if($request->input('custom_role')){
+        if ($request->input('custom_role')) {
             $employee->custom_role = $request->input('custom_role');
         }
 
@@ -292,10 +294,14 @@ class EmployeeController extends Controller
             $request->input('role_id') == 15 ||
             $request->input('role_id') == 16 ||
             $request->input('role_id') == 17
-        )  ? null : $request->input('owner_id');
+        ) ? null : $request->input('owner_id');
         $employee->salary = $request->input('salary');
         $employee->salary_frequency = $request->input('salary_frequency');
         $employee->restaurant_id = $venue->id;
+        if ($request->hasFile('profile_picture')) {
+            $path = Storage::disk('s3')->putFile('profile_pictures', $request->file('profile_picture'));
+            $employee->profile_picture = $path;
+        }
         $employee->save();
 
         // TODO: maybe we need this logic for multiple brands
@@ -416,7 +422,7 @@ class EmployeeController extends Controller
         }
 
         // Check if the user is authorized to edit the employee
-//        $user = Employee::findOrFail(auth()->user()->id);
+//        $user = Employee::where('user_id', auth()->user()->id)->first();
 //        if (!($user->role_id === 2)  || ($user->role_id === 1 && $employee->manager_id !== $user->id)) {
 //            return response()->json(['error' => 'Unauthorized'], 401);
 //        }

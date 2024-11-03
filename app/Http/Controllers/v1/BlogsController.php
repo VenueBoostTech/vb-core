@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Google\Cloud\Translate\V2\TranslateClient;
 use function response;
 
 
@@ -536,7 +537,7 @@ class BlogsController extends Controller
     {
         $limit = $request->input('limit', 10);
 
-        $blogs = Blog::select('id', 'title', 'read_count')
+        $blogs = Blog::select('id', 'title', 'read_count', 'is_featured', 'is_draft')
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m-%d') as posted_on")
             ->orderBy('created_at', 'desc') // Order by latest
             ->take($limit)
@@ -558,7 +559,7 @@ class BlogsController extends Controller
     public function blogsListSuperadmin(Request $request): \Illuminate\Http\JsonResponse
     {
 
-        $blogs = Blog::select('id', 'title', 'author_name')
+        $blogs = Blog::select('id', 'title', 'author_name', 'is_featured', 'is_draft')
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m-%d') as posted_on")
             ->orderBy('created_at', 'desc') // Order by latest
             ->get();
@@ -569,17 +570,55 @@ class BlogsController extends Controller
         ]);
     }
 
+    public function featuredBlog(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $blog = Blog::with('categories')
+            ->where('is_featured', 1)
+            ->where('is_draft', false)
+            ->first();
+
+        if (!$blog) {
+            return response()->json(['error' => 'No featured blog found'], 404);
+        }
+
+        $categoryMapping = $this->getCategoryMapping();
+        $transformedBlog = [
+            'id' => $blog->id,
+            'title' => $blog->title,
+            'slug' => $blog->slug,
+            'slug_related' => $blog->slug_related,
+            'date' => $blog->created_at ? $blog->created_at->format('F j, Y') : '-',
+            'image' => $this->getImageUrl($blog),
+            'tags' => $blog->tags,
+            'body' => $blog->body,
+            'author_name' => $blog->author_name,
+            'author_designation' => $blog->author_designation,
+            'read_time' => $blog->read_time,
+            'show_quiz' => $blog->show_quiz,
+            'is_new_type' => $blog->is_new_type,
+            'is_featured' => $blog->is_featured,
+            'category_text' => $categoryMapping[$blog->category_text] ?? $blog->category_text,
+        ];
+
+        return response()->json([
+            'data' => $transformedBlog
+        ]);
+    }
     public function blogsList(Request $request): \Illuminate\Http\JsonResponse
     {
         $validator = Validator::make($request->all(), [
-            'category' => 'sometimes|string'
+            'category' => 'sometimes|string',
+            'category_text' => 'sometimes|string',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+            'is_new_type' => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 400);
         }
 
-        $query = Blog::with('categories');
+        $query = Blog::with('categories')->where('is_draft', false);
 
         $categoryName = $request->input('category');
         if (!empty($categoryName)) {
@@ -588,25 +627,142 @@ class BlogsController extends Controller
             });
         }
 
+        $categoryText = $request->input('category_text');
+        if (!empty($categoryText)) {
+            $query->where('category_text', '=', array_search($categoryText, $this->getCategoryMapping()));
+        }
+
+//        $isNewType = $request->input('is_new_type', 1);
+//        $query->where('is_new_type', $isNewType);
+
         $excludedIds = [
-            76,
-            75,
-            74,
-            73,
-            72,
-            69,
-            68, 67, 66, 65, 64, 63, 62, 61, 60, 59,
-            58, 57, 55, 54, 53, 52, 51, 50, 49, 48,
-            47, 46, 45, 44, 43, 42, 41, 40,
-            39, 38, 37,
-            36,
-            79,
-            80,
-            81,
-            82,
+            76, 75, 74, 73, 72, 69, 68, 67, 66, 65, 64, 63, 62, 61, 60, 59,
+            58, 57, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42,
+            41, 40, 39, 38, 37, 36, 79, 80, 81, 82, 218, 34, 20, 19, 14,11,10,7,2,1
         ];
 
-        // Mapping array
+        $perPage = $request->input('per_page', 10);
+        $page = $request->input('page', 1);
+
+        $blogs = $query->whereNotIn('id', $excludedIds)
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage, ['id', 'title', 'slug', 'slug_related', 'created_at', 'image', 'tags', 'body', 'author_name', 'author_designation', 'read_time', 'show_quiz', 'is_new_type', 'category_text', 'is_featured'], 'page', $page);
+
+        $blogs->getCollection()->transform(function ($blog) {
+            $categoryMapping = $this->getCategoryMapping();
+            return [
+                'id' => $blog->id,
+                'title' => $blog->title,
+                'slug' => $blog->slug,
+                'slug_related' => $blog->slug_related,
+                'date' => $blog->created_at ? $blog->created_at->format('F j, Y') : '-',
+                'image' => $this->getImageUrl($blog),
+                'tags' => $blog->tags,
+                'body' => $blog->body,
+                'author_name' => $blog->author_name,
+                'author_designation' => $blog->author_designation,
+                'read_time' => $blog->read_time,
+                'show_quiz' => $blog->show_quiz,
+                'is_new_type' => $blog->is_new_type,
+                'is_featured' => $blog->is_featured,
+                'category_text' => $categoryMapping[$blog->category_text] ?? $blog->category_text,
+            ];
+        });
+
+        return response()->json([
+            'data' => $blogs->items(),
+            'current_page' => $blogs->currentPage(),
+            'last_page' => $blogs->lastPage(),
+            'per_page' => $blogs->perPage(),
+            'total' => $blogs->total(),
+        ]);
+    }
+
+    public function searchBlogs(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'query' => 'required|string|min:3',
+            'category_text' => 'sometimes|string',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+            'is_new_type' => 'sometimes|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        $query = $request->input('query');
+        $categoryText = $request->input('category_text');
+        $perPage = $request->input('per_page', 10);
+        $page = $request->input('page', 1);
+        $isNewType = $request->input('is_new_type', 1);
+
+        $excludedIds = [
+            76, 75, 74, 73, 72, 69, 68, 67, 66, 65, 64, 63, 62, 61, 60, 59,
+            58, 57, 55, 54, 53, 52, 51, 50, 49, 48, 47, 46, 45, 44, 43, 42,
+            41, 40, 39, 38, 37, 36, 79, 80, 81, 82, 218, 34, 20, 19, 14, 11, 10, 7, 2, 1
+        ];
+
+        $blogs = Blog::where('title', 'like', '%' . $query . '%')
+            ->where('is_draft', false)
+            ->whereNotIn('id', $excludedIds);
+
+        if (!empty($categoryText)) {
+            $blogs->where('category_text', '=', array_search($categoryText, $this->getCategoryMapping()));
+        }
+
+        $blogs = $blogs->orderBy('created_at', 'desc')
+            ->paginate($perPage, ['id', 'title', 'slug', 'slug_related', 'created_at', 'image', 'tags', 'body', 'author_name', 'author_designation', 'read_time', 'show_quiz', 'is_new_type', 'category_text'], 'page', $page);
+
+        $blogs->getCollection()->transform(function ($blog) {
+            $categoryMapping = $this->getCategoryMapping();
+            return [
+                'id' => $blog->id,
+                'title' => $blog->title,
+                'slug' => $blog->slug,
+                'slug_related' => $blog->slug_related,
+                'date' => $blog->created_at ? $blog->created_at->format('F j, Y') : '-',
+                'image' => $this->getImageUrl($blog),
+                'tags' => $blog->tags,
+                'body' => $blog->body,
+                'author_name' => $blog->author_name,
+                'author_designation' => $blog->author_designation,
+                'read_time' => $blog->read_time,
+                'show_quiz' => $blog->show_quiz,
+                'is_new_type' => $blog->is_new_type,
+                'category_text' => $categoryMapping[$blog->category_text] ?? $blog->category_text,
+            ];
+        });
+
+        return response()->json([
+            'data' => $blogs->items(),
+            'current_page' => $blogs->currentPage(),
+            'last_page' => $blogs->lastPage(),
+            'per_page' => $blogs->perPage(),
+            'total' => $blogs->total(),
+        ]);
+    }
+
+    private function getImageUrl($blog)
+    {
+        if (in_array($blog->id, [56, 70, 71, 171, 175, 191, 192, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 214, 216])) {
+            return $blog->image;
+        }
+        return $blog->image ? Storage::disk('s3')->temporaryUrl($blog->image, '+5 minutes') : null;
+    }
+
+    private function unfeatureOtherBlogs($exceptBlogId = null)
+    {
+        $query = Blog::where('is_featured', true);
+        if ($exceptBlogId) {
+            $query->where('id', '!=', $exceptBlogId);
+        }
+        $query->update(['is_featured' => false]);
+    }
+
+    private function getCategoryText($categoryText): string
+    {
         $categoryMapping = [
             'news_and_trends' => 'News and trends',
             'venue_management' => 'Venue management',
@@ -616,57 +772,24 @@ class BlogsController extends Controller
             'industry_insights' => 'Industry insights'
         ];
 
-        $blogs = $query->whereNotIn('id', $excludedIds)
-            ->orderBy('created_at', 'desc') // Order by latest
-            ->get(['id', 'title', 'slug', 'slug_related', 'created_at', 'image', 'tags', 'body', 'author_name', 'author_designation', 'read_time', 'show_quiz', 'is_new_type', 'category_text'])
-            ->map(function ($blog) use ($categoryMapping) {
-                return [
-                    'id' => $blog->id,
-                    'title' => $blog->title,
-                    'slug' => $blog->slug,
-                    'slug_related' => $blog->slug_related,
-                    'date' => $blog->created_at ? $blog->created_at->format('F j, Y') :'-' ,
-                    'image' => (
-                        $blog->id === 56 ||
-                        $blog->id === 70 ||
-                        $blog->id === 71 ||
-                        $blog->id === 171 ||
-                        $blog->id === 175 ||
-                        $blog->id === 191 ||
-                        $blog->id === 192 ||
-                        $blog->id === 193 ||
-                        $blog->id === 194 ||
-                        $blog->id === 195 ||
-                        $blog->id === 196 ||
-                        $blog->id === 197 ||
-                        $blog->id === 198 ||
-                        $blog->id === 199 ||
-                        $blog->id === 200 ||
-                        $blog->id === 201 ||
-                        $blog->id === 202 ||
-                        $blog->id === 214 ||
-                        $blog->id === 216
-                    )
-                        ? $blog->image
-                        : ($blog->image ? Storage::disk('s3')->temporaryUrl($blog->image, '+5 minutes') : null),
-                    'tags' => $blog->tags,
-                    'body' => $blog->body,
-                    'author_name' => $blog->author_name,
-                    'author_designation' => $blog->author_designation,
-                    'read_time' => $blog->read_time,
-                    'show_quiz' => $blog->show_quiz,
-                    'is_new_type' => $blog->is_new_type,
-                    'category_text' => $categoryMapping[$blog->category_text] ?? $blog->category_text,
-                ];
-            });
-
-        return response()->json($blogs);
+        return $categoryMapping[$categoryText] ?? $categoryText;
     }
 
-    public function getOneBlog($id): \Illuminate\Http\JsonResponse
+    private function getCategoryMapping()
+    {
+        return [
+            'news_and_trends' => 'News and trends',
+            'venue_management' => 'Venue management',
+            'pro_tips_and_best_practices' => 'Pro Tips and Best Practices',
+            'special_announcements' => 'Special Announcements',
+            'feature_showcase' => 'Feature Showcase',
+            'industry_insights' => 'Industry insights'
+        ];
+    }
+    public function getOneBlog($slug): \Illuminate\Http\JsonResponse
     {
         // Validate that the blog exists
-        $blog = Blog::with('categories')->find($id);
+        $blog = Blog::with('categories')->where('slug', $slug)->first();
 
         if (!$blog) {
             return response()->json(['error' => 'Blog not found'], 404);
@@ -687,6 +810,7 @@ class BlogsController extends Controller
             'title' => $blog->title,
             'category' => $blog->categories->pluck('name')->join(', '),
             'slug' => $blog->slug,
+            'slug_related' => $blog->slug_related,
             'date' => $blog->created_at ? $blog->created_at->format('F j, Y') :'-' ,
             'image' => (
                 $blog->id === 56 ||
@@ -719,48 +843,87 @@ class BlogsController extends Controller
             'read_time' => $blog->read_time,
             'show_quiz' => $blog->show_quiz,
             'is_new_type' => $blog->is_new_type,
+            'is_featured' => $blog->is_featured,
             'category_text' => $categoryMapping[$blog->category_text] ?? $blog->category_text,
         ];
 
         return response()->json($blogData);
     }
 
+    public function getOneBlogNew($id): \Illuminate\Http\JsonResponse
+    {
+        try {
+            $blog = Blog::findOrFail($id);
+
+            $blogData = [
+                'id' => $blog->id,
+                'title' => $blog->title,
+                'body' => $blog->body,
+                'image' => $blog->image ? Storage::disk('s3')->temporaryUrl($blog->image, '+5 minutes') : null,
+                'author_name' => $blog->author_name,
+                'author_designation' => $blog->author_designation,
+                'author_avatar' => $blog->author_avatar,
+                'read_time' => $blog->read_time,
+                'tags' => $blog->tags,
+                'category_text' => $blog->category_text,
+                'show_quiz' => $blog->show_quiz,
+                'created_at' => $blog->created_at,
+                'updated_at' => $blog->updated_at,
+                'is_featured' => $blog->is_featured,
+                'is_draft' => $blog->is_draft,
+                'translations' => [
+                    'es' => ['title' => $blog->title_es, 'body' => $blog->body_es],
+                    'fr' => ['title' => $blog->title_fr, 'body' => $blog->body_fr],
+                    'it' => ['title' => $blog->title_it, 'body' => $blog->body_it],
+                    'de' => ['title' => $blog->title_de, 'body' => $blog->body_de],
+                    'pt' => ['title' => $blog->title_pt, 'body' => $blog->body_pt],
+                ]
+            ];
+
+            return response()->json($blogData);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json(['error' => 'Blog post not found'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'An error occurred while retrieving the blog post'], 500);
+        }
+    }
 
     public function storeBlog(Request $request): \Illuminate\Http\JsonResponse
     {
+
+        // Parse the translate_to field if it exists
+        if ($request->has('translate_to')) {
+            $translateTo = json_decode($request->input('translate_to'), true);
+            $request->merge(['translate_to' => $translateTo]);
+        }
+
         $validator = Validator::make($request->all(), [
             'title' => 'required|string|max:255',
             'image' => 'nullable',
-             'body' => 'required',
-             'tags' => 'required|string',
-             'category_text' => 'required|string',
+            'body' => 'required',
+            'tags' => 'required|string',
+            'category_text' => 'required|string',
             'author_name' => 'required|string|max:255',
             'author_designation' => 'required|string|max:255',
             'read_time' => 'required|integer',
+            'translate_to' => 'nullable|array',
+            'is_featured' => 'nullable|boolean',
+            'is_draft' => 'nullable|boolean',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 400);
         }
-////
-//        $user = auth()->user();
-////        dd($user->role->name);
-//        if ($user->role->name !== 'Superadmin') {
-//            return response()->json(['error' => 'Unauthorized: Only super admins can perform this action'], 403);
-//        }
 
         $requestType = 'gallery';
 
         $slug = Str::slug($request->input('title'));
         $slugRelated = "/blog/{$slug}";
 
-
         $path = null;
         if ($request->file('image')) {
-
             $blogImage = $request->file('image');
             $filename = Str::random(20) . '.' . $blogImage->getClientOriginalExtension();
-
             $path = Storage::disk('s3')->putFileAs('blog_section_images/' . $requestType, $blogImage, $filename);
 
             $photo = new Photo();
@@ -768,12 +931,11 @@ class BlogsController extends Controller
             $photo->type = $requestType;
             $photo->venue_id = 1;
             $photo->save();
-
         }
 
         $blogData = [
             'title' => $request->input('title'),
-            'content' =>'-',
+            'content' => '-',
             'body' => $request->input('body'),
             'image' => $path,
             'author_avatar' => $request->input('author_avatar'),
@@ -786,13 +948,27 @@ class BlogsController extends Controller
             'slug_related' => $slugRelated,
             'show_quiz' => $request->input('show_quiz'),
             'category_text' => $request->input('category_text'),
-            'is_new_type' => true
+            'is_new_type' => true,
+            'is_featured' => $request->input('is_featured', false),
+            'is_draft' => $request->input('is_draft', false),
         ];
 
+        // Auto-translate
+        $translateTo = $request->input('translate_to', []);
+        foreach ($translateTo as $lang) {
+            $blogData["title_{$lang}"] = $this->translateText($request->input('title'), $lang);
+            $blogData["body_{$lang}"] = $this->translateText($request->input('body'), $lang);
+        }
+
+        // If the new blog is set as featured, unfeature all other blogs
+        if ($blogData['is_featured']) {
+            $this->unfeatureOtherBlogs();
+        }
         Blog::create($blogData);
 
-        return response()->json(['message' => 'Successfully stored the blogs']);
+        return response()->json(['message' => 'Successfully stored the blog']);
     }
+
 
     public function updateStatus(Request $request, $id): \Illuminate\Http\JsonResponse
     {
@@ -819,6 +995,113 @@ class BlogsController extends Controller
         $blog->save();
 
         return response()->json(['message' => 'Blog status updated successfully', 'blog' => $blog]);
+    }
+
+
+    public function updateBlogNew(Request $request, $id): \Illuminate\Http\JsonResponse
+    {
+        $blog = Blog::findOrFail($id);
+
+        // Parse the translate_to field if it exists
+        if ($request->has('translate_to')) {
+            $translateTo = json_decode($request->input('translate_to'), true);
+            $request->merge(['translate_to' => $translateTo]);
+        }
+
+
+        $validator = Validator::make($request->all(), [
+            'title' => 'required|string|max:255',
+            'image' => 'nullable',
+            'body' => 'required',
+            'tags' => 'required|string',
+            'category_text' => 'required|string',
+            'author_name' => 'required|string|max:255',
+            'author_designation' => 'required|string|max:255',
+            'read_time' => 'required|integer',
+            'translate_to' => 'nullable|array',
+            'is_featured' => 'nullable|boolean',
+            'is_draft' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        $requestType = 'gallery';
+
+        $slug = Str::slug($request->input('title'));
+        $slugRelated = "/blog/{$slug}";
+
+        $path = $blog->image;
+        if ($request->hasFile('image')) {
+            if ($blog->image) {
+                Storage::disk('s3')->delete($blog->image);
+            }
+
+            $blogImage = $request->file('image');
+            $filename = Str::random(20) . '.' . $blogImage->getClientOriginalExtension();
+            $path = Storage::disk('s3')->putFileAs('blog_section_images/' . $requestType, $blogImage, $filename);
+
+            $photo = new Photo();
+            $photo->image_path = $path;
+            $photo->type = $requestType;
+            $photo->venue_id = 1;
+            $photo->save();
+        }
+
+        $blogData = [
+            'title' => $request->input('title'),
+            'content' => '-',
+            'body' => $request->input('body'),
+            'image' => $path,
+            'author_avatar' => $request->input('author_avatar'),
+            'author_name' => $request->input('author_name'),
+            'author_designation' => $request->input('author_designation'),
+            'read_time' => $request->input('read_time'),
+            'has_tags' => true,
+            'tags' => $request->input('tags'),
+            'slug' => $slug,
+            'slug_related' => $slugRelated,
+            'show_quiz' => $request->input('show_quiz'),
+            'category_text' => $request->input('category_text'),
+            'is_new_type' => true,
+            'is_featured' => $request->input('is_featured', false),
+            'is_draft' => $request->input('is_draft', false),
+        ];
+
+        // Auto-translate
+        $translateTo = $request->input('translate_to', []);
+        foreach ($translateTo as $lang) {
+            $blogData["title_{$lang}"] = $this->translateText($request->input('title'), $lang);
+            $blogData["body_{$lang}"] = $this->translateText($request->input('body'), $lang);
+        }
+
+        // If the blog is being set as featured, unfeature all other blogs
+        if ($blogData['is_featured'] && !$blog->is_featured) {
+            $this->unfeatureOtherBlogs($id);
+        }
+
+        $blog->update($blogData);
+
+        return response()->json(['message' => 'Successfully updated the blog']);
+    }
+
+
+    /**
+     * @throws \Google\Cloud\Core\Exception\GoogleException
+     * @throws \Google\Cloud\Core\Exception\ServiceException
+     */
+    private function translateText($text, $targetLanguage)
+    {
+        $translate = new TranslateClient([
+            'key' => config('services.google_translate.key')
+        ]);
+
+        $result = $translate->translate($text, [
+            'target' => $targetLanguage
+        ]);
+
+        return $result['text'];
     }
 
     public function updateBlog(Request $request, $id): \Illuminate\Http\JsonResponse

@@ -11,7 +11,17 @@ class VbStoreAttributeOption extends Model
 
     protected $table = 'vb_store_attributes_options';
 
-    protected $fillable = ['attribute_id', 'option_name', 'option_url', 'option_description', 'option_photo'];
+    protected $fillable = [
+        'attribute_id',
+        'option_name',
+        'option_name_al',
+        'option_url',
+        'option_description',
+        'option_description_al',
+        'option_photo',
+        'bybest_id',
+        'order_id'
+    ];
 
     public function attribute(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
@@ -30,5 +40,10 @@ class VbStoreAttributeOption extends Model
         return $this->belongsToMany(VbStoreProductVariant::class, 'vb_store_product_variant_attributes', 'attribute_id', 'variant_id')
             ->withPivot('venue_id')
             ->withTimestamps();
+    }
+
+    public function productVariantAttributes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(VbStoreProductVariantAttribute::class, 'attribute_id');
     }
 }

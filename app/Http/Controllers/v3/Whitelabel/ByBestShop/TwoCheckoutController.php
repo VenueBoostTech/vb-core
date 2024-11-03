@@ -212,7 +212,7 @@ class TwoCheckoutController extends Controller
                 'email' => $customer['email'],
                 'password' => Hash::make('1234'),
                 'country_code' => 'US',
-                'end_user' => true
+                'enduser' => true
             ]);
 
             $customer = Customer::create([

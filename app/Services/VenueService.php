@@ -2,12 +2,28 @@
 
 namespace App\Services;
 
+use App\Models\AppConfiguration;
+use App\Models\Employee;
+use App\Models\Guest;
 use App\Models\RentalUnit;
 use App\Models\User;
+use App\Models\VbApp;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
+use App\Models\Restaurant;
+
 
 class VenueService
 {
+
+    protected UserService $userService;
+
+    public function __construct(UserService $userService)
+    {
+        $this->userService = $userService;
+    }
 
     public function manageGeneralVenueAddonsAndPlan($restaurantId) {
         // Insert into restaurant_addons
@@ -140,6 +156,10 @@ class VenueService
 
     public function adminAuthCheck()
     {
+        if (!auth()->user() || !$this->userService->isOwner(auth()->user())) {
+            return response()->json(['error' => 'User not authorized for this action'], 403);
+        }
+
         if (!auth()->user()->restaurants->count()) {
             return response()->json(['error' => 'User not eligible for making this API call'], 400);
         }
@@ -149,14 +169,26 @@ class VenueService
             return response()->json(['error' => 'Venue short code is required'], 400);
         }
 
-        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        // URL decode the venue short code
+        $decodedVenueCode = urldecode($apiCallVenueShortCode);
+
+        // Add logging to debug
+        Log::info('Searching for venue:', [
+            'raw_code' => $apiCallVenueShortCode,
+            'decoded_code' => $decodedVenueCode,
+            'available_venues' => auth()->user()->restaurants->pluck('short_code')
+        ]);
+
+        $venue = auth()->user()->restaurants->where('short_code', $decodedVenueCode)->first();
         if (!$venue) {
-            return response()->json(['error' => 'Venue not found'], 404);
+            return response()->json([
+                'error' => 'Venue not found',
+                'searched_code' => $decodedVenueCode
+            ], 404);
         }
 
         return $venue;
     }
-
     public function getVenueIdsForUser($userId): array
     {
         $user = User::find($userId);
@@ -196,4 +228,83 @@ class VenueService
 
         return $readableBedResult;
     }
+
+
+    /**
+     * Get a venue by its app code.
+     *
+     * @param string|null $appCode
+     * @return Restaurant
+     * @throws ValidationException
+     * @throws \Exception
+     */
+    public function getVenueByAppCode(?string $appKey): Restaurant
+    {
+        if (!$appKey) {
+            throw ValidationException::withMessages([
+                'venue_app_key' => ['Venue app key is required'],
+            ]);
+        }
+
+        $venue = Restaurant::where('app_key', $appKey)->first();
+
+        if (!$venue) {
+            throw new \Exception('Venue not found', 404);
+        }
+
+        return $venue;
+    }
+
+    /**
+     * Get the app configuration for a venue and app source.
+     *
+     * @param Restaurant $venue
+     * @param string $appSource
+     * @return array
+     * @throws \Exception
+     */
+    public function getSimplifiedAppConfiguration(Restaurant $venue, string $appSource): array
+    {
+        $vbApp = VbApp::where('slug', $appSource)->first();
+
+        if (!$vbApp) {
+            throw new \Exception('Invalid app source', 400);
+        }
+
+        $appConfiguration = AppConfiguration::where('venue_id', $venue->id)
+            ->where('vb_app_id', $vbApp->id)
+            ->first();
+
+        if (!$appConfiguration) {
+            throw new \Exception('App configuration not found for this venue and app source', 404);
+        }
+
+        return [
+            'app_name' => $appConfiguration->app_name,
+            'main_color' => $appConfiguration->main_color,
+            'button_color' => $appConfiguration->button_color,
+            'logo_url' => $appConfiguration->logo_url,
+        ];
+    }
+
+    public function employee(): Employee|JsonResponse
+    {
+        if (!auth()->user()) {
+            return response()->json(['error' => 'No authenticated user to make this API call'], 401);
+        }
+
+        $userId = auth()->user()->id;
+
+       $employee = Employee::where('user_id', $userId)->first();
+
+        if (!$employee) {
+            return response()->json(['error' => 'Employeee not found'], 404);
+        }
+
+        return $employee;
+
+
+
+    }
+
 }
