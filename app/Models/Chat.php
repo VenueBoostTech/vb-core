@@ -34,4 +34,9 @@ class Chat extends Model
     {
         return $this->hasMany(Message::class);
     }
+
+    public function order(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Order::class);
+    }
 }

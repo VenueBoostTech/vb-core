@@ -19,4 +19,16 @@ class ThirdPartyBooking extends Model
         'start_date',
         'end_date',
     ];
+
+    protected $dates = ['start_date', 'end_date'];
+
+    public function venue()
+    {
+        return $this->belongsTo(Restaurant::class);
+    }
+
+    public function rentalUnit()
+    {
+        return $this->belongsTo(RentalUnit::class);
+    }
 }

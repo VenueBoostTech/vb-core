@@ -9,6 +9,7 @@
 <table>
     <thead>
     <tr>
+        
         <th>Item Name</th>
         <th>Current Quantity</th>
         <th>Reorder Point</th>

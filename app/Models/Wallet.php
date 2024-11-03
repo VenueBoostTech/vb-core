@@ -36,4 +36,11 @@ class Wallet extends Model
     {
         return $this->belongsTo(LoyaltyTier::class, 'loyalty_tier_id');
     }
+
+    // Relationship with WalletHistory
+
+    public function walletHistory(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(WalletHistory::class);
+    }
 }

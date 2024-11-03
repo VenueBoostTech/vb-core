@@ -160,7 +160,7 @@ class BookingController extends Controller
                         // make hash random password
                         'password' => Hash::make(Str::random(8)),
                         'country_code' => 'US',
-                        'end_user' => true
+                        'enduser' => true
                     ]);
                 }
                 $guest->user_id = $user->id;
@@ -168,18 +168,24 @@ class BookingController extends Controller
             }
             else {
                 if ($request->guest['email']){
+                    // First check if guest exists
                     $guest = Guest::where('email', $request->guest['email'])->first();
 
-                    if (!$guest) {
+                    // First find existing user or create new one
+                    $user = User::where('email', $request->guest['email'])->first();
+
+                    if (!$user) {
                         $user = User::create([
                             'name' => $request->guest['first_name'] . ' ' . $request->guest['last_name'],
                             'email' => $request->guest['email'],
-                            // make hash random password
                             'password' => Hash::make(Str::random(8)),
                             'country_code' => 'US',
-                            'end_user' => true
+                            'enduser' => true
                         ]);
+                    }
 
+                    if (!$guest) {
+                        // Create new guest if doesn't exist
                         $guest = Guest::create([
                             'restaurant_id' => $venueId,
                             'name' => $request->guest['first_name'] . ' ' . $request->guest['last_name'],
@@ -194,7 +200,6 @@ class BookingController extends Controller
                         // get first tier based on name
                         $tier = LoyaltyTier::where('name', 'Bronze Tier')->first();
 
-
                         Wallet::create([
                             'guest_id' => $guest->id,
                             'venue_id' => $venueId,
@@ -202,25 +207,14 @@ class BookingController extends Controller
                             'balance' => 0,
                         ]);
                         $guestId = $guest->id;
-
                     } else {
                         $guestId = $guest->id;
 
-                        // also create user if not exists
-                        $user = User::where('email', $guest->email)->first();
-                        if (!$user) {
-                            $user = User::create([
-                                'name' => $guest->name,
-                                'email' => $guest->email,
-                                // make hash random password
-                                'password' => Hash::make(Str::random(8)),
-                                'country_code' => 'US',
-                                'end_user' => true
-                            ]);
+                        // Update existing guest with user_id if not set
+                        if (!$guest->user_id) {
+                            $guest->user_id = $user->id;
+                            $guest->save();
                         }
-                        $guest->user_id = $user->id;
-                        $guest->save();
-
                     }
 
 
@@ -354,19 +348,21 @@ class BookingController extends Controller
 
             Mail::to($guest['email'])->send(new GuestReceiptEmail($venue->name, $guestReceiptData));
 
+            $venueLogo = $venue->logo ? Storage::disk('s3')->temporaryUrl($venue->logo, '+8000 minutes') : null;
             // send a new booking email to the venue
-            if ( $venue->email) {
+            if ($venue->email) {
                 Mail::to($venue->email)->send(new NewBookingEmail(
                     $venue->name,
                     $guest->name,
                     $rentalUnit->name,
                     $booking->check_in_date,
                     $booking->check_out_date,
+                    $venueLogo
                 ));
             }
 
             // send message to the guest
-            if ( $venue->phone_number) {
+            if ($venue->phone_number) {
                 // Twilio account information
                 $account_sid = env('TWILIO_ACCOUNT_SID');
                 $auth_token = env('TWILIO_AUTH_TOKEN');
@@ -383,7 +379,7 @@ class BookingController extends Controller
 
 
                 try {
-                    // Send SMS message
+                     //Send SMS message
                     $client->messages->create(
                         $venue->phone_number,
                         array(
@@ -402,7 +398,7 @@ class BookingController extends Controller
 
             $tier = $guest->getLoyaltyTierAttribute();
             // get the points earned based on the tier
-            $pointsEarned = $tier->points_per_booking;
+            $pointsEarned = $tier?->points_per_booking ?? 0;
 
             // Update the guest's wallet balance with the points earned
             // Update guest's wallet balance with the earned points

@@ -66,4 +66,14 @@ class Address extends Model
     }
 
 
+    public function projects(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AppProject::class);
+    }
+
+    public function clients(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AppClient::class);
+    }
+
 }

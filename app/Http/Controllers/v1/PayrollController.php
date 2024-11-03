@@ -666,7 +666,7 @@ class PayrollController extends Controller
         }
 
         // Check if the user is authorized to approve the time-off request for the employee
-        $user = Employee::findOrFail(auth()->user()->id);
+        $user = Employee::where('user_id', auth()->user()->id)->first();
         if (!($user->role_id === 2)  || ($user->role_id === 1 && $employee->manager_id !== $user->id)) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
@@ -800,7 +800,7 @@ class PayrollController extends Controller
         }
 
         // Check if the user is authorized to edit the employee
-        $user = Employee::findOrFail(auth()->user()->id);
+        $user = Employee::where('user_id', auth()->user()->id)->first();
         if (!($user->role_id === 2)  || ($user->role_id === 1 && $employee->manager_id !== $user->id)) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
@@ -911,7 +911,7 @@ class PayrollController extends Controller
         }
 
         // Check if the user is authorized to edit the employee
-        $user = Employee::findOrFail(auth()->user()->id);
+        $user = Employee::where('user_id', auth()->user()->id)->first();
         if (!($user->role_id === 2)  || ($user->role_id === 1 && $employee->manager_id !== $user->id)) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
@@ -1047,7 +1047,7 @@ class PayrollController extends Controller
         }
 
         // Check if the user is authorized to edit the employee
-        $user = Employee::findOrFail(auth()->user()->id);
+        $user = Employee::where('user_id', auth()->user()->id)->first();
         if (!($user->role_id === 2)  || ($user->role_id === 1 && $employee->manager_id !== $user->id)) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }

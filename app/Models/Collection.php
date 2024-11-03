@@ -12,7 +12,7 @@ class Collection extends Model
 
     use SoftDeletes;
 
-    protected $fillable = ['name', 'description', 'logo_path', 'venue_id', 'slug', 'bybest_id','created_at', 'updated_at','deleted_at'];
+    protected $fillable = ['name', 'name_al', 'description', 'description_al', 'logo_path', 'venue_id', 'slug', 'bybest_id','created_at', 'updated_at','deleted_at'];
 
     public function venue(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

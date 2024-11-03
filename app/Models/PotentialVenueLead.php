@@ -71,4 +71,9 @@ class PotentialVenueLead extends Model
         return $this->hasOne(SubscribedEmail::class);
     }
 
+    public function onboardingErrors(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(OnboardingError::class);
+    }
+
 }

@@ -13,10 +13,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="x-apple-disable-message-reformatting">
     <!--[if !mso]>
-					<!-->
+               <!-->
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <!--
-						<![endif]-->
+
+
+                  <![endif]-->
     <title></title>
     <style type="text/css">
         @media only screen and (min-width: 620px) {
@@ -171,12 +173,14 @@
         }
     </style>
     <!--[if !mso]>
-						<!-->
+                  <!-->
     <link href="https://fonts.googleapis.com/css?family=Raleway:400,700&display=swap" rel="stylesheet" type="text/css">
     <!--
-							<![endif]-->
+
+
+                     <![endif]-->
 </head>
-<body class="clean-body u_body" style="margin: 0;padding: 0;-webkit-text-size-adjust: 100%;background-color: #ffffff;color: #000000">
+<body class="clean-body u_body" style="margin: 0;padding: 0;-webkit-text-size-adjust: 100%;background-color: #ececec; color: #000000; padding: 0 10px;">
 <!--[if IE]>
 <div class="ie-container">
 <![endif]-->
@@ -205,20 +209,22 @@
                         <!--[if (mso)|(IE)]>
                         <td align="center" width="600" style="width: 600px;padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;" valign="top">
                         <![endif]-->
-                        <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
+                        <div style="max-width: 600px;">
                             <div style="height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                 <!--[if (!mso)&(!IE)]>
                                                                                                                       <!-->
                                 <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                     <!--
+
+
                                                                                                                             <![endif]-->
                                     <table id="u_content_text_2" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:30px;font-family:'Raleway',sans-serif;" align="left">
-                                                <div class="v-color v-text-align" style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
-                                                    <div class="logo" style="text-align: center;">
-                                                        <img src="https://venueboost.io/static/media/logo-png-header.7c3ed4ed1731d48567be.png" alt="VenueBoost Logo" width="225" height="38" class="fr-fic fr-dii">
+                                            <td style="overflow-wrap:break-word;word-break:break-word;padding:20px;font-family:'Raleway',sans-serif;" align="left">
+                                                <div style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
+                                                    <div style="text-align: center;">
+                                                        <img src="{{$venueLogo}}" alt="By Best Apartments  Logo" style="width: 10%" class="fr-fic fr-dii">
                                                     </div>
                                                 </div>
                                             </td>
@@ -226,10 +232,12 @@
                                         </tbody>
                                     </table>
                                     <!--[if (!mso)&(!IE)]>
-                                                                                                                            <!-->
+                                                                                                                                <!-->
                                 </div>
                                 <!--
-                                                                                                                      <![endif]-->
+
+
+                                                                                                                          <![endif]-->
                             </div>
                         </div>
                         <!--[if (mso)|(IE)]>
@@ -259,80 +267,98 @@
                         <td align="center" width="600" style="background-color: #ffffff;width: 600px;padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;" valign="top">
                         <![endif]-->
                         <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
-                            <div style="background-color: #ffffff;height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
+                            <div style="background-color: #ffffff;height: 100%;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;
+
+                            margin: 0 auto;
+
+                            border: 1px solid #ddd;
+
+                            padding: 24px;
+
+                            border-radius: 16px;
+
+                            background-color: #fff;
+
+                            text-align: left;
+
+                            overflow: hidden;
+
+                        ">
                                 <!--[if (!mso)&(!IE)]>
-                                                                                                                      <!-->
-                                <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
+                                                                                                                          <!-->
+                                <div s>
                                     <!--
-                                                                                                                            <![endif]-->
-                                    <table style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                        <tbody>
-                                        <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:25px;font-family:'Raleway',sans-serif;" align="left">
-                                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                                    <tr>
-                                                        <td class="v-text-align" style="padding-right: 0px;padding-left: 0px;" align="center">
-                                                            <img align="center" border="0" src="https://emilon.s3.eu-west-1.amazonaws.com/assets/image-7.png" alt="" title="" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: inline-block !important;border: none;height: auto;float: none;width: 100%;max-width: 82px;" width="82" />
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
+
+
+                                                                                                                                <![endif]-->
                                     <table id="u_content_text_8" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:0px 130px;font-family:'Raleway',sans-serif;" align="left">
+                                            <td style="overflow-wrap:break-word;word-break:break-word;font-family:'Raleway',sans-serif;" align="left">
                                                 <div class="v-color v-text-align" style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
-                                                    <p style="line-height: 140%;">
-                                                        <strong>
-                                                            <span style="font-size: 22px; line-height: 30.8px;"> New Booking Alert 🎉</span>
-                                                        </strong>
-                                                    </p>
+                                                    <span style="color: #000; font-size: 32px;line-height: 46px; font-weight: bold; font-family: 'Manrope', Arial, sans-serif; margin: 0;"> New Booking Alert 🎉</span>
                                                     <p style="line-height: 140%;"></p>
-                                                    <p style="line-height: 140%;margin-top: 20px;">
-                        <span style="font-size: 16px; line-height: 22.4px;">
-                            <strong> You've received a new booking. Please review and manage the details in your VB admin:</strong>
-                        </span>
+                                                    <p style="line-height: 140%;margin-top: 20px; text-align: left;">
+                                                        <span style="color: #666666; font-size: 16px; line-height: 24px; margin: 0 0 10px; "> You've received a new booking. Please review and manage the details in your VB admin: </span>
                                                     </p>
                                                     <!-- Add booking details here, such as guest name, check-in, and check-out dates -->
-                                                    <p style="line-height: 140%;margin-top: 20px;">
-                        <span style="font-size: 16px; line-height: 22.4px;">
-                            <strong>Rental Unit: {{$rental_unit}}</strong>
-                        </span>
-                                                    </p>
-                                                    <p style="line-height: 140%">
-                        <span style="font-size: 16px; line-height: 22.4px;">
-                            <strong>Guest Name: {{$guest_name}}</strong>
-                        </span>
-                                                    </p>
-                                                    <p style="line-height: 140%;">
-                        <span style="font-size: 16px; line-height: 22.4px;">
-                            <strong>Check-In Date: {{$checkin_date}}</strong>
-                        </span>
-                                                    </p>
-                                                    <p style="line-height: 140%;">
-                        <span style="font-size: 16px; line-height: 22.4px;">
-                            <strong>Check-Out Date:  {{$checkout_date}}</strong>
-                        </span>
-                                                    </p>
+                                                    <table style="border-radius: 8px;width: 100%; border-collapse: collapse; font-family: Arial, sans-serif; max-width: 600px; box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.2);text-align:left;font-size: 16px;margin-top: 24px;margin-bottom: 24px;   ">
+                                                        <tbody>
+                                                        <tr style="background-color: rgba(109, 223, 226, 0.1);">
+                                                            <td style="font-weight: bold; padding: 10px 20px; width: 40%;">Rental Unit</td>
+                                                            <td style="padding: 10px 20px;">{{$rental_unit}}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="font-weight: bold; padding: 10px 20px;">Guest Name</td>
+                                                            <td style="padding: 10px 20px;">{{$guest_name}}</td>
+                                                        </tr>
+                                                        <tr style="background-color: rgba(109, 223, 226, 0.1);">
+                                                            <td style="font-weight: bold; padding: 10px 20px;">Check-In Date</td>
+                                                            <td style="padding: 10px 20px;">{{$checkin_date}}</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td style="font-weight: bold; padding: 10px 20px;">Check-Out Date</td>
+                                                            <td style="padding: 10px 20px;">{{$checkout_date}}</td>
+                                                        </tr>
+                                                        </tbody>
+                                                    </table>
                                                     <!-- End of booking details -->
-                                                    <p style="line-height: 140%;margin-bottom: 20px;margin-top: 20px;">
-                                                        <span style="font-size: 16px; line-height: 22.4px;">Best regards, <br>The VenueBoost Team</span>
+                                                    <p style="line-height: 140%;margin: 20px 0; text-align: left;">
+                                                        <span style="font-size: 16px; line-height: 1.5; color: #333; margin: 24px 0">Best regards, <br>The VenueBoost Team </span>
                                                     </p>
-                                                    <p style="line-height: 140%;"></p>
+                                                    <div style="text-align: center">
+                                                        <a href="https://admin.venueboost.io/" style="
+
+                                                                display: inline-block;
+
+                                                                padding: 12px 20px;
+
+                                                                text-decoration: none;
+
+                                                                color: #fff;
+
+                                                                background-color: rgb(109 223 226);
+
+                                                                border-radius: 6px;
+
+                                                                font-size: 16px;
+
+                                                                font-weight: bold;
+
+                                                            ">Admin Panel</a>
+                                                    </div>
                                                 </div>
                                             </td>
                                         </tr>
                                         </tbody>
                                     </table>
-
                                     <!--[if (!mso)&(!IE)]>
-                                                                                                                                <!-->
+                                                                                                                                    <!-->
                                 </div>
                                 <!--
-                                                                                                                          <![endif]-->
+
+
+                                                                                                                              <![endif]-->
                             </div>
                         </div>
                         <!--[if (mso)|(IE)]>
@@ -364,43 +390,45 @@
                         <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
                             <div style="height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                 <!--[if (!mso)&(!IE)]>
-                                                                                                                          <!-->
+                                                                                                                              <!-->
                                 <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                     <!--
-                                                                                                                                <![endif]-->
 
+
+                                                                                                                                    <![endif]-->
                                     <table id="u_content_text_6" class="hide-mobile" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:10px 10px 40px;font-family:'Raleway',sans-serif;" align="left">
-                                                <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="font-size: 14px; line-height: 160%;"> Copyright © VenueBoost inc.</p>
-                                                    <p style="font-size: 14px; line-height: 160%;">222 East 44th Street <br> New York, NY 10017 United States  <br />All Right Reserved. </p>
-                                                </div>
+                                            <td align="left">
+                                                <div class="v-color v-text-align" style="text-align: center; margin: 20px; font-size: 12px; color: #666"> Copyright © VenueBoost inc. 222 East 44th Street <br> New York, NY 10017 United States <br />All Right Reserved. </div>
                                             </td>
                                         </tr>
                                         </tbody>
                                     </table>
                                     <!--[if !mso]>
-                                                                                                                                                    <!-->
+                                                                                                                                        <!-->
                                     <table id="u_content_text_9" class="hide-default__display-table hide-desktop" style="display: none;mso-hide: all;font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:0px 10px 40px;font-family:'Raleway',sans-serif;" align="left">
+                                            <td style="overflow-wrap:break-word;word-break:break-word;padding:20px 10px 40px;font-family:'Raleway',sans-serif;" align="left">
                                                 <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="font-size: 14px; line-height: 160%;"> Copyright © VenueBoost inc.  222 East 44th Street <br> New York, NY 10017 United States  <br />All Right Reserved. </p>
+                                                    <p style="font-size: 14px; line-height: 160%;"> Copyright © VenueBoost inc. 222 East 44th Street <br> New York, NY 10017 United States <br />All Right Reserved. </p>
                                                 </div>
                                             </td>
                                         </tr>
                                         </tbody>
                                     </table>
                                     <!--
-                                                                                                                                                    <![endif]-->
+
+
+                                                                                                                                            <![endif]-->
                                     <!--[if (!mso)&(!IE)]>
-                                                                                                                                                    <!-->
+                                                                                                                                            <!-->
                                 </div>
                                 <!--
-                                                                                                                                              <![endif]-->
+
+
+                                                                                                                                      <![endif]-->
                             </div>
                         </div>
                         <!--[if (mso)|(IE)]>

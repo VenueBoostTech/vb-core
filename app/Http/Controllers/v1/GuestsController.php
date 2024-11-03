@@ -314,7 +314,7 @@ class GuestsController extends Controller
             // make hash random password
             'password' => Hash::make(Str::random(8)),
             'country_code' => 'US',
-            'end_user' => true
+            'enduser' => true
         ]);
 
         $guest = Guest::create([

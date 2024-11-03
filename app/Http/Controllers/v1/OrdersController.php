@@ -964,7 +964,7 @@ class OrdersController extends Controller
                     // make hash random password
                     'password' => Hash::make(Str::random(8)),
                     'country_code' => 'US',
-                    'end_user' => true
+                    'enduser' => true
                 ]);
             } else {
                 $guest = $checkGuest;
@@ -1418,7 +1418,7 @@ class OrdersController extends Controller
                     // make hash random password
                     'password' => Hash::make(Str::random(8)),
                     'country_code' => 'US',
-                    'end_user' => true
+                    'enduser' => true
                 ]);
             } else {
                 $guest = $checkGuest;
@@ -1643,7 +1643,7 @@ class OrdersController extends Controller
                 'email' => $request->customer['email'],
                 'password' => Hash::make(Str::random(8)),
                 'country_code' => 'US',
-                'end_user' => true,
+                'enduser' => true,
             ]);
         }
 

@@ -12,7 +12,10 @@ class Brand extends Model
 
     use SoftDeletes;
 
-    protected $fillable = ['title', 'description', 'logo_path', 'venue_id', 'url', 'total_stock', 'white_logo_path', 'parent_id'];
+    protected $fillable = ['title', 'description', 'logo_path', 'venue_id', 'url', 'total_stock', 'white_logo_path', 'parent_id',
+        'bybest_id', 'sidebar_logo_path', 'short_description', 'short_description_al',  'description_al',
+        'keywords','more_info', 'brand_order_no', 'status_no', 'created_at', 'updated_at', 'deleted_at'
+    ];
 
     public function venue(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

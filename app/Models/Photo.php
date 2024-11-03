@@ -12,6 +12,8 @@ class Photo extends Model
     protected $fillable = [
         'image_path',
         'type',
+        'bybest_id',
+        'description'
     ];
 
     public function venue(): \Illuminate\Database\Eloquent\Relations\BelongsTo

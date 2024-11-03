@@ -48,9 +48,9 @@ class PaymentController extends Controller
             'email' => $validatedData['email'],
             // 'return_url' => route('payment.success'), // URL to redirect after payment
             // 'cancel_url' => route('payment.cancel'), // URL to redirect if payment is canceled
-            'accepturl' => route('payment.success')
+            'accepturl' => route('payment.success'),
             'cancelurl' => route('payment.cancel'),
-            'callbackurl' => route('payment.callback'), 
+            'callbackurl' => route('payment.callback'),
         ];
 
         // Call WebToPay to build the request and redirect to payment
@@ -89,7 +89,7 @@ class PaymentController extends Controller
     }
 
     public function callback(Request $request)
-    {c
+    {
         return response()->json(['message' => 'Payment callback']);
     }
 }

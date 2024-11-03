@@ -49,4 +49,10 @@ return [
         'private_key' => env('TWOCHECKOUT_PRIVATE_KEY'),
         'sandbox' => env('TWOCHECKOUT_SANDBOX', true),
     ],
+    'google_translate' => [
+        'key' => env('GOOGLE_TRANSLATE_API_KEY'),
+    ],
+    'bkt' => [
+        'web_redirect_url' => env('APP_ENV') === 'production' ? env('BKT_BBSHOP_URL_LIVE') : env('BKT_BBSHOP_URL_TEST'),
+    ],
 ];

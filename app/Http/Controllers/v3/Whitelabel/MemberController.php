@@ -221,7 +221,7 @@ class MemberController extends Controller
             'email' => $member->email,
             'password' => Hash::make($password),
             'country_code' => 'AL',
-            'end_user' => true
+            'enduser' => true
         ]);
 
         // Create a new customer

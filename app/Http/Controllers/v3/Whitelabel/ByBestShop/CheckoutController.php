@@ -2,7 +2,13 @@
 
 namespace App\Http\Controllers\v3\Whitelabel\ByBestShop;
 
+use App\Models\AccountingFinance\Currency;
+use App\Models\VbStoreProductAttribute;
+use App\Services\BktPaymentService;
+use DateTime;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
@@ -21,24 +27,215 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\CustomerOrderConfirmationEmail;
 use App\Mail\NewOrderEmail;
-use WebToPay;
+use Stevebauman\Location\Facades\Location;
 
 class CheckoutController extends Controller
 {
-    private $sellerId;
-    private $secretKey;
-    private $privateKey;
-    private $apiUrl;
-    private $sandboxMode;
+    protected $bktPaymentService;
 
-    public function __construct()
+    public function __construct(BktPaymentService $bktPaymentService)
     {
-        
+        $this->bktPaymentService = $bktPaymentService;
     }
 
-    
 
     public function quickCheckout(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'app_key' => 'required|string',
+                'first_name' => 'required|string',
+                'last_name' => 'nullable|string',
+                'address_details' => 'required|string',
+                'phone_number' => 'required|string',
+                'email' => 'nullable|string',
+                'country' => 'required|integer',
+                'order_city' => 'required|integer',
+                'product_id' => 'required|integer',
+                'language' => 'required|string',
+                'payment_method' => 'required|string', // Add this to handle different payment methods
+
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['message' => $validator->errors()], 400);
+            }
+
+            $app_key = $request->input('app_key');
+            $venue = Restaurant::where('app_key', $app_key)->first();
+            if (!$venue) {
+                return response()->json(['message' => 'Venue not found'], 404);
+            }
+
+            $product = Product::where('id', $request->product_id)->where('restaurant_id', $venue->id)->first();
+
+            if (!$product) {
+                return response()->json(['message' => 'Product not found'], 404);
+            }
+
+            $exchange_rate = Currency::where('is_primary', '=', true)->first();
+            $currency_all = Currency::where('currency_alpha', '=', 'LEK')->first();
+            $currency_eur = Currency::where('currency_alpha', '=', 'EUR')->first();
+            $location = Location::get($request->ip());
+            $order_tracking_code = strtoupper('BB'.$this->unique_code(10));
+            $has_applied_offer = false;
+
+            $discount_amount = 0;
+            $total_order = 0;
+            $discount_amount_eur = 0;
+            $total_order_eur = 0;
+
+            $locale = $request->input('language');
+
+            if ($request->variation_id_cart != null) {
+
+                $product_details = DB::table('store_products_variants')
+                    ->rightJoin('store_products', 'store_products.id', '=', 'store_products_variants.product_id')
+                    ->select(
+                        'store_products_variants.sale_price',
+                        'store_products_variants.regular_price',
+                        'store_products_variants.stock_quantity',
+                        'store_products_variants.currency_alpha',
+                        'store_products_variants.bb_points',
+                        'store_products_variants.date_sale_start',
+                        'store_products_variants.date_sale_end',
+                        'store_products.product_image',
+                        'store_products.product_url',
+                        'store_products.product_url',
+                        'store_products.product_short_description',
+                    )
+                    ->where('store_products_variants.id', '=', $request->variation_id_cart)->first();
+
+                $attributes = DB::table('store_product_variant_at5ributes')
+                    ->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_variant_atributes.atribute_id')
+                    ->join('store_attributes', 'store_attributes.id', '=', 'store_attributes_options.attribute_id')
+                    ->select(
+                        DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
+                        DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes_options.option_name, '$." . App::getLocale() . "')) AS option_name"),
+                    )
+                    ->where('store_product_variant_attributes.variant_id', '=', $request->variation_id_cart)
+                    ->get();
+            } else {
+
+                $product_details = DB::table('vb_store_products')
+                    ->select('vb_store_products.*')
+                    ->where('vb_store_products.id', '=', $product->id)->first();
+
+                $attributes = VbStoreProductAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.id', '=', 'vb_store_product_attributes.attribute_id')
+                    ->join('vb_store_attributes', 'vb_store_attributes.id', '=', 'vb_store_attributes_options.attribute_id')
+                    ->select(
+                        DB::raw("JSON_UNQUOTE(JSON_EXTRACT(vb_store_attributes.attr_name, '$." . $locale . "')) AS attr_name"),
+                        DB::raw("JSON_UNQUOTE(JSON_EXTRACT(vb_store_attributes_options.option_name, '$." . $locale . "')) AS option_name"),
+                    )
+                    ->where('vb_store_product_attributes.product_id', '=', $product->id)
+                    ->get();
+            }
+
+            // Calculate total order and discounts
+            $sale_valid = $this->checkIfSaleValidForProduct($product_details->date_sale_start, $product_details->date_sale_end);
+
+            if ($product_details->currency_alpha === 'EUR') {
+                if (!$sale_valid) {
+                    $total_order += ($product_details->regular_price) * $currency_all->exchange;
+                    $total_order_eur += $product_details->regular_price;
+                } else {
+                    $product_subtotal = ($product_details->regular_price) * $currency_all->exchange;
+                    $product_discount = (float)$product_details->sale_price / 100;
+                    $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                    $total_order += $product_discounted_subtotal;
+                    $total_order_eur += ($product_details->regular_price - ($product_details->regular_price * $product_discount));
+                }
+            } else {
+                if (!$sale_valid) {
+                    $total_order += $product_details->regular_price;
+                    $total_order_eur += $product_details->regular_price / $currency_eur->exchange;
+                } else {
+                    $product_subtotal = $product_details->regular_price;
+                    $product_discount = (float)$product_details->sale_price / 100;
+                    $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                    $total_order += $product_discounted_subtotal;
+                    $total_order_eur += $product_discounted_subtotal / $currency_eur->exchange;
+                }
+            }
+            $first_name = $request->input('first_name');
+            $last_name = $request->input('last_name');
+            $address_details = $request->input('address');
+            $phone = $request->input('phone');
+            $country = $request->input('country');
+            $city = $request->input('city');
+            $email = $request->input('email');
+            $payment_method = $request->input('payment_method');
+
+            $customer = [
+                'first_name' => $first_name,
+                'last_name' => $last_name,
+                'email' => $email,
+                'phone' => $phone,
+                'address' => $address_details,
+            ];
+
+            $order_products = $request->input('order_products');
+            $total = $this->getProductsTotal($order_products);
+            if ($total['status'] == false) {
+                return response()->json(['message' => $total['error']], 400);
+            }
+            $total_price = $total['value'];
+
+            $result_order = null;
+            // Handle payment via paysera
+            if ($payment_method == 'cash') {
+              //
+            } else {
+                // Handle other payment methods like cash
+                $result = $this->finalizeOrder($venue, $customer, $order_products, $total_price, null);
+
+                if (!$result['status']) {
+                    return response()->json(['message' => $result['error']], 500);
+                }
+                $result_order = $result['order'];
+
+                $orderDetails = [
+                    'id' => $result_order->id,
+                    'total' => $result_order->total_amount, // Make sure this matches the property name in your Order model
+                    // Add any other necessary details here
+                ];
+
+                $paymentInfo = $this->bktPaymentService->initiatePayment($orderDetails);
+
+                return response()->json([
+                    'status' => 'success',
+                    'payment_url' => $paymentInfo['url'],
+                    'payment_data' => $paymentInfo['data']
+                ]);
+            }
+
+            // if ($venue->email) {
+            //     Mail::to($venue->email)->send(new NewOrderEmail($venue->name));
+            // }
+
+//            return response()->json(['message' => 'Order added successfully', 'order' => $result_order], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * @throws \Exception
+     */
+    private function checkIfSaleValidForProduct($date_sale_start, $date_sale_end): bool
+    {
+        $temp_date_start = new DateTime($date_sale_start);
+        $temp_date_end = new DateTime($date_sale_end);
+        $temp_date_now = new DateTime();
+        return $temp_date_now > $temp_date_start && $temp_date_now < $temp_date_end;
+    }
+
+    private function unique_code($limit): string
+    {
+        return substr(base_convert(sha1(uniqid(mt_rand())), 16, 36), 0, $limit);
+    }
+
+    public function checkout(Request $request)
     {
         try {
             $validator = Validator::make($request->all(), [
@@ -93,9 +290,8 @@ class CheckoutController extends Controller
 
             $result_order = null;
             // Handle payment via paysera
-            if ($payment_method == 'paysera') {
-                // Call the PaymentController to process the payment
-                return app(PaymentController::class)->processPayment($request);
+            if ($payment_method == 'cash') {
+                //
             } else {
                 // Handle other payment methods like cash
                 $result = $this->finalizeOrder($venue, $customer, $order_products, $total_price, null);
@@ -104,13 +300,27 @@ class CheckoutController extends Controller
                     return response()->json(['message' => $result['error']], 500);
                 }
                 $result_order = $result['order'];
+
+                $orderDetails = [
+                    'id' => $result_order->id,
+                    'total' => $result_order->total_amount, // Make sure this matches the property name in your Order model
+                    // Add any other necessary details here
+                ];
+
+                $paymentInfo = $this->bktPaymentService->initiatePayment($orderDetails);
+
+                return response()->json([
+                    'status' => 'success',
+                    'payment_url' => $paymentInfo['url'],
+                    'payment_data' => $paymentInfo['data']
+                ]);
             }
 
             // if ($venue->email) {
             //     Mail::to($venue->email)->send(new NewOrderEmail($venue->name));
             // }
 
-            return response()->json(['message' => 'Order added successfully', 'order' => $result_order], 200);
+//            return response()->json(['message' => 'Order added successfully', 'order' => $result_order], 200);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Error: ' . $e->getMessage()], 500);
         }
@@ -160,7 +370,7 @@ class CheckoutController extends Controller
                 'email' => $customer['email'],
                 'password' => Hash::make('1234'),
                 'country_code' => 'US',
-                'end_user' => true
+                'enduser' => true
             ]);
 
             $customer = Customer::create([
@@ -228,51 +438,6 @@ class CheckoutController extends Controller
 
     public function testCheckout(Request $request)
     {
-        // Validate incoming request data using Validator facade
-        $validator = Validator::make($request->all(), [
-            'app_key' => 'required|string',
-            'first_name' => 'required|string',
-            'last_name' => 'nullable|string',
-            'address' => 'required|string',
-            'phone' => 'required|string',
-            'email' => 'nullable|string|email',
-            'country' => 'required|string',
-            'city' => 'required|string',
-            'payment_method' => 'required|string',
-            'token' => 'required|string', // Simulated token
-            'order_products' => 'required|array',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['message' => $validator->errors()], 400);
-        }
-
-        // Get validated data
-        $validatedData = $validator->validated();
-
-        // Prepare payment data
-        $payseraData = [
-            'projectid' => 'YOUR_PROJECT_ID', // Replace with your project ID
-            'sign_password' => 'YOUR_SIGN_PASSWORD', // Replace with your sign password
-            'amount' => 100.00, // Amount in currency units (e.g., EUR)
-            'currency' => 'EUR', // Currency code
-            'orderid' => uniqid(), // Unique order ID
-            'description' => 'Test payment for ' . $validatedData['first_name'] . ' ' . $validatedData['last_name'],
-            'email' => $validatedData['email'],
-            'accepturl' => route('payment.success'), // URL to redirect after payment
-            'cancelurl' => route('payment.cancel'), // URL to redirect if payment is canceled,
-            'callbackurl' => route('payment.callback'), 
-        ];
-
-        // Call WebToPay to build the request and redirect to payment
-        try {
-            // Build the request data
-            $requestData = WebToPay::buildRequest($payseraData);
-
-            // Redirect to the payment page
-            WebToPay::redirectToPayment($requestData);
-        } catch (WebToPayException $e) {
-            return response()->json(['message' => 'Payment processing error: ' . $e->getMessage()], 500);
-        }
+        // do nothing
     }
 }

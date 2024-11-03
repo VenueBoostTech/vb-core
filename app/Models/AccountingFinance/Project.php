@@ -10,6 +10,9 @@ class Project extends Model
     use HasFactory;
 
     protected $fillable = ['company_id', 'name', 'start_date', 'end_date', 'budget', 'status'];
+
     public function company(): \Illuminate\Database\Eloquent\Relations\BelongsTo
-    { return $this->belongsTo(Company::class); }
+    {
+        return $this->belongsTo(Company::class);
+    }
 }

@@ -20,7 +20,7 @@ class TMActivePiecesAutomationsService
         // Send email notification
         try {
             Mail::to('development@venueboost.io')->send(new NewLeadNotification($itemName, $itemEmail, 'Griseld'));
-            Mail::to('rf@venueboost.io')->send(new NewLeadNotification($itemName, $itemEmail, 'Redi'));
+            //Mail::to('rf@venueboost.io')->send(new NewLeadNotification($itemName, $itemEmail, 'Redi'));
         } catch (\Exception $e) {
             // Log the error or handle it as needed
             \Log::error('Failed to send new lead notification email: ' . $e->getMessage());

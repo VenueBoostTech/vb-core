@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Category;
 use App\Models\Collection;
 use App\Models\EcommercePlatform;
+use App\Models\InventorySync;
+use App\Models\InventorySyncError;
 use App\Models\InventorySynchronization;
 use App\Models\InventoryWarehouse;
 use App\Models\PhysicalStore;
@@ -19,6 +21,123 @@ use App\Models\Country;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * @OA\Tag(
+ *     name="Inventory Reports",
+ *     description="API endpoints for inventory reporting and analytics"
+ * )
+ *
+ * @OA\Parameter(
+ *     parameter="venue_short_code",
+ *     name="venue_short_code",
+ *     in="query",
+ *     required=true,
+ *     @OA\Schema(type="string"),
+ *     description="Venue short code for filtering data"
+ * )
+ *
+ * @OA\Parameter(
+ *     parameter="brand_id",
+ *     name="brand_id",
+ *     in="query",
+ *     required=true,
+ *     @OA\Schema(type="integer"),
+ *     description="Brand ID for filtering data"
+ * )
+ *
+ * @OA\Parameter(
+ *     parameter="report_type",
+ *     name="type",
+ *     in="query",
+ *     @OA\Schema(
+ *         type="string",
+ *         enum={"daily", "weekly", "monthly", "yearly", "total"},
+ *         default="total"
+ *     ),
+ *     description="Report aggregation type"
+ * )
+ */
+
+/**
+ * @OA\Tag(
+ *     name="Inventory Reports",
+ *     description="API endpoints for inventory reporting and analytics"
+ * )
+ *
+ * @OA\Parameter(
+ *     parameter="venue_short_code",
+ *     name="venue_short_code",
+ *     in="query",
+ *     required=true,
+ *     @OA\Schema(type="string"),
+ *     description="Venue short code for filtering data"
+ * )
+ *
+ * @OA\Parameter(
+ *     parameter="brand_id",
+ *     name="brand_id",
+ *     in="query",
+ *     required=true,
+ *     @OA\Schema(type="integer"),
+ *     description="Brand ID for filtering data"
+ * )
+ *
+ * @OA\Parameter(
+ *     parameter="report_type",
+ *     name="type",
+ *     in="query",
+ *     @OA\Schema(
+ *         type="string",
+ *         enum={"daily", "weekly", "monthly", "yearly", "total"},
+ *         default="total"
+ *     ),
+ *     description="Report aggregation type"
+ * )
+ *
+ * @OA\Schema(
+ *     schema="InventoryData",
+ *     @OA\Property(
+ *         property="products",
+ *         type="object",
+ *         @OA\Property(property="total", type="integer"),
+ *         @OA\Property(property="active", type="integer")
+ *     ),
+ *     @OA\Property(
+ *         property="categories",
+ *         type="object",
+ *         @OA\Property(property="total", type="integer"),
+ *         @OA\Property(property="active", type="integer")
+ *     ),
+ *     @OA\Property(
+ *         property="collections",
+ *         type="object",
+ *         @OA\Property(property="total", type="integer"),
+ *         @OA\Property(property="active", type="integer")
+ *     )
+ * )
+ *
+ * @OA\Schema(
+ *     schema="LocationsSummary",
+ *     @OA\Property(
+ *         property="warehouses",
+ *         type="object",
+ *         @OA\Property(property="total", type="integer"),
+ *         @OA\Property(property="active", type="integer")
+ *     ),
+ *     @OA\Property(
+ *         property="physical_stores",
+ *         type="object",
+ *         @OA\Property(property="total", type="integer"),
+ *         @OA\Property(property="active", type="integer")
+ *     ),
+ *     @OA\Property(
+ *         property="ecommerce_sites",
+ *         type="object",
+ *         @OA\Property(property="total", type="integer"),
+ *         @OA\Property(property="active", type="integer")
+ *     )
+ * )
+ */
 class InventoryReportController extends Controller
 {
     private function validateRequest(Request $request): \Illuminate\Http\JsonResponse|array
@@ -43,8 +162,8 @@ class InventoryReportController extends Controller
         $validator = Validator::make($request->all(), [
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after:start_date',
-            'brand_id' => 'required|exists:brands,id',
-            'type' => 'in:daily,weekly,monthly,yearly', // Validate the 'type' parameter
+            'brand_id' => 'nullable|exists:brands,id',
+            'type' => 'nullable|in:daily,weekly,monthly,yearly', // Validate the 'type' parameter
         ]);
 
         if ($validator->fails()) {
@@ -54,6 +173,39 @@ class InventoryReportController extends Controller
         return ['venue' => $venue, 'brand_id' => $request->brand_id, 'type' => $request->type ?? 'total'];
     }
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/orders-by-brand",
+     *     tags={"Inventory Reports"},
+     *     summary="Get orders by brand",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Parameter(ref="#/components/parameters/report_type"),
+     *     @OA\Parameter(
+     *         name="start_date",
+     *         in="query",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="end_date",
+     *         in="query",
+     *         required=false,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="nr_orders", type="integer"),
+     *             @OA\Property(property="total_amount_eur", type="number"),
+     *             @OA\Property(property="subtotal_eur", type="number"),
+     *             @OA\Property(property="total_discount_used_eur", type="number"),
+     *             @OA\Property(property="total_coupon_used_eur", type="number")
+     *         )
+     *     )
+     * )
+     */
     public function ordersByBrand(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -201,6 +353,46 @@ class InventoryReportController extends Controller
         }
     }
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/orders-by-brand-and-country",
+     *     tags={"Inventory Reports"},
+     *     summary="Get orders by brand and country",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Parameter(ref="#/components/parameters/report_type"),
+     *     @OA\Parameter(
+     *         name="start_date",
+     *         in="query",
+     *         required=true,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="end_date",
+     *         in="query",
+     *         required=true,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             type="array",
+     *             @OA\Items(
+     *                 @OA\Property(property="country", type="string"),
+     *                 @OA\Property(
+     *                     property="data",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="period", type="string"),
+     *                         @OA\Property(property="order_count", type="integer")
+     *                     )
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function ordersByBrandAndCountry(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -311,6 +503,47 @@ class InventoryReportController extends Controller
     }
 
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/orders-by-brand-and-city",
+     *     tags={"Inventory Reports"},
+     *     summary="Get orders by brand and city",
+     *     description="Retrieves order statistics grouped by cities in Albania",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Parameter(ref="#/components/parameters/report_type"),
+     *     @OA\Parameter(
+     *         name="start_date",
+     *         in="query",
+     *         required=true,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="end_date",
+     *         in="query",
+     *         required=true,
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             type="array",
+     *             @OA\Items(
+     *                 @OA\Property(property="city", type="string"),
+     *                 @OA\Property(
+     *                     property="data",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="period", type="string"),
+     *                         @OA\Property(property="order_count", type="integer")
+     *                     )
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function ordersByBrandAndCity(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -422,6 +655,40 @@ class InventoryReportController extends Controller
     }
 
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/inventory-data",
+     *     tags={"Inventory Reports"},
+     *     summary="Get inventory data summary",
+     *     description="Retrieves summary of products, categories, and collections",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             @OA\Property(
+     *                 property="products",
+     *                 type="object",
+     *                 @OA\Property(property="total", type="integer"),
+     *                 @OA\Property(property="active", type="integer")
+     *             ),
+     *             @OA\Property(
+     *                 property="categories",
+     *                 type="object",
+     *                 @OA\Property(property="total", type="integer"),
+     *                 @OA\Property(property="active", type="integer")
+     *             ),
+     *             @OA\Property(
+     *                 property="collections",
+     *                 type="object",
+     *                 @OA\Property(property="total", type="integer"),
+     *                 @OA\Property(property="active", type="integer")
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function getInventoryData(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -461,6 +728,40 @@ class InventoryReportController extends Controller
         return response()->json($data);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/locations",
+     *     tags={"Inventory Reports"},
+     *     summary="Get locations summary",
+     *     description="Retrieves summary of warehouses, physical stores, and ecommerce sites",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             @OA\Property(
+     *                 property="warehouses",
+     *                 type="object",
+     *                 @OA\Property(property="total", type="integer"),
+     *                 @OA\Property(property="active", type="integer")
+     *             ),
+     *             @OA\Property(
+     *                 property="physical_stores",
+     *                 type="object",
+     *                 @OA\Property(property="total", type="integer"),
+     *                 @OA\Property(property="active", type="integer")
+     *             ),
+     *             @OA\Property(
+     *                 property="ecommerce_sites",
+     *                 type="object",
+     *                 @OA\Property(property="total", type="integer"),
+     *                 @OA\Property(property="active", type="integer")
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function getLocationsSummary(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -490,31 +791,31 @@ class InventoryReportController extends Controller
         return response()->json($data);
     }
 
-    public function getSyncStatus(Request $request)
-    {
-        $validation = $this->validateRequest($request);
-        if (isset($validation['error'])) {
-            return $validation['error'];
-        }
 
-        $venue = $validation['venue'];
-        $brandId = $validation['brand_id'];
-        $type = $request->get('type', 'total'); // Default to 'total' if not provided
-
-        $syncStatus = InventorySynchronization::where('venue_id', $venue->id)
-//            ->where('brand_id', $brandId)
-//            ->where('entity_type', 'product
-//            ->select('entity_type', 'status', DB::raw('COUNT(*) as count'))
-//            ->groupBy('entity_type', 'status')
-            ->get()
-//            ->groupBy('entity_type')
-            ->map(function ($group) {
-                return $group->pluck('count', 'status');
-            });
-
-        return response()->json($syncStatus);
-    }
-
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/upcoming-launches",
+     *     tags={"Inventory Reports"},
+     *     summary="Get upcoming product launches",
+     *     description="Retrieves list of upcoming product launches",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             type="array",
+     *             @OA\Items(
+     *                 @OA\Property(property="title", type="string"),
+     *                 @OA\Property(property="category", type="string"),
+     *                 @OA\Property(property="launch_date", type="string", format="date"),
+     *                 @OA\Property(property="initial_stock", type="integer"),
+     *                 @OA\Property(property="pre_orders", type="integer")
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function getUpcomingLaunches(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -551,6 +852,27 @@ class InventoryReportController extends Controller
         return response()->json($upcomingLaunches);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/inventory-distribution",
+     *     tags={"Inventory Reports"},
+     *     summary="Get inventory distribution",
+     *     description="Retrieves inventory distribution across physical stores",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             type="array",
+     *             @OA\Items(
+     *                 @OA\Property(property="location", type="string"),
+     *                 @OA\Property(property="value", type="integer")
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function getInventoryDistribution(Request $request)
     {
         $validation = $this->validateRequest($request);
@@ -572,6 +894,39 @@ class InventoryReportController extends Controller
         return response()->json($distribution);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/channel-performance",
+     *     tags={"Inventory Reports"},
+     *     summary="Get channel performance",
+     *     description="Retrieves performance metrics for different sales channels",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Parameter(
+     *         name="start_date",
+     *         in="query",
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Parameter(
+     *         name="end_date",
+     *         in="query",
+     *         @OA\Schema(type="string", format="date")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             type="array",
+     *             @OA\Items(
+     *                 @OA\Property(property="channel", type="string"),
+     *                 @OA\Property(property="sales_volume", type="integer"),
+     *                 @OA\Property(property="revenue", type="number"),
+     *                 @OA\Property(property="growth", type="number")
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function getChannelPerformance(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -617,56 +972,31 @@ class InventoryReportController extends Controller
         return response()->json($performance);
     }
 
-    public function getSyncHealth(Request $request): \Illuminate\Http\JsonResponse
-    {
-        $validation = $this->validateRequest($request);
-        if (isset($validation['error'])) {
-            return $validation['error'];
-        }
-
-        $venue = $validation['venue'];
-        $brandId = $validation['brand_id'];
-        $type = $request->get('type', 'total'); // Default to 'total' if not provided
-
-//        $syncHealth = InventorySynchronization::where('brand_id', $brandId)
-//            ->select(
-//                'entity_type',
-//                DB::raw('COUNT(*) as total'),
-//                DB::raw('SUM(CASE WHEN status = "success" THEN 1 ELSE 0 END) as synced')
-//            )
-//            ->groupBy('entity_type')
-//            ->get()
-//            ->map(function ($item) {
-//                $item['syncedPercentage'] = ($item['total'] > 0) ? ($item['synced'] / $item['total']) * 100 : 0;
-//                return $item;
-//            });
-//
-//        $overallPercentage = $syncHealth->avg('syncedPercentage');
-
-        // dummy data
-        $syncHealth = [
-            [
-                'entity_type' => 'Product',
-                'total' => 100,
-                'synced' => 90,
-                'syncedPercentage' => 90
-            ],
-            [
-                'entity_type' => 'Store',
-                'total' => 50,
-                'synced' => 40,
-                'syncedPercentage' => 80
-            ]
-        ];
-
-        $overallPercentage = 85;
-
-        return response()->json([
-            'overallPercentage' => $overallPercentage,
-            'categories' => $syncHealth
-        ]);
-    }
-
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/data-quality",
+     *     tags={"Inventory Reports"},
+     *     summary="Get data quality score",
+     *     description="Retrieves data quality metrics for inventory data",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="overallScore", type="integer"),
+     *             @OA\Property(
+     *                 property="factors",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="name", type="string"),
+     *                     @OA\Property(property="score", type="integer")
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function getDataQualityScore(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -722,6 +1052,104 @@ class InventoryReportController extends Controller
         ]);
     }
 
+    /**
+     * @OA\Get(
+     *     path="/inventory-reports/all-report-data",
+     *     tags={"Inventory Reports"},
+     *     summary="Get all report data",
+     *     description="Retrieves comprehensive report including all inventory metrics",
+     *     @OA\Parameter(ref="#/components/parameters/venue_short_code"),
+     *     @OA\Parameter(ref="#/components/parameters/brand_id"),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Successful response",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="inventory_data", ref="#/components/schemas/InventoryData"),
+     *             @OA\Property(property="locations", ref="#/components/schemas/LocationsSummary"),
+     *             @OA\Property(
+     *                 property="sync_status",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     type="object",
+     *                     @OA\Property(property="id", type="integer"),
+     *                     @OA\Property(property="venue_id", type="integer"),
+     *                     @OA\Property(property="sync_type", type="integer"),
+     *                     @OA\Property(property="method", type="string"),
+     *                     @OA\Property(property="third_party", type="string"),
+     *                     @OA\Property(property="created_at", type="string", format="datetime"),
+     *                     @OA\Property(property="completed_at", type="string", format="datetime", nullable=true)
+     *                 )
+     *             ),
+     *             @OA\Property(
+     *                 property="upcoming_launches",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     type="object",
+     *                     @OA\Property(property="title", type="string"),
+     *                     @OA\Property(property="category", type="string"),
+     *                     @OA\Property(property="launch_date", type="string", format="date"),
+     *                     @OA\Property(property="initial_stock", type="integer"),
+     *                     @OA\Property(property="pre_orders", type="integer")
+     *                 )
+     *             ),
+     *             @OA\Property(
+     *                 property="inventory_distribution",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     type="object",
+     *                     @OA\Property(property="location", type="string"),
+     *                     @OA\Property(property="value", type="integer")
+     *                 )
+     *             ),
+     *             @OA\Property(
+     *                 property="channel_performance",
+     *                 type="array",
+     *                 @OA\Items(
+     *                     type="object",
+     *                     @OA\Property(property="channel", type="string"),
+     *                     @OA\Property(property="sales_volume", type="integer"),
+     *                     @OA\Property(property="revenue", type="number"),
+     *                     @OA\Property(property="growth", type="number")
+     *                 )
+     *             ),
+     *             @OA\Property(
+     *                 property="sync_health",
+     *                 type="object",
+     *                 @OA\Property(property="overview", type="object",
+     *                     @OA\Property(property="total_syncs", type="integer"),
+     *                     @OA\Property(property="successful_syncs", type="integer"),
+     *                     @OA\Property(property="failed_syncs", type="integer"),
+     *                     @OA\Property(property="success_rate", type="number"),
+     *                     @OA\Property(property="average_duration", type="string")
+     *                 ),
+     *                 @OA\Property(property="by_type", type="array",
+     *                     @OA\Items(type="object")
+     *                 ),
+     *                 @OA\Property(property="error_summary", type="array",
+     *                     @OA\Items(type="object")
+     *                 ),
+     *                 @OA\Property(property="performance_trend", type="array",
+     *                     @OA\Items(type="object")
+     *                 )
+     *             ),
+     *             @OA\Property(
+     *                 property="data_quality",
+     *                 type="object",
+     *                 @OA\Property(property="overallScore", type="integer"),
+     *                 @OA\Property(
+     *                     property="factors",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         type="object",
+     *                         @OA\Property(property="name", type="string"),
+     *                         @OA\Property(property="score", type="integer")
+     *                     )
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
     public function getAllReportData(Request $request): \Illuminate\Http\JsonResponse
     {
         $validation = $this->validateRequest($request);
@@ -745,5 +1173,398 @@ class InventoryReportController extends Controller
         ];
 
         return response()->json($data);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/synchronizations",
+     *     tags={"Synchronizations"},
+     *     summary="Get all synchronizations",
+     *     @OA\Parameter(
+     *         name="venue_short_code",
+     *         in="query",
+     *         required=true,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             type="array",
+     *             @OA\Items(
+     *                 @OA\Property(property="date", type="string", example="2024-07-15"),
+     *                 @OA\Property(property="time_completed", type="string", example="16:40 PM"),
+     *                 @OA\Property(property="type", type="object",
+     *                     @OA\Property(property="name", type="string", example="Prices Sync"),
+     *                     @OA\Property(property="color", type="string", example="#cd8438")
+     *                 ),
+     *                 @OA\Property(property="method", type="string", example="Manual - API"),
+     *                 @OA\Property(property="errors_count", type="integer", example=0),
+     *                 @OA\Property(property="third_party", type="string", example="BookMaster"),
+     *                 @OA\Property(property="status", type="string", example="completed")
+     *             )
+     *         )
+     *     )
+     * )
+     */
+    public function getSyncronizations(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validation = $this->validateRequest($request);
+
+        if ($validation instanceof \Illuminate\Http\JsonResponse) {
+            return $validation;
+        }
+
+        $venue = $validation['venue'];
+        $perPage = $request->input('per_page', 15);
+        $type = $request->input('sync_type');
+
+        $query = InventorySynchronization::with(['syncType', 'errors'])
+            ->where('venue_id', $venue->id);
+
+        if ($type) {
+            $syncTypeId = InventorySync::where('slug', $type)->value('id');
+            $query->where('sync_type', $syncTypeId);
+        }
+
+        $query->orderBy('created_at', 'desc');
+        $syncs = $query->paginate($perPage);
+
+        $formattedSyncs = $syncs->map(function ($sync) {
+            $completedAt = $sync->completed_at ? Carbon::parse($sync->completed_at) : null;
+
+            return [
+                'date' => $sync->created_at->format('Y-m-d'),
+                'time_completed' => $completedAt ? $completedAt->format('H:i A') : null,
+                'type' => [
+                    'name' => $sync->syncType->name,
+                    'color' => $this->getSyncTypeColor($sync->syncType->slug)
+                ],
+                'method' => $this->formatSyncMethod($sync->method),
+                'errors_count' => $sync->errors->count(),
+                'third_party' => $sync->third_party ?? 'None',
+                'status' => $this->getSyncStatus($sync),
+                'id' => $sync->id
+            ];
+        });
+
+        return response()->json([
+            'synchronizations' => [
+                'current_page' => $syncs->currentPage(),
+                'data' => $formattedSyncs,
+                'first_page_url' => $syncs->url(1),
+                'from' => $syncs->firstItem(),
+                'last_page' => $syncs->lastPage(),
+                'last_page_url' => $syncs->url($syncs->lastPage()),
+                'next_page_url' => $syncs->nextPageUrl(),
+                'path' => $syncs->path(),
+                'per_page' => $syncs->perPage(),
+                'prev_page_url' => $syncs->previousPageUrl(),
+                'to' => $syncs->lastItem(),
+                'total' => $syncs->total(),
+            ],
+            'current_page' => $syncs->currentPage(),
+            'per_page' => $syncs->perPage(),
+            'total' => $syncs->total(),
+            'total_pages' => $syncs->lastPage(),
+        ], 200);
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/synchronizations/{sync}/errors",
+     *     tags={"Synchronizations"},
+     *     summary="Get errors for a specific sync",
+     *     @OA\Parameter(
+     *         name="sync",
+     *         in="path",
+     *         required=true,
+     *         @OA\Schema(type="integer")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             type="array",
+     *             @OA\Items(
+     *                 @OA\Property(property="type", type="string"),
+     *                 @OA\Property(property="message", type="string"),
+     *                 @OA\Property(property="created_at", type="string"),
+     *                 @OA\Property(property="context", type="object")
+     *             )
+     *         )
+     *     )
+     * )
+     */
+    public function getSyncErrors(Request $request, int $syncId): \Illuminate\Http\JsonResponse
+    {
+        $validation = $this->validateRequest($request);
+        if (isset($validation['error'])) {
+            return $validation['error'];
+        }
+
+        $errors = InventorySyncError::where('synchronization_id', $syncId)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->map(function ($error) {
+                return [
+                    'type' => $error->error_type,
+                    'message' => $error->error_message,
+                    'created_at' => $error->created_at->format('Y-m-d H:i:s'),
+                    'context' => $error->error_context
+                ];
+            });
+
+        return response()->json($errors);
+    }
+
+    private function getSyncTypeColor(string $type): string
+    {
+        return [
+            'price-sync' => '#cd8438',
+            'sku-sync' => '#F1C332',
+            'stock-sync' => '#240b3b',
+            'sales-sync' => '#D3D3D3'
+        ][$type] ?? '#gray';
+    }
+
+    private function formatSyncMethod(string $method): string
+    {
+        $type = str_contains($method, 'api') ? 'API' : 'Staff';
+        $mode = str_contains($method, 'manual') || str_contains($method, 'csv_import')  ? 'Manual' : 'Automatic';
+
+        return "$mode - $type";
+    }
+
+    /**
+     * @OA\Get(
+     *     path="/synchronizations/health",
+     *     tags={"Synchronizations"},
+     *     summary="Get synchronization health metrics",
+     *     @OA\Parameter(
+     *         name="venue_short_code",
+     *         in="query",
+     *         required=true,
+     *         @OA\Schema(type="string")
+     *     ),
+     *     @OA\Parameter(
+     *         name="date_range",
+     *         in="query",
+     *         required=false,
+     *         @OA\Schema(type="string", enum={"24h", "7d", "30d"}, default="24h")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Success",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="overview", type="object",
+     *                 @OA\Property(property="total_syncs", type="integer", example=150),
+     *                 @OA\Property(property="successful_syncs", type="integer", example=142),
+     *                 @OA\Property(property="failed_syncs", type="integer", example=8),
+     *                 @OA\Property(property="success_rate", type="number", format="float", example=94.67),
+     *                 @OA\Property(property="average_duration", type="string", example="2m 30s")
+     *             ),
+     *             @OA\Property(property="by_type", type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="type", type="string", example="Price Sync"),
+     *                     @OA\Property(property="total", type="integer", example=50),
+     *                     @OA\Property(property="successful", type="integer", example=48),
+     *                     @OA\Property(property="failed", type="integer", example=2),
+     *                     @OA\Property(property="success_rate", type="number", example=96),
+     *                     @OA\Property(property="average_duration", type="string", example="1m 45s"),
+     *                     @OA\Property(property="last_sync_status", type="string", example="successful"),
+     *                     @OA\Property(property="last_sync_time", type="string", example="2024-03-27 14:30:00")
+     *                 )
+     *             ),
+     *             @OA\Property(property="error_summary", type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="type", type="string", example="API"),
+     *                     @OA\Property(property="count", type="integer", example=5),
+     *                     @OA\Property(property="percentage", type="number", example=62.5)
+     *                 )
+     *             ),
+     *             @OA\Property(property="performance_trend", type="array",
+     *                 @OA\Items(
+     *                     @OA\Property(property="date", type="string", example="2024-03-27"),
+     *                     @OA\Property(property="success_rate", type="number", example=95),
+     *                     @OA\Property(property="average_duration", type="string", example="2m 15s"),
+     *                     @OA\Property(property="total_syncs", type="integer", example=10)
+     *                 )
+     *             )
+     *         )
+     *     )
+     * )
+     */
+    public function getSyncHealth(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validation = $this->validateRequest($request);
+        if (isset($validation['error'])) {
+            return $validation['error'];
+        }
+
+        $venue = $validation['venue'];
+        $dateRange = $request->get('date_range', '24h');
+
+        // Calculate date range
+        $startDate = match($dateRange) {
+            '7d' => now()->subDays(7),
+            '30d' => now()->subDays(30),
+            default => now()->subHours(24)
+        };
+
+        // Get syncs within date range
+        $syncs = InventorySynchronization::with(['syncType', 'errors'])
+            ->where('venue_id', $venue->id)
+            ->where('created_at', '>=', $startDate)
+            ->get();
+
+        // Calculate overview metrics
+        $overview = $this->calculateOverviewMetrics($syncs);
+
+        // Calculate metrics by sync type
+        $byType = $this->calculateMetricsByType($syncs);
+
+        // Analyze errors
+        $errorSummary = $this->analyzeErrors($syncs);
+
+        // Calculate performance trend
+        $performanceTrend = $this->calculatePerformanceTrend($syncs, $dateRange);
+
+        return response()->json([
+            'overview' => $overview,
+            'by_type' => $byType,
+            'error_summary' => $errorSummary,
+            'performance_trend' => $performanceTrend
+        ]);
+    }
+
+    private function calculateOverviewMetrics($syncs): array
+    {
+        $total = $syncs->count();
+        $successful = $syncs->filter->isCompleted()->count();
+        $failed = $syncs->filter->isFailed()->count();
+
+        $avgDuration = $syncs
+            ->filter->isCompleted()
+            ->map(function ($sync) {
+                return $sync->completed_at->diffInSeconds($sync->created_at);
+            })
+            ->average();
+
+        return [
+            'total_syncs' => $total,
+            'successful_syncs' => $successful,
+            'failed_syncs' => $failed,
+            'success_rate' => $total > 0 ? round(($successful / $total) * 100, 2) : 0,
+            'average_duration' => $this->formatDuration($avgDuration)
+        ];
+    }
+
+    private function calculateMetricsByType($syncs): array
+    {
+        $byType = [];
+        $types = $syncs->groupBy('sync_type');
+
+        foreach ($types as $typeId => $typeSyncs) {
+            $syncType = $typeSyncs->first()->syncType;
+            $total = $typeSyncs->count();
+            $successful = $typeSyncs->filter->isCompleted()->count();
+
+            $avgDuration = $typeSyncs
+                ->filter->isCompleted()
+                ->map(function ($sync) {
+                    return $sync->completed_at->diffInSeconds($sync->created_at);
+                })
+                ->average();
+
+            $lastSync = $typeSyncs->sortByDesc('created_at')->first();
+
+            $byType[] = [
+                'type' => $syncType->name,
+                'total' => $total,
+                'successful' => $successful,
+                'failed' => $total - $successful,
+                'success_rate' => $total > 0 ? round(($successful / $total) * 100, 2) : 0,
+                'average_duration' => $this->formatDuration($avgDuration),
+                'last_sync_status' => $this->getSyncStatus($lastSync),
+                'last_sync_time' => $lastSync->created_at->format('Y-m-d H:i:s')
+            ];
+        }
+
+        return $byType;
+    }
+
+    private function analyzeErrors($syncs): array
+    {
+        $errors = $syncs->pluck('errors')->flatten();
+        $totalErrors = $errors->count();
+
+        $errorTypes = $errors->groupBy('error_type')
+            ->map(function ($typeErrors) use ($totalErrors) {
+                $count = $typeErrors->count();
+                return [
+                    'count' => $count,
+                    'percentage' => $totalErrors > 0 ? round(($count / $totalErrors) * 100, 2) : 0
+                ];
+            });
+
+        return $errorTypes->map(function ($data, $type) {
+            return [
+                'type' => $type,
+                'count' => $data['count'],
+                'percentage' => $data['percentage']
+            ];
+        })->values()->toArray();
+    }
+
+    private function calculatePerformanceTrend($syncs, $dateRange): array
+    {
+        $grouping = match($dateRange) {
+            '30d' => 'Y-m-d',
+            '7d' => 'Y-m-d',
+            default => 'Y-m-d H:00' // Hourly for 24h
+        };
+
+        return $syncs->groupBy(function ($sync) use ($grouping) {
+            return $sync->created_at->format($grouping);
+        })->map(function ($daySyncs) {
+            $total = $daySyncs->count();
+            $successful = $daySyncs->filter->isCompleted()->count();
+
+            $avgDuration = $daySyncs
+                ->filter->isCompleted()
+                ->map(function ($sync) {
+                    return $sync->completed_at->diffInSeconds($sync->created_at);
+                })
+                ->average();
+
+            return [
+                'date' => $daySyncs->first()->created_at->format('Y-m-d H:i:s'),
+                'success_rate' => $total > 0 ? round(($successful / $total) * 100, 2) : 0,
+                'average_duration' => $this->formatDuration($avgDuration),
+                'total_syncs' => $total
+            ];
+        })->values()->toArray();
+    }
+
+    private function formatDuration(?float $seconds): string
+    {
+        if (!$seconds) return '0s';
+
+        $minutes = floor($seconds / 60);
+        $remainingSeconds = round($seconds % 60);
+
+        if ($minutes > 0) {
+            return "{$minutes}m {$remainingSeconds}s";
+        }
+
+        return "{$remainingSeconds}s";
+    }
+
+    private function getSyncStatus($sync): string
+    {
+        if ($sync->isCompleted()) return 'successful';
+        if ($sync->isFailed()) return 'failed';
+        return 'in_progress';
     }
 }

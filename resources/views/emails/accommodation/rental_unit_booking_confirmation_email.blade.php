@@ -13,12 +13,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="x-apple-disable-message-reformatting">
     <!--[if !mso]>
-					<!-->
+               <!-->
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <!--
 
 
-						<![endif]-->
+                  <![endif]-->
     <title></title>
     <style type="text/css">
         @media only screen and (min-width: 620px) {
@@ -173,14 +173,17 @@
         }
     </style>
     <!--[if !mso]>
-						<!-->
+                  <!-->
     <link href="https://fonts.googleapis.com/css?family=Raleway:400,700&display=swap" rel="stylesheet" type="text/css">
     <!--
 
 
-							<![endif]-->
+                     <![endif]-->
 </head>
-<body class="clean-body u_body" style="margin: 0;padding: 0;-webkit-text-size-adjust: 100%;background-color: #ffffff;color: #000000">
+<body class="clean-body u_body" style="margin: 0;padding: 0;-webkit-text-size-adjust: 100%;background-color: #ffffff;color: #000000; font-family: 'Manrope', sans-serif;
+margin: 0;
+padding: 0;
+background-color: #f5f5f5;">
 <!--[if IE]>
 <div class="ie-container">
 <![endif]-->
@@ -197,7 +200,7 @@
                     <td align="center" style="background-color: #ffffff;">
             <![endif]-->
             <div class="u-row-container" style="padding: 0px;background-color: #ececec">
-                <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent;">
+                <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent; ">
                     <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: transparent;">
                         <!--[if (mso)|(IE)]>
                         <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -221,12 +224,12 @@
                                     <table id="u_content_text_2" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:30px;font-family:'Raleway',sans-serif;" align="left">
+                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:24px;font-family:'Raleway',sans-serif;" align="left">
                                                 <div class="v-color v-text-align" style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
                                                     <p style="line-height: 140%;">
-                                    <span style="font-size: 18px; line-height: 25.2px;">
-                                      <strong>VenueBoost</strong>
-                                    </span>
+                                                    <div class="logo" style="text-align: center;">
+                                                        <img src="{{ asset('storage/bb-apartments-logo.png') }}" alt="By Best Apartments Logo" width="225" height="38" class="fr-fic fr-dii"/>
+                                                    </div>
                                                     </p>
                                                 </div>
                                             </td>
@@ -256,7 +259,14 @@
                 </div>
             </div>
             <div class="u-row-container" style="padding: 0px;background-color: #ececec">
-                <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent;">
+                <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent; max-width: 600px;
+                margin: 0 auto;
+                border: 1px solid #ddd;
+                padding: 24px;
+                border-radius: 16px;
+                background-color: #fff;
+                text-align: left;
+                overflow: hidden;">
                     <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: transparent;">
                         <!--[if (mso)|(IE)]>
                         <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -272,26 +282,12 @@
                             <div style="background-color: #ffffff;height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                 <!--[if (!mso)&(!IE)]>
                                                                                                                       <!-->
-                                <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
+                                <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px; ">
                                     <!--
 
 
                                                                                                                             <![endif]-->
-                                    <table style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                        <tbody>
-                                        <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:25px;font-family:'Raleway',sans-serif;" align="left">
-                                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                                                    <tr>
-                                                        <td class="v-text-align" style="padding-right: 0px;padding-left: 0px;" align="center">
-                                                            <img align="center" border="0" src="https://emilon.s3.eu-west-1.amazonaws.com/assets/image-7.png" alt="" title="" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: inline-block !important;border: none;height: auto;float: none;width: 100%;max-width: 82px;" width="82" />
-                                                        </td>
-                                                    </tr>
-                                                </table>
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
+
                                     <center style="">
                                         <table cellpadding="0" style="max-width:640px;border-collapse:collapse!important;border-spacing:0px!important;color:#222222!important;display:table!important;font-family:'Raleway',sans-serif;margin-left:auto!important;margin-right:auto!important;padding:0px!important;vertical-align:top!important;width:100%!important">
                                             <tbody>
@@ -301,12 +297,12 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px;padding-top:0px;padding-bottom:24px">
+                                                                <td style="padding-bottom: 20px; text-align: center;">
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
                                                                             <td>
-                                                                                <p style="font-size:18px;line-height:28px;font-family:'Raleway',sans-serif;margin:0!important;font-weight:400!important">You’re going to {{$rental_unit_booking_confirmation_data['rental_unit_name']}}!</p>
+                                                                                <span style="color: #000; font-size: 32px;line-height: 46px; font-weight: bold; font-family: 'Manrope', Arial, sans-serif; margin: 0;">You’re going to {{$rental_unit_booking_confirmation_data['rental_unit_name']}}!</span>
                                                                             </td>
                                                                         </tr>
                                                                         </tbody>
@@ -318,7 +314,7 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px">
+                                                                <td>
                                                                     <a href="#" style="font-family:'Raleway',sans-serif;font-weight:800;color:#222222" rel="noreferrer noopener" target="_blank">
                                                                         <div>
                                                                             <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%;max-height:none">
@@ -346,11 +342,11 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-bottom:8px;padding-top:8px">
+                                                                <td >
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-left:24px;padding-right:24px;padding-bottom:24px;padding-top:24px">
+                                                                            <td style="padding: 20px 0">
                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                     <tbody>
                                                                                     <tr style="margin:0px!important">
@@ -361,7 +357,7 @@
                                                                                                     <tr style="margin:0px!important">
                                                                                                         <td>
                                                                                                             <div>
-                                                                                                                <h2 style="font-size:22px;line-height:26px;color:#222222;font-family:'Raleway',sans-serif;font-weight:800;margin:0">{{$rental_unit_booking_confirmation_data['rental_unit_name']}}</h2>
+                                                                                                                <h2 style="font-size:20px;line-height:24px;color:#222222;font-family:'Raleway',sans-serif;font-weight:800;margin:0">{{$rental_unit_booking_confirmation_data['rental_unit_name']}}</h2>
                                                                                                             </div>
                                                                                                         </td>
                                                                                                     </tr>
@@ -370,9 +366,9 @@
                                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                                     <tbody>
                                                                                                     <tr style="margin:0px!important">
-                                                                                                        <td style="padding-top:8px">
+                                                                                                        <td style="padding-top:20px">
                                                                                                             <div style="font-size:18px;line-height:28px;margin:0;font-weight:400!important">
-                                                                                                                <p style="font-size:18px;line-height:28px;font-family:'Raleway',sans-serif;margin:0!important;font-weight:400!important">{{$rental_unit_booking_confirmation_data['rental_type']}} hosted by {{$rental_unit_booking_confirmation_data['rental_unit_host']}}</p>
+                                                                                                                <p style="font-size: 16px; line-height: 1.5; color: #333;">{{$rental_unit_booking_confirmation_data['rental_type']}} hosted by {{$rental_unit_booking_confirmation_data['rental_unit_host']}}</p>
                                                                                                             </div>
                                                                                                         </td>
                                                                                                     </tr>
@@ -394,7 +390,7 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px;padding-top:0px">
+                                                                <td >
                                                                     <table width="100%" style="border-spacing:0px!important">
                                                                         <tbody>
                                                                         <tr>
@@ -409,13 +405,13 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-bottom:24px;padding-left:24px;padding-right:24px;padding-top:32px">
+                                                                <td style="padding: 20px 0">
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
                                                                             <td style="padding-bottom:8px">
                                                                                 <div>
-                                                                                    <h2 style="font-size:22px;line-height:26px;color:#222222;font-family:'Raleway',sans-serif;font-weight:800;margin:0">Check in</h2>
+                                                                                    <h2 style="font-size:20px;line-height:24px;color:#222222;font-family:'Raleway',sans-serif;font-weight:800;margin:0">Check in</h2>
                                                                                 </div>
                                                                             </td>
                                                                         </tr>
@@ -461,11 +457,11 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-bottom:8px;padding-top:8px">
+                                                                <td style="">
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-left:24px;padding-right:24px;padding-bottom:24px;padding-top:24px">
+                                                                            <td style="">
                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                     <tbody>
                                                                                     <tr style="margin:0px!important">
@@ -519,7 +515,7 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px;padding-top:0px">
+                                                                <td style="padding: 20px 0;">
                                                                     <table width="100%" style="border-spacing:0px!important">
                                                                         <tbody>
                                                                         <tr>
@@ -534,11 +530,11 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-bottom:8px;padding-top:8px">
+                                                                <td style="">
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-left:24px;padding-right:24px;padding-bottom:24px;padding-top:24px">
+                                                                            <td style="">
                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                     <tbody>
                                                                                     <tr style="margin:0px!important">
@@ -592,11 +588,11 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-bottom:8px;padding-top:8px">
+                                                                <td style="padding: 20px 0;">
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-left:24px;padding-right:24px;padding-top:0px">
+                                                                            <td style="">
                                                                                 <table width="100%" style="border-spacing:0px!important">
                                                                                     <tbody>
                                                                                     <tr>
@@ -615,11 +611,11 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-bottom:16px;padding-top:24px">
+                                                                <td style="">
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-left:24px;padding-right:24px;padding-top:8px">
+                                                                            <td style="">
                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                     <tbody>
                                                                                     <tr style="margin:0px!important">
@@ -638,7 +634,7 @@
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-bottom:16px;padding-left:24px;padding-right:24px;padding-top:16px">
+                                                                            <td style="">
                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                     <tbody>
                                                                                     <tr style="margin:0px!important">
@@ -685,7 +681,7 @@
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-bottom:16px;padding-left:24px;padding-right:24px;padding-top:16px">
+                                                                            <td style="">
                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                     <tbody>
                                                                                     <tr style="margin:0px!important">
@@ -729,7 +725,7 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px;padding-top:0px">
+                                                                <td style="padding: 20px 0">
                                                                     <table width="100%" style="border-spacing:0px!important">
                                                                         <tbody>
                                                                         <tr>
@@ -744,11 +740,11 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-bottom:8px;padding-top:8px">
+                                                                <td style="">
                                                                     <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                         <tbody>
                                                                         <tr style="margin:0px!important">
-                                                                            <td style="padding-left:24px;padding-right:24px;padding-bottom:24px;padding-top:24px">
+                                                                            <td style="">
                                                                                 <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                                                     <tbody>
                                                                                     <tr style="margin:0px!important">
@@ -782,7 +778,7 @@
                                                         <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
                                                             <tbody>
                                                             <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px;padding-top:0px">
+                                                                <td style="padding: 20px 0">
                                                                     <table width="100%" style="border-spacing:0px!important">
                                                                         <tbody>
                                                                         <tr>
@@ -794,44 +790,16 @@
                                                             </tr>
                                                             </tbody>
                                                         </table>
-                                                        <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
-                                                            <tbody>
-                                                            <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px;padding-top:0px">
-                                                                    <table width="100%" style="border-spacing:0px!important">
-                                                                        <tbody>
-                                                                        <tr>
-                                                                            <td style="padding:0px!important;border-top:1px solid #dddddd!important" width="100%"></td>
-                                                                        </tr>
-                                                                        </tbody>
-                                                                    </table>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-                                                        <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
-                                                            <tbody>
-                                                            <tr style="margin:0px!important">
-                                                                <td style="padding-left:24px;padding-right:24px;padding-top:0px">
-                                                                    <table width="100%" style="border-spacing:0px!important">
-                                                                        <tbody>
-                                                                        <tr>
-                                                                            <td style="padding:0px!important;border-top:1px solid #dddddd!important" width="100%"></td>
-                                                                        </tr>
-                                                                        </tbody>
-                                                                    </table>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
+
+
                                                         <table cellpadding="0" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                                                             <tbody>
                                                             <tr style="margin: 0px!important;">
-                                                                <td style="padding-bottom: 8px; padding-top: 8px;">
+                                                                <td style="">
                                                                     <table cellpadding="0" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                                                                         <tbody>
                                                                         <tr style="margin: 0px!important;">
-                                                                            <td style="padding-left:24px;padding-right:24px; padding-bottom: 24px; padding-top: 24px;">
+                                                                            <td style="">
                                                                                 <table cellpadding="0" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                                                                                     <tbody>
                                                                                     <tr style="margin: 0px!important;">
@@ -874,7 +842,21 @@
                                                             </tr>
                                                             </tbody>
                                                         </table>
-
+                                                        <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
+                                                            <tbody>
+                                                            <tr style="margin:0px!important">
+                                                                <td style="padding: 20px 0">
+                                                                    <table width="100%" style="border-spacing:0px!important">
+                                                                        <tbody>
+                                                                        <tr>
+                                                                            <td style="padding:0px!important;border-top:1px solid #dddddd!important" width="100%"></td>
+                                                                        </tr>
+                                                                        </tbody>
+                                                                    </table>
+                                                                </td>
+                                                            </tr>
+                                                            </tbody>
+                                                        </table>
                                                         <table cellpadding="0" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                                                             <tbody>
                                                             <tr style="margin: 0px!important;">
@@ -882,7 +864,7 @@
                                                                     <table cellpadding="0" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                                                                         <tbody>
                                                                         <tr style="margin: 0px!important;">
-                                                                            <td style="padding-left:24px;padding-right:24px; padding-bottom: 24px; padding-top: 24px;">
+                                                                            <td >
                                                                                 <table cellpadding="0" style="border-collapse: collapse; border-spacing: 0; width: 100%;">
                                                                                     <tbody>
                                                                                     <tr style="margin: 0px!important;">
@@ -894,12 +876,6 @@
                                                                                                         <div style="font-size: 18px; line-height: 28px; margin: 0; font-weight: 400!important;">
                                                                                                             <p style="font-size: 18px; line-height: 28px; font-family:'Raleway',sans-serif; margin: 0!important; font-weight: 400!important;">You can reach our support team 24/7 from anywhere in the world.</p>
                                                                                                         </div>
-                                                                                                    </td>
-                                                                                                </tr>
-                                                                                                <tr style="margin: 0px!important;">
-                                                                                                    <td>
-                                                                                                        <a href="https://venueboost.io/resources/tools-guides" style="font-family:'Raleway',sans-serif; font-size: 18px; line-height: 28px; font-weight: 800; color: #222222; text-decoration: underline!important;" rel="noreferrer noopener" target="_blank">Explore our guides</a>
-                                                                                                        <a href="https://venueboost.io/contact-us" style="font-family:'Raleway',sans-serif; font-size: 18px; line-height: 28px; float: right; font-weight: 800; color: #222222; text-decoration: underline!important;" rel="noreferrer noopener" target="_blank">Contact Venueboost</a>
                                                                                                     </td>
                                                                                                 </tr>
                                                                                                 </tbody>
@@ -945,211 +921,21 @@
                     </div>
                 </div>
             </div>
-            <div class="u-row-container" style="padding: 0px;background-color: #ececec">
-                <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent;">
+            <div class="u-row-container" style="padding: 0px;background-color: #ececec; ">
+                <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: transparent; ">
                     <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: transparent;">
-                        <!--[if (mso)|(IE)]>
+
                         <table width="100%" cellpadding="0" cellspacing="0" border="0">
                             <tr>
                                 <td style="padding: 0px;background-color: #ececec;" align="center">
                                     <table cellpadding="0" cellspacing="0" border="0" style="width:600px;">
                                         <tr style="background-color: transparent;">
-                        <![endif]-->
-                        <!--[if (mso)|(IE)]>
-                        <td align="center" width="600" style="width: 600px;padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;" valign="top">
-                        <![endif]-->
-                        <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
-                            <div style="height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
-                                <!--[if (!mso)&(!IE)]>
-                                                                                                                                                                      <!-->
-                                <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
-                                    <!--
 
-
-                                                                                                                                                                            <![endif]-->
-                                    <table id="u_content_text_4" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                        <tbody>
-                                        <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:32px 80px 10px;font-family:'Raleway',sans-serif;" align="left">
-                                                <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="line-height: 160%;">Follow us on</p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
-                                    <table style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                        <tbody>
-                                        <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:0px;font-family:'Raleway',sans-serif;" align="left">
-                                                <div align="center">
-                                                    <div style="display: table; max-width:234px;">
-                                                        <!--[if (mso)|(IE)]>
-                                                        <table width="234" cellpadding="0" cellspacing="0" border="0">
-                                                            <tr>
-                                                                <td style="border-collapse:collapse;" align="center">
-                                                                    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse; mso-table-lspace: 0pt;mso-table-rspace: 0pt; width:234px;">
-                                                                        <tr>
-                                                        <![endif]-->
-                                                        <!--[if (mso)|(IE)]>
-                                                        <td width="32" style="width:32px; padding-right: 15px;" valign="top">
-                                                        <![endif]-->
-                                                        <table align="left" border="0" cellspacing="0" cellpadding="0" width="32" height="32" style="width: 32px !important;height: 32px !important;display: inline-block;border-collapse: collapse;table-layout: fixed;border-spacing: 0;mso-table-lspace: 0pt;mso-table-rspace: 0pt;vertical-align: top;margin-right: 15px">
-                                                            <tbody>
-                                                            <tr style="vertical-align: top">
-                                                                <td align="left" valign="middle" style="word-break: break-word;border-collapse: collapse !important;vertical-align: top">
-                                                                    <a href="https://www.facebook.com/unlayer" title="Facebook" target="_blank">
-                                                                        <img src="https://emilon.s3.eu-west-1.amazonaws.com/assets/image-1.png" alt="Facebook" title="Facebook" width="24" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: block !important;border: none;height: auto;float: none;max-width: 32px !important">
-                                                                    </a>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-                                                        <!--[if (mso)|(IE)]>
-                                                        </td>
-                                                        <![endif]-->
-                                                        <!--[if (mso)|(IE)]>
-                                                        <td width="32" style="width:32px; padding-right: 15px;" valign="top">
-                                                        <![endif]-->
-                                                        <table align="left" border="0" cellspacing="0" cellpadding="0" width="32" height="32" style="width: 32px !important;height: 32px !important;display: inline-block;border-collapse: collapse;table-layout: fixed;border-spacing: 0;mso-table-lspace: 0pt;mso-table-rspace: 0pt;vertical-align: top;margin-right: 15px">
-                                                            <tbody>
-                                                            <tr style="vertical-align: top">
-                                                                <td align="left" valign="middle" style="word-break: break-word;border-collapse: collapse !important;vertical-align: top">
-                                                                    <a href="https://www.instagram.com/unlayer_official/" title="Instagram" target="_blank">
-                                                                        <img src="https://emilon.s3.eu-west-1.amazonaws.com/assets/image-2.png" alt="Instagram" title="Instagram" width="24" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: block !important;border: none;height: auto;float: none;max-width: 32px !important">
-                                                                    </a>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-                                                        <!--[if (mso)|(IE)]>
-                                                        </td>
-                                                        <![endif]-->
-                                                        <!--[if (mso)|(IE)]>
-                                                        <td width="32" style="width:32px; padding-right: 15px;" valign="top">
-                                                        <![endif]-->
-                                                        <table align="left" border="0" cellspacing="0" cellpadding="0" width="32" height="32" style="width: 32px !important;height: 32px !important;display: inline-block;border-collapse: collapse;table-layout: fixed;border-spacing: 0;mso-table-lspace: 0pt;mso-table-rspace: 0pt;vertical-align: top;margin-right: 15px">
-                                                            <tbody>
-                                                            <tr style="vertical-align: top">
-                                                                <td align="left" valign="middle" style="word-break: break-word;border-collapse: collapse !important;vertical-align: top">
-                                                                    <a href="https://twitter.com/unlayerapp" title="Twitter" target="_blank">
-                                                                        <img src="https://emilon.s3.eu-west-1.amazonaws.com/assets/image-3.png" alt="Twitter" title="Twitter" width="24" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: block !important;border: none;height: auto;float: none;max-width: 32px !important">
-                                                                    </a>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-                                                        <!--[if (mso)|(IE)]>
-                                                        </td>
-                                                        <![endif]-->
-                                                        <!--[if (mso)|(IE)]>
-                                                        <td width="32" style="width:32px; padding-right: 15px;" valign="top">
-                                                        <![endif]-->
-                                                        <table align="left" border="0" cellspacing="0" cellpadding="0" width="32" height="32" style="width: 32px !important;height: 32px !important;display: inline-block;border-collapse: collapse;table-layout: fixed;border-spacing: 0;mso-table-lspace: 0pt;mso-table-rspace: 0pt;vertical-align: top;margin-right: 15px">
-                                                            <tbody>
-                                                            <tr style="vertical-align: top">
-                                                                <td align="left" valign="middle" style="word-break: break-word;border-collapse: collapse !important;vertical-align: top">
-                                                                    <a href="https://youtube.com/" title="YouTube" target="_blank">
-                                                                        <img src="https://emilon.s3.eu-west-1.amazonaws.com/assets/image-4.png" alt="YouTube" title="YouTube" width="24" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: block !important;border: none;height: auto;float: none;max-width: 32px !important">
-                                                                    </a>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-                                                        <!--[if (mso)|(IE)]>
-                                                        </td>
-                                                        <![endif]-->
-                                                        <!--[if (mso)|(IE)]>
-                                                        <td width="32" style="width:32px; padding-right: 0px;" valign="top">
-                                                        <![endif]-->
-                                                        <table align="left" border="0" cellspacing="0" cellpadding="0" width="32" height="32" style="width: 32px !important;height: 32px !important;display: inline-block;border-collapse: collapse;table-layout: fixed;border-spacing: 0;mso-table-lspace: 0pt;mso-table-rspace: 0pt;vertical-align: top;margin-right: 0px">
-                                                            <tbody>
-                                                            <tr style="vertical-align: top">
-                                                                <td align="left" valign="middle" style="word-break: break-word;border-collapse: collapse !important;vertical-align: top">
-                                                                    <a href="https://www.linkedin.com/company/unlayer/mycompany/" title="LinkedIn" target="_blank">
-                                                                        <img src="https://emilon.s3.eu-west-1.amazonaws.com/assets/image-5.png" alt="LinkedIn" title="LinkedIn" width="24" style="outline: none;text-decoration: none;-ms-interpolation-mode: bicubic;clear: both;display: block !important;border: none;height: auto;float: none;max-width: 32px !important">
-                                                                    </a>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-                                                        <!--[if (mso)|(IE)]>
-                                                        </td>
-                                                        <![endif]-->
-                                                        <!--[if (mso)|(IE)]>
-                                                        </tr>
-                                                        </table>
-                                                        </td>
-                                                        </tr>
-                                                        </table>
-                                                        <![endif]-->
-                                                    </div>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
-                                    <table id="u_content_text_5" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                        <tbody>
-                                        <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:32px 10px;font-family:'Raleway',sans-serif;" align="left">
-                                                <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="line-height: 160%;">
-                                                        <a rel="noopener" href="https://venueboost.io" target="_blank">https://venueboost.io</a>
-                                                    </p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
-                                    <table id="u_content_text_6" class="hide-mobile" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                        <tbody>
-                                        <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:10px 10px 40px;font-family:'Raleway',sans-serif;" align="left">
-                                                <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="font-size: 14px; line-height: 160%;"> Copyright © VenueBoost inc.</p>
-                                                    <p style="font-size: 14px; line-height: 160%;">222 East 44th Street <br> New York, NY 10017 United States  <br />All Right Reserved. </p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
-                                    <!--[if !mso]>
-                                                                                                                                                                                                <!-->
-                                    <table id="u_content_text_9" class="hide-default__display-table hide-desktop" style="display: none;mso-hide: all;font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
-                                        <tbody>
-                                        <tr>
-                                            <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:0px 10px 40px;font-family:'Raleway',sans-serif;" align="left">
-                                                <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="font-size: 14px; line-height: 160%;"> Copyright © VenueBoost inc.  222 East 44th Street <br> New York, NY 10017 United States  <br />All Right Reserved. </p>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        </tbody>
-                                    </table>
-                                    <!--
-
-
-                                                                                                                                                                                                <![endif]-->
-                                    <!--[if (!mso)&(!IE)]>
-                                                                                                                                                                                                <!-->
-                                </div>
-                                <!--
-
-
-                                                                                                                                                                                          <![endif]-->
-                            </div>
-                        </div>
-                        <!--[if (mso)|(IE)]>
-                        </td>
-                        <![endif]-->
-                        <!--[if (mso)|(IE)]>
                         </tr>
                         </table>
                         </td>
                         </tr>
                         </table>
-                        <![endif]-->
                     </div>
                 </div>
             </div>

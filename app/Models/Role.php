@@ -9,7 +9,9 @@ class Role extends Model
     protected $table = 'roles';
 
     protected $fillable = [
-        'name'
+        'name',
+        'venue_id',
+        'role_type'
     ];
 
     public function employees()
@@ -22,4 +24,10 @@ class Role extends Model
     {
         return $this->belongsToMany(Permission::class, 'role_permission', 'role_id', 'permission_id');
     }
+
+    public function restaurants(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(Restaurant::class);
+    }
+
 }

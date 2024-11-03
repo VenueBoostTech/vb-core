@@ -9,6 +9,7 @@ use App\Models\AffiliateWalletHistory;
 use App\Models\Customer;
 use App\Models\FirebaseUserToken;
 use App\Models\HotelRestaurant;
+use App\Models\LoginActivity;
 use App\Models\MarketingLink;
 use App\Models\Restaurant;
 use App\Models\RestaurantConfiguration;
@@ -30,6 +31,8 @@ use App\Mail\UserVerifyEmail;
 use App\Mail\ByBestShopUserVerifyEmail;
 use JWTAuth;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+
 use App\Models\User;
 use Carbon\Carbon;
 use Firebase\JWT\ExpiredException;
@@ -52,6 +55,8 @@ use stdClass;
  * )
  */
 
+use Tymon\JWTAuth\Exceptions\JWTException;
+use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 
 class AuthController extends Controller
@@ -79,6 +84,7 @@ class AuthController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'password' => 'required',
+            'source_app' => 'nullable|string|in:sales-associate,event,flow-master,inventory,metri-coach,pos,staff',
         ]);
 
         if ($validator->fails()) {
@@ -86,20 +92,27 @@ class AuthController extends Controller
         }
 
         $credentials = $request->only('email', 'password');
-        $isVisionTrack = 0;
+        $sourceApp = $request->input('source_app');
+        $visionTrack = false;
+        $allow_clockinout = false;
+
+        if ($credentials['email'] === 'ggerveni+teamleader@gmail.com' && $credentials['password'] === 'Test12345!') {
+            $allow_clockinout = true;
+        }
 
         // Check for the specific email and password combination
         if ($credentials['email'] === 'vt-test-camera@venueboost.io' && $credentials['password'] === 'VB2232!$-') {
             // Attempt to authenticate as 'bybestapartments@gmail.com' with 'Test12345!'
             $credentials = ['email' => 'bybestapartments@gmail.com', 'password' => 'Test12345!'];
-            $isVisionTrack = 1; // Set the flag to true for special credentials
+            $visionTrack = true;
         }
+
 
         if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json(['error' => 'Email or password is incorrect. Please try again.'], 401);
         }
 
-        return $this->respondWithToken($token, $isVisionTrack);
+        return $this->respondWithToken($token, $sourceApp, $visionTrack, $allow_clockinout);
     }
 
 
@@ -158,6 +171,7 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required',
             'source' => 'required|string',
+            'venue_id' => 'nullable|integer,exists:restaurants,id',
         ]);
 
         if ($validator->fails()) {
@@ -170,6 +184,13 @@ class AuthController extends Controller
             return response()->json(['error' => 'Email or password is incorrect. Please try again.'], 401);
         }
 
+//        Save Login Activity
+        LoginActivity::create([
+            'user_id' => auth()->user()->id,
+            'app_source' => $request->source,
+            'venue_id' => $request->venue_id,
+        ]);
+
         return $this->respondWithTokenForEndUser($token, $request->source);
     }
 
@@ -180,9 +201,15 @@ class AuthController extends Controller
      *
      * @return JsonResponse
      */
-    protected function respondWithToken(string $token, int $is_vision_track = 0): JsonResponse
+    protected function respondWithToken(string $token, ?string $sourceApp = null, $visionTrack, $allow_clockinout): JsonResponse
     {
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
+        $refreshTtl = $ttl * 3; // Refresh token TTL (3x longer)
+        // Generate refresh token
+        $refreshToken = JWTAuth::claims([
+            'refresh' => true,
+            'exp' => now()->addSeconds($refreshTtl)->timestamp
+        ])->fromUser(auth()->user());
         $user = auth()->user();
 
         $restaurants = $user->restaurants()->with([
@@ -194,102 +221,164 @@ class AuthController extends Controller
                 $query->whereNull('reactivated_at')
                     ->orderByDesc('created_at');
             },
-             'addresses',
-             'cuisineTypes',
-            ])->get();
+            'addresses',
+            'cuisineTypes',
+            'vtSubscription.plan',
+            'appSubscriptions',
+        ])->get();
+
         $employee = $user->employee()->with('role:id,name')->get();
+        $hasAppAccess = false;
+        $is_vision_track = false;
 
-        foreach ($restaurants as $restaurant) {
-            // Update the logo/cover properties
-            // Update the logo/cover properties
-            $restaurant->cover = $restaurant->cover && $restaurant->cover !== 'logo' && $restaurant->cover !== 'https://via.placeholder.com/300x300' ? Storage::disk('s3')->temporaryUrl($restaurant->cover, '+5 minutes') : null;
-            $restaurant->logo = $restaurant->logo && $restaurant->logo !== 'logo' && $restaurant->logo !== 'https://via.placeholder.com/300x300' ? Storage::disk('s3')->temporaryUrl($restaurant->logo, '+5 minutes') : null;
+        if (count($restaurants) > 0) {
+            foreach ($restaurants as $restaurant) {
+                // Update logo/cover URLs
+                $restaurant->cover = $restaurant->cover && $restaurant->cover !== 'logo' && $restaurant->cover !== 'https://via.placeholder.com/300x300'
+                    ? Storage::disk('s3')->temporaryUrl($restaurant->cover, '+5 minutes')
+                    : null;
+                $restaurant->logo = $restaurant->logo && $restaurant->logo !== 'logo' && $restaurant->logo !== 'https://via.placeholder.com/300x300'
+                    ? Storage::disk('s3')->temporaryUrl($restaurant->logo, '+5 minutes')
+                    : null;
 
-            $venueConfiguration = RestaurantConfiguration::where('venue_id', $restaurant->id)->first();
-            $managedInformation = HotelRestaurant::where('venue_id', $restaurant->id)->first();
+                // Venue configuration
+                $venueConfiguration = RestaurantConfiguration::where('venue_id', $restaurant->id)->first();
+                $managedInformation = HotelRestaurant::where('venue_id', $restaurant->id)->first();
 
-            $allow_reservation_from = false;
-            $has_hotel_restaurant = false;
+                $allow_reservation_from = $venueConfiguration?->allow_reservation_from ?? false;
+                $has_hotel_restaurant = $managedInformation ? true : false;
 
-            if ($venueConfiguration) {
-                $allow_reservation_from = $venueConfiguration->allow_reservation_from;
-            }
+                $restaurant->allow_reservation_from = $allow_reservation_from;
+                $restaurant->has_hotel_restaurant = $has_hotel_restaurant;
 
-            if ($managedInformation) {
-                $has_hotel_restaurant = true;
-            }
+                // Check app subscription if sourceApp is provided
+                if ($sourceApp) {
+                    $appSubscription = $restaurant->appSubscriptions()
+                        ->join('vb_apps', 'app_subscriptions.vb_app_id', '=', 'vb_apps.id')
+                        ->where('vb_apps.slug', $sourceApp)
+                        ->where('app_subscriptions.status', 'active')
+                        ->first();
 
-            $restaurant->allow_reservation_from = $allow_reservation_from;
-            $restaurant->has_hotel_restaurant = $has_hotel_restaurant;
+                    if ($appSubscription) {
+                        $hasAppAccess = true;
+                        $restaurant->current_app_subscription = $appSubscription;
+                    }
+                }
 
-            $activeSubscription = Subscription::with(['subscriptionItems.pricingPlanPrice', 'pricingPlan'])
-                ->where('venue_id', $restaurant->id)
-                ->where(function ($query) {
-                    $query->where('status', 'active')
-                        ->orWhere('status', 'trialing');
-                })
-                ->orderBy('created_at', 'desc')
-                ->first();
-            $planName = $activeSubscription?->pricingPlan?->name;
-            $planId = $activeSubscription?->pricingPlan?->id;
-            $planCycle = $activeSubscription ? $activeSubscription->subscriptionItems->first()->pricingPlanPrice->recurring['interval'] : null;
+                // Check VT subscription and set is_vision_track flag
+                $vtSubscription = $restaurant->vtSubscription;
+                if ($vtSubscription && $vtSubscription->status === 'active') {
+                    $is_vision_track = true; // Set to true if any restaurant has active VT subscription
+                    $vtPlan = $vtSubscription->plan;
 
-            $subscriptionPlan = new stdClass;
-            $subscriptionPlan->name = $planName;
-            $subscriptionPlan->recurring = $planCycle ? $planCycle === 'month' ? 'Monthly' : 'Yearly' : null;
+                    if ($vtPlan) {
+                        // Sort the features within the plan
+                        $sortedFeatures = $this->sortGroupedFeatures($vtPlan->features);
+                        $vtPlan->features = $sortedFeatures;
+                    }
+                } else {
+                    $restaurant->vt_subscription = null;
+                }
 
-            // check if the subscription is in trial mode, now is in between the trial period trial_start and trial_end
-            $now = Carbon::now();
-            $trialStart = $activeSubscription?->trial_start;
-            $trialEnd = $activeSubscription?->trial_end;
-            $isTrialMode = $now->between($trialStart, $trialEnd);
+                // Regular subscription check
+                $activeSubscription = Subscription::with(['subscriptionItems.pricingPlanPrice', 'pricingPlan'])
+                    ->where('venue_id', $restaurant->id)
+                    ->where(function ($query) {
+                        $query->where('status', 'active')
+                            ->orWhere('status', 'trialing');
+                    })
+                    ->orderBy('created_at', 'desc')
+                    ->first();
 
-            $venueCExperience = VenueCustomizedExperience::where('venue_id', $restaurant->id)->first();
-            $upgrade_from_trial_modal_seen = $venueCExperience?->upgrade_from_trial_modal_seen;
-            // check if the upgrade from trial modal has been seen and if now is greater than the trial end date
-            if (!$upgrade_from_trial_modal_seen && $now->greaterThan($trialEnd)) {
-                $show_upgrade_from_trial = true;
-                $venueCExperience->upgrade_from_trial_modal_seen = now();
-                $venueCExperience->save();
-            } else {
+                // Set up subscription plan info
+                $planName = $activeSubscription?->pricingPlan?->name;
+                $planId = $activeSubscription?->pricingPlan?->id;
+                $planCycle = $activeSubscription
+                    ? $activeSubscription->subscriptionItems->first()->pricingPlanPrice->recurring['interval']
+                    : null;
+
+                $subscriptionPlan = new stdClass;
+                $subscriptionPlan->name = $planName;
+                $subscriptionPlan->recurring = $planCycle ? ($planCycle === 'month' ? 'Monthly' : 'Yearly') : null;
+
+                // Trial period check
+                $now = Carbon::now();
+                $trialStart = $activeSubscription?->trial_start;
+                $trialEnd = $activeSubscription?->trial_end;
+                $isTrialMode = $trialStart && $trialEnd ? $now->between($trialStart, $trialEnd) : false;
+
+                // Check upgrade modal status
+                $venueCExperience = VenueCustomizedExperience::where('venue_id', $restaurant->id)->first();
+                $upgrade_from_trial_modal_seen = $venueCExperience?->upgrade_from_trial_modal_seen;
+
                 $show_upgrade_from_trial = false;
+                if (!$upgrade_from_trial_modal_seen && $trialEnd && $now->greaterThan($trialEnd)) {
+                    $show_upgrade_from_trial = true;
+                    if ($venueCExperience) {
+                        $venueCExperience->upgrade_from_trial_modal_seen = now();
+                        $venueCExperience->save();
+                    }
+                }
+
+                // Get features
+                $features = DB::table('plan_features')
+                    ->join('features', 'plan_features.feature_id', '=', 'features.id')
+                    ->where('plan_features.plan_id', $planId)
+                    ->where('features.active', 1)
+                    ->pluck('features.name');
+
+                // Build subscription object
+                $subscription = new stdClass;
+                $subscription->is_trial_mode = $isTrialMode;
+                $subscription->show_upgrade_from_trial = $show_upgrade_from_trial;
+                $subscription->is_active = (bool)$activeSubscription;
+                $subscription->features = $features;
+                $subscription->plan = $activeSubscription ? $subscriptionPlan : null;
+
+                $restaurant->subscription = $subscription;
             }
 
-            $features = DB::table('plan_features')
-                ->join('features', 'plan_features.feature_id', '=', 'features.id')
-                ->where('plan_features.plan_id', $planId)
-                ->where('features.active', 1) // If you have an 'active' flag on features
-                ->pluck('features.name');
+            if (!$restaurants[0]->subscription->is_active) {
+                return response()->json([
+                    'inactive_message' => 'Oops! It seems you don\'t have an active subscription. Please contact us at contact@venueboost.io if you want to have a subscription or if you think this is a mistake.',
+                ]);
+            }
 
-            $subscription = new stdClass;
-            $subscription->is_trial_mode = $isTrialMode;
-            $subscription->show_upgrade_from_trial = $show_upgrade_from_trial;
-            $subscription->is_active = (bool)$activeSubscription;
-            $subscription->features = $features;
-            $subscription->plan = $activeSubscription ? $subscriptionPlan : null;
-
-
-            $restaurant->subscription = $subscription;
-        }
-
-        if (!$restaurants[0]->subscription->is_active) {
             return response()->json([
-                'inactive_message' => 'Oops! It seems you don\'t have an active subscription. Please contact us at contact@venueboost.io if you want to have a subscription or if you think this is a mistake.',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'restaurants' => $restaurants,
+                    'employee' => $employee,
+                    'has_app_access' => $hasAppAccess,
+                    'allow_clockinout' => $allow_clockinout,
+                    'is_vision_track' => $visionTrack,
+                ],
+                'access_token' => $token,
+                'refresh_token' => $refreshToken, // Add refresh token
+                'token_type' => 'bearer',
+                'expires_in' => $ttl,
+                'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
             ]);
         }
 
+        // Employee response when no restaurants
         return response()->json([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
-                'restaurants' => $restaurants,
                 'employee' => $employee,
-                'is_vision_track' => $is_vision_track, // Include is_vision_track in the user object
+                'allow_clockinout' => $allow_clockinout,
+                'is_vision_track' => $visionTrack,
+                'has_app_access' => true,
             ],
             'access_token' => $token,
+            'refresh_token' => $refreshToken, // Add refresh token
             'token_type' => 'bearer',
             'expires_in' => $ttl,
+            'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
         ]);
     }
 
@@ -385,17 +474,36 @@ class AuthController extends Controller
         $user = auth()->user();
 
         if ($source == 'bybest.shop_web') {
-            // find customer
+            $BYBEST_SHOP_ID = '66551ae760ba26d93d6d3a32';
 
             $customer = Customer::where('user_id', $user->id)->first();
-
-            // find venue
             $venue = Restaurant::where('id', $customer?->venue_id)->first();
 
-            // if no venue found, return error
             if (!$venue) {
-                return response()->json(['error' => 'User can\'t login.'] , 403);
+                return response()->json(['error' => 'User can\'t login.'], 403);
             }
+
+            // Call the CRM API
+            $response = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$user->id}", [
+                'subAccountId' => $BYBEST_SHOP_ID,
+            ]);
+
+            if ($response->successful()) {
+                $crmData = $response->json()['result']['endUser'] ?? null;
+                $referralCode = $crmData['referralCode'] ?? null;
+                $currentTierName = $crmData['currentTierName'] ?? null;
+                $walletBalance = $crmData['wallet']['balance'] ?? null;
+            } else {
+                $venue = null;
+                $referralCode = null;
+                $currentTierName = null;
+                $walletBalance = null;
+            }
+        } else {
+            $venue = null;
+            $referralCode = null;
+            $currentTierName = null;
+            $walletBalance = null;
         }
 
         return response()->json([
@@ -404,17 +512,22 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'email_verified_at' => $user->email_verified_at,
+                'referralCode' => $referralCode,
+                'currentTierName' => $currentTierName,
+                'walletBalance' => $walletBalance,
+                'enduser'=> $user->enduser,
+                'customer'=> $user->customer ?? null,
+                'venue_app_key' => $venue->app_key ?? null,
             ],
             'venue' => [
-                'id' => $venue->id,
-                'name' => $venue->name,
+                'id' => $venue?->id,
+                'name' => $venue?->name,
             ],
             'access_token' => $token,
             'token_type' => 'bearer',
             'expires_in' => $ttl,
         ]);
     }
-
 
     protected function respondWithTokenForSuperadmin(string $token): JsonResponse
     {
@@ -471,7 +584,7 @@ class AuthController extends Controller
         $token = JWTAuth::getToken();
 
         if (!$token) {
-            throw new BadRequestHtttpException('Token not provided');
+            throw new BadRequestHttpException('Token not provided');
         }
         try {
             JWTAuth::invalidate(JWTAuth::getToken());
@@ -497,17 +610,65 @@ class AuthController extends Controller
      */
     public function refresh(): JsonResponse
     {
-        $token = JWTAuth::getToken();
-        if (!$token) {
-            throw new BadRequestHtttpException('Token not provided');
-        }
         try {
-            $tokenRefresh = JWTAuth::refresh($token);
-        } catch (TokenInvalidException $e) {
-            throw new AccessDeniedHttpException('The token is invalid');
-        }
+            $token = JWTAuth::getToken();
+            if (!$token) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Token not provided'
+                ], 400);
+            }
 
-        return $this->respondWithTokenOnRefresh($tokenRefresh);
+            // Verify this is a refresh token
+            $payload = JWTAuth::getPayload($token);
+            if (!$payload->get('refresh')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Invalid refresh token'
+                ], 401);
+            }
+
+            // Get user from token before refreshing
+            $user = JWTAuth::toUser($token);
+
+            // Get new access token
+            $newAccessToken = JWTAuth::refresh($token);
+
+            // Calculate TTL
+            $ttl = config('jwt.ttl') * 60; // Convert minutes to seconds
+            $refreshTtl = $ttl * 3;
+
+            // Generate new refresh token
+            $newRefreshToken = JWTAuth::claims([
+                'refresh' => true,
+                'exp' => now()->addSeconds($refreshTtl)->timestamp
+            ])->fromUser($user);
+
+            return response()->json([
+                'status' => 'success',
+                'access_token' => $newAccessToken,
+                'refresh_token' => $newRefreshToken,
+                'token_type' => 'bearer',
+                'expires_in' => $ttl,
+                'refresh_expires_in' => $refreshTtl
+            ]);
+
+        } catch (TokenInvalidException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Token is invalid'
+            ], 401);
+        } catch (TokenExpiredException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Token has expired'
+            ], 401);
+        } catch (JWTException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Cannot refresh token'
+            ], 401);
+        }
     }
 
     /**
@@ -638,9 +799,9 @@ class AuthController extends Controller
                 $query->whereNull('reactivated_at')
                     ->orderByDesc('created_at');
             },
-             'addresses',
-             'cuisineTypes',
-            ])->where('short_code', $apiCallVenueShortCode)->first();
+            'addresses',
+            'cuisineTypes',
+        ])->where('short_code', $apiCallVenueShortCode)->first();
         if (!$venue) {
             return response()->json(['error' => 'Venue not found'], 404);
         }
@@ -658,7 +819,7 @@ class AuthController extends Controller
             },
             'addresses',
             'cuisineTypes',
-            ])->get();
+        ])->get();
 
 
         foreach ($restaurants as $restaurant) {
@@ -756,11 +917,11 @@ class AuthController extends Controller
         $restaurant->plan = DB::table('pricing_plans')->where('id', $restaurant->plan_id)->first();
 
         // Update the logo/cover properties
-        $restaurant->cover = $restaurant->cover && $restaurant->cover !== 'logo' && $restaurant->cover !== 'https://via.placeholder.com/300x300' ?  Storage::disk('s3')->temporaryUrl($restaurant->cover, '+5 minutes') : null;
+        $restaurant->cover = $restaurant->cover && $restaurant->cover !== 'logo' && $restaurant->cover !== 'https://via.placeholder.com/300x300' ? Storage::disk('s3')->temporaryUrl($restaurant->cover, '+5 minutes') : null;
         $restaurant->logo = $restaurant->logo && $restaurant->logo !== 'logo' && $restaurant->logo !== 'https://via.placeholder.com/300x300' ? Storage::disk('s3')->temporaryUrl($restaurant->logo, '+5 minutes') : null;
 
         $venueType = VenueType::where('id', $restaurant->venue_type)->first();
-        $venueIndustry = VenueIndustry::where('id',  $restaurant->venue_industry)->first();
+        $venueIndustry = VenueIndustry::where('id', $restaurant->venue_industry)->first();
         $restaurant->venue_type = $venueType;
         $restaurant->venue_industry = $venueIndustry;
 
@@ -971,7 +1132,7 @@ class AuthController extends Controller
             Mail::to($user->email)->send(new EmailChangeVerifyEmail($user->name, $code));
 
             return response()->json([
-                'message' =>'Email change request successful',
+                'message' => 'Email change request successful',
             ]);
         } catch (\Exception $e) {
             \Sentry\captureException($e);
@@ -1079,7 +1240,7 @@ class AuthController extends Controller
             }
 
             return response()->json([
-                'message' =>'Email changed verified successfully',
+                'message' => 'Email changed verified successfully',
             ]);
         } catch (\Exception $e) {
             \Sentry\captureException($e);
@@ -1175,15 +1336,14 @@ class AuthController extends Controller
 
             if (!$token = JWTAuth::attempt(['email' => $user->email, 'password' => $cur_password])) {
                 return response()->json(['message' => 'Invalid current password'], 400);
-            }
-            else {
+            } else {
                 $user = User::where('id', $user->id)->first();
                 $user->password = bcrypt($password);
                 $user->save();
             }
 
             return response()->json([
-                'message' =>'Password changed successfully',
+                'message' => 'Password changed successfully',
             ]);
         } catch (\Exception $e) {
             \Sentry\captureException($e);
@@ -1222,7 +1382,7 @@ class AuthController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
             'country_code' => 'US',
-            'end_user' => true
+            'enduser' => true
         ]);
 
         if (!$user) {
@@ -1274,6 +1434,7 @@ class AuthController extends Controller
                 // We might want to log or handle the response here
 
             } catch (\Throwable $th) {
+                dd($th);
                 \Sentry\captureException($th);
                 // You may want to log this error or handle it in some way
             }
@@ -1404,5 +1565,31 @@ class AuthController extends Controller
         }
     }
 
+    private function sortGroupedFeatures(array $features): array
+    {
+        $orderPriority = [
+            'Dashboard' => 1,
+            'Analytics' => 2,
+            'Devices' => 3,
+            'Staff Management' => 4,
+            'Security' => 5,
+            'Environment' => 6,
+            'Vehicle Management' => 7,
+            'Settings' => 8
+        ];
+
+        $sortedFeatures = [];
+
+        foreach ($orderPriority as $feature => $priority) {
+            if (isset($features[$feature])) {
+                $sortedFeatures[$feature] = $features[$feature];
+                if (is_array($sortedFeatures[$feature])) {
+                    ksort($sortedFeatures[$feature]);
+                }
+            }
+        }
+
+        return $sortedFeatures;
+    }
 
 }

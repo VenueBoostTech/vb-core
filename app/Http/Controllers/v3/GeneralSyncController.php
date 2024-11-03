@@ -220,7 +220,7 @@ class GeneralSyncController extends Controller
                 'birthday' => $oldUser['bb_member_birthday'],
                 'city' => $oldUser['bb_member_city'],
                 'address' => $oldUser['bb_member_address'],
-                'venue_id' => 10,
+                'venue_id' => 58,
                 'old_platform_member_code' => $oldUser['bb_member_code'],
                 $statusDate => now(),
                 'is_rejected' => $status == 'rejected',

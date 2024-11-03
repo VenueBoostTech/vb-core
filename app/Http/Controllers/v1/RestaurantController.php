@@ -3268,7 +3268,7 @@ class RestaurantController extends Controller
                 ],
                 'paused' => $venue->paused,
                 'address' => $venue->addresses[0] ?? '-',
-                'venuePauseHistories' => $venue->venuePauseHistories,
+                'venuePauseHistories' => $venue->venuePauseHistories
             ];
             $formattedVenues[] = $formattedVenue;
         }
@@ -4680,4 +4680,5 @@ function generateStringAppKey($providerName) {
 
     return $prefix . $randomNumbers . $suffix . $randomChar;
 }
+
 

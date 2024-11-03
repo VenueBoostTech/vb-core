@@ -1,9 +1,45 @@
 <?php
 
+use App\Http\Controllers\AppSuite\AppConfigurationController;
+use App\Http\Controllers\AppSuite\AppWhitelabelController;
+use App\Http\Controllers\AppSuite\Inventory\VBAppProductsController;
+use App\Http\Controllers\AppSuite\NotificationsController;
+use App\Http\Controllers\AppSuite\Staff\AdminProjectController;
+use App\Http\Controllers\AppSuite\Staff\AdminStaffController;
+use App\Http\Controllers\AppSuite\Staff\AdminTaskController;
+use App\Http\Controllers\AppSuite\Staff\AdminTimesheetController;
+use App\Http\Controllers\AppSuite\Staff\AppClientController;
+use App\Http\Controllers\AppSuite\Staff\AttendanceController;
+use App\Http\Controllers\AppSuite\Staff\BusinessController;
+use App\Http\Controllers\AppSuite\Staff\CommentController;
+use App\Http\Controllers\AppSuite\Staff\CompanySetupController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeProjectController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeTaskController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeTimesheetController;
+use App\Http\Controllers\AppSuite\Staff\L2EmployeeTimesheetController;
+use App\Http\Controllers\AppSuite\Staff\ShiftController;
+use App\Http\Controllers\AppSuite\Staff\StaffReportController;
+use App\Http\Controllers\AppSuite\Staff\TeamController;
+use App\Http\Controllers\AppSuite\Staff\TimeEntryController;
+use App\Http\Controllers\AppSuite\VBAppCustomersController;
+use App\Http\Controllers\TrackMaster\OnboardingAnalyticsController;
 use App\Http\Controllers\v1\ProductsController;
 use App\Http\Controllers\v2\InventoryConfigurationController;
-use App\Http\Controllers\v2\VisionTrack\DevicesController;
-use App\Http\Controllers\v2\VisionTrack\AnalyticsController;
+use App\Http\Controllers\v3\Accommodation\BookingsController;
+use App\Http\Controllers\v3\Accommodation\CalendarConnectionController;
+use App\Http\Controllers\v3\EndUserController;
+use App\Http\Controllers\v3\Synchronization\AlphaSyncController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbBrandsController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCategoriesController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCollectionsController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbGroupsController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbProductsController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbSearchController;
+use App\Http\Controllers\VisionTrack\ActivityAnalyticsController;
+use App\Http\Controllers\VisionTrack\AnalyticsController;
+use App\Http\Controllers\VisionTrack\DevicesController;
+use App\Http\Controllers\VisionTrack\VenueDetectionActivityController;
+use App\Http\Controllers\VisionTrack\VtClientsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -41,7 +77,7 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
     });
 
     Route::group([
-        'middleware' => ['jwt', 'api'] ,
+        'middleware' => ['jwt', 'api'],
         'prefix' => 'auth',
     ], function ($router) {
         Route::post('/resend-verify-email', 'App\Http\Controllers\v1\AuthController@resendVerifyEmail');
@@ -49,24 +85,48 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
 
     });
 
-    Route::middleware(['jwt'])->group(function () {
-        Route::prefix('end-user')->group(function () {
-            Route::get('/orders', 'App\Http\Controllers\v3\EndUserController@getOrders');
-            Route::get('/orders/{id}', 'App\Http\Controllers\v3\EndUserController@getOrderDetails');
-            Route::get('/activities', 'App\Http\Controllers\v3\EndUserController@getActivities');
-            Route::get('/wallet/info', 'App\Http\Controllers\v3\EndUserController@walletInfo');
-            Route::get('/wallet/payment-methods', 'App\Http\Controllers\v3\EndUserController@getPaymentMethods');
-            Route::get('/promotions', 'App\Http\Controllers\v3\EndUserController@getPromotions');
-            Route::get('/wishlist', 'App\Http\Controllers\v3\EndUserController@getWishlist');
-            Route::get('/{id}', 'App\Http\Controllers\v3\EndUserController@getOne');
-
-        });
-    });
-
 
     Route::prefix('faqs')->group(function () {
         Route::get('/search', 'App\Http\Controllers\v1\FaqController@search');
         Route::get('/by-category', 'App\Http\Controllers\v1\FaqController@searchByCategory');
+    });
+
+    Route::prefix('bb-shop-web')->group(function () {
+        Route::get('/app-service-provider', 'App\Http\Controllers\v1\FaqController@search');
+        Route::get('/home-page-brands', 'App\Http\Controllers\v1\FaqController@search');
+
+        Route::get('/home', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\HomePageController@get');
+        Route::get('/menus', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\HomePageController@getMenus');
+
+        Route::prefix('brands')->group(function () {
+            Route::get('/list', [BbBrandsController::class, 'showAllBrands']);
+            Route::get('/{brand_url}', [BbBrandsController::class, 'brandProducts']);
+            Route::get('/products/search', [BbBrandsController::class, 'searchProducts']);
+        });
+
+        Route::prefix('collections')->group(function () {
+            Route::get('/{collection_url}', [BbCollectionsController::class, 'collectionProducts']);
+            Route::get('/products/search', [BbCollectionsController::class, 'searchProducts']);
+            Route::get('/list', [BbCollectionsController::class, 'showAllCollections']);
+        });
+
+        Route::post('/search', [BbSearchController::class, 'searchPage']);
+        Route::get('/products/searchpreview', [BbSearchController::class, 'searchProductPreview']);
+
+        Route::prefix('category')->group(function () {
+            Route::get('/{category_url}', [BbCategoriesController::class, 'categoryProducts']);
+            Route::get('/products/search', [BbCategoriesController::class, 'searchProducts']);
+            Route::get('/list', [BbCategoriesController::class, 'showAllCategories']);
+        });
+
+        Route::prefix('group')->group(function () {
+            Route::get('/{group_id}', [BbGroupsController::class, 'groupProducts']);
+        });
+
+        Route::prefix('products')->group(function () {
+            Route::get('/{product_id}/{product_url}', [BbProductsController::class, 'singleProduct']);
+            Route::get('/variant', [BbProductsController::class, 'changeProductVariant']);
+        });
     });
 
 
@@ -81,7 +141,7 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
     });
 
     Route::prefix('restaurants')->group(function () {
-            Route::post('/register', 'App\Http\Controllers\v1\RestaurantPreOnboardingController@create');
+        Route::post('/register', 'App\Http\Controllers\v1\RestaurantPreOnboardingController@create');
         Route::post('/verify-email', 'App\Http\Controllers\v1\RestaurantPreOnboardingController@verifyEmail');
         Route::post('/resend-verify-email', 'App\Http\Controllers\v1\RestaurantPreOnboardingController@resendVerifyEmail');
         Route::post('/add-card', 'App\Http\Controllers\v1\RestaurantPreOnboardingController@addCard');
@@ -114,7 +174,10 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::get('/payment/success', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@success')->name('payment.success');
         Route::get('/payment/cancel', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@cancel')->name('payment.cancel');
         Route::get('/payment/callback', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@callback')->name('payment.callback');
+        // Route::post('/quick-checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@quickCheckout');
         Route::post('/checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@quickCheckout');
+        Route::post('/initiate-bkt-payment', 'App\Http\Controllers\v3\Whitelabel\BktPaymentController@initiatePayment');
+
     });
 
     Route::group(['prefix' => 'resto-tables'], function () {
@@ -151,9 +214,12 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::post('/suggest-quiz', 'App\Http\Controllers\v1\AI\Web\QuizzesController@suggestQuiz');
         Route::post('/store-quiz-answers', 'App\Http\Controllers\v1\AI\Web\QuizzesController@storeQuizAnswers');
         Route::get('/blogs-list', 'App\Http\Controllers\v1\BlogsController@blogsList');
-        // Route to get a single blog by ID
-        Route::get('/blogs/{id}', 'App\Http\Controllers\v1\BlogsController@getOneBlog');
+        Route::get('/featured-blog', 'App\Http\Controllers\v1\BlogsController@featuredBlog');
+        // Route to get a single blog by slug
+        Route::get('/blogs/{slug}', 'App\Http\Controllers\v1\BlogsController@getOneBlog');
         Route::post('/chat', 'App\Http\Controllers\v1\AI\ChatbotController@sendChat');
+        Route::get('/search-blogs', 'App\Http\Controllers\v1\BlogsController@searchBlogs');
+
     });
 
     Route::group(['prefix' => 'retail'], function () {
@@ -221,29 +287,29 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
         });
 
 
-    Route::prefix('web-stripe-terminal')->group(function () {
-        Route::prefix('connection')->group(function () {
-            Route::post('/', 'App\Http\Controllers\v1\Stripe\Terminal\ConnectionController@connect');
-            Route::get('/locations', 'App\Http\Controllers\v1\Stripe\Terminal\ConnectionController@locations');
+        Route::prefix('web-stripe-terminal')->group(function () {
+            Route::prefix('connection')->group(function () {
+                Route::post('/', 'App\Http\Controllers\v1\Stripe\Terminal\ConnectionController@connect');
+                Route::get('/locations', 'App\Http\Controllers\v1\Stripe\Terminal\ConnectionController@locations');
+            });
+
+            Route::prefix('readers')->group(function () {
+                Route::get('/', 'App\Http\Controllers\v1\Stripe\Terminal\ReadersController@readers');
+                Route::post('/create', 'App\Http\Controllers\v1\Stripe\Terminal\ReadersController@createReader');
+
+            });
+
+            Route::prefix('payments')->group(function () {
+                Route::post('/', 'App\Http\Controllers\v1\Stripe\Terminal\PaymentsController@createPaymentIntent');
+
+            });
+
         });
-
-        Route::prefix('readers')->group(function () {
-            Route::get('/', 'App\Http\Controllers\v1\Stripe\Terminal\ReadersController@readers');
-            Route::post('/create', 'App\Http\Controllers\v1\Stripe\Terminal\ReadersController@createReader');
-
-        });
-
-        Route::prefix('payments')->group(function () {
-            Route::post('/', 'App\Http\Controllers\v1\Stripe\Terminal\PaymentsController@createPaymentIntent');
-
-        });
-
-    });
 
         Route::group(['prefix' => 'members'], function () {
             Route::get('/', 'App\Http\Controllers\v3\Whitelabel\MemberController@listMembers');
-            Route::post('/accept','App\Http\Controllers\v3\Whitelabel\MemberController@acceptMember');;
-            Route::post('/reject','App\Http\Controllers\v3\Whitelabel\MemberController@rejectMember');
+            Route::post('/accept', 'App\Http\Controllers\v3\Whitelabel\MemberController@acceptMember');;
+            Route::post('/reject', 'App\Http\Controllers\v3\Whitelabel\MemberController@rejectMember');
         });
 
         Route::group(['prefix' => 'postals'], function () {
@@ -252,38 +318,55 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
         });
 
 
-
         Route::group(['prefix' => 'banners'], function () {
             Route::get('/', 'App\Http\Controllers\v3\WhiteLabel\ByBestShop\BannersController@index');
             Route::get('/types', 'App\Http\Controllers\v3\WhiteLabel\ByBestShop\BannersController@types');
+            Route::post('/bb-sliders/upload-photos', 'App\Http\Controllers\v3\WhiteLabel\ByBestShop\BannersController@uploadPhotos');
         });
 
         Route::group(['prefix' => 'inventory-reports'], function () {
+           Route::get('/{brandId}/daily-overview', 'App\Http\Controllers\v3\ReportController@getDailyOverviewReport');
+            Route::get('/{brandId}/daily-sales-lc', 'App\Http\Controllers\v3\ReportController@getDailySalesInLCReport');
+            Route::get('/{brandId}/inventory', 'App\Http\Controllers\v3\ReportController@getInventory');
+            Route::get('/{brandId}/inventory-by-store', 'App\Http\Controllers\v3\ReportController@getInventoryByStore');
+            Route::get('/{brandId}/inventory-turnover', 'App\Http\Controllers\v3\ReportController@getInventoryTurnoverReport');
+
             Route::get('/orders-by-brand', 'App\Http\Controllers\v3\InventoryReportController@ordersByBrand');
             Route::get('/orders-by-brand-and-country', 'App\Http\Controllers\v3\InventoryReportController@ordersByBrandAndCountry');
             Route::get('/orders-by-brand-and-city', 'App\Http\Controllers\v3\InventoryReportController@ordersByBrandAndCity');
-            Route::get('/{brandId}/daily-overview', 'App\Http\Controllers\v3\ReportController@getDailyOverviewReport');
-            Route::get('/{brandId}/daily-sales-lc','App\Http\Controllers\v3\ReportController@getDailySalesInLCReport');
-            Route::get('/{brandId}/inventory','App\Http\Controllers\v3\ReportController@getInventory');
-            Route::get('/{brandId}/inventory-by-store', 'App\Http\Controllers\v3\ReportController@getInventoryByStore');
-            Route::get('/{brandId}/inventory-turnover', 'App\Http\Controllers\v3\ReportController@getInventoryTurnoverReport');
             Route::get('/inventory-data', 'App\Http\Controllers\v3\InventoryReportController@getInventoryData');
             Route::get('/locations', 'App\Http\Controllers\v3\InventoryReportController@getLocationsSummary');
-            Route::get('/sync-status', 'App\Http\Controllers\v3\InventoryReportController@getSyncStatus');
             Route::get('/upcoming-launches', 'App\Http\Controllers\v3\InventoryReportController@getUpcomingLaunches');
             Route::get('/inventory-distribution', 'App\Http\Controllers\v3\InventoryReportController@getInventoryDistribution');
             Route::get('/channel-performance', 'App\Http\Controllers\v3\InventoryReportController@getChannelPerformance');
-            Route::get('/sync-health', 'App\Http\Controllers\v3\InventoryReportController@getSyncHealth');
             Route::get('/data-quality', 'App\Http\Controllers\v3\InventoryReportController@getDataQualityScore');
             Route::get('/all-report-data', 'App\Http\Controllers\v3\InventoryReportController@getAllReportData');
         });
 
+        Route::group(['prefix' => 'synchronizations'], function () {
+
+            Route::get('/', 'App\Http\Controllers\v3\InventoryReportController@getSyncronizations');  // api documented
+            Route::get('/health', 'App\Http\Controllers\v3\InventoryReportController@getSyncHealth'); // api documented
+            Route::get('/{sync}/errors', 'App\Http\Controllers\v3\InventoryReportController@getSyncErrors'); // api documented
+
+            Route::prefix('do-sync')->group(function() {
+                Route::post('/price', [AlphaSyncController::class, 'syncPriceAlpha']); // api documented
+                Route::post('/sku', [AlphaSyncController::class, 'syncSkuAlpha']);
+                Route::post('/stock', [AlphaSyncController::class, 'syncStockAlpha']);
+                Route::post('/calculate-stock', [AlphaSyncController::class, 'calculateStock']);
+            });
+
+
+
+        });
+
+
 
         Route::group(['prefix' => 'subscriptions'], function () {
-        Route::get('/get-subscription', 'App\Http\Controllers\v2\SubscriptionsController@getSubscription');
-        Route::post('/create-checkout-session', 'App\Http\Controllers\v1\PricingPlansController@createCheckoutSession');
-        Route::post('/confirm-subscription', 'App\Http\Controllers\v1\PricingPlansController@confirmSubscription');
-    });
+            Route::get('/get-subscription', 'App\Http\Controllers\v2\SubscriptionsController@getSubscription');
+            Route::post('/create-checkout-session', 'App\Http\Controllers\v1\PricingPlansController@createCheckoutSession');
+            Route::post('/confirm-subscription', 'App\Http\Controllers\v1\PricingPlansController@confirmSubscription');
+        });
 
         Route::group(['prefix' => 'feature-feedback'], function () {
             Route::post('/', 'App\Http\Controllers\v1\FeatureFeedbackController@store');
@@ -295,9 +378,34 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
         Route::group(['prefix' => 'sync'], function () {
             Route::post('/bybest-inventory/', 'App\Http\Controllers\v3\InventorySyncController@startSync');
-            Route::post('/bybest-collections/', 'App\Http\Controllers\v3\InventorySyncController@collectionSync');
             // inventory-master
             Route::get('/history', 'App\Http\Controllers\v3\InventorySyncController@syncHistory');
+
+            Route::post('/bybest-collections/', 'App\Http\Controllers\v3\InventorySyncController@collectionSync'); // ok
+            Route::post('/bybest-brands/', 'App\Http\Controllers\v3\InventorySyncController@brandSync'); // ok
+            Route::post('/bybest-groups/', 'App\Http\Controllers\v3\InventorySyncController@groupsSync'); // ok
+            Route::post('/bybest-categories/', 'App\Http\Controllers\v3\InventorySyncController@categoriesSync'); // ok
+            Route::post('/bybest-attributes/', 'App\Http\Controllers\v3\InventorySyncController@attributesSync'); // ok
+            Route::post('/bybest-attroptions/', 'App\Http\Controllers\v3\InventorySyncController@attributesOptionsSync'); // ok
+            Route::post('/bybest-products/', 'App\Http\Controllers\v3\InventorySyncController@productSync'); // ok
+
+            Route::post('/bybest-productvariants/', 'App\Http\Controllers\v3\InventorySyncController@productVariantsSync'); // ok
+            Route::post('/bybest-productattrs/', 'App\Http\Controllers\v3\InventorySyncController@productAttributesSync'); // ok
+            Route::post('/bybest-productvariantattrs/', 'App\Http\Controllers\v3\InventorySyncController@productVariantAttributesSync'); // ok
+            Route::post('/bybest-productgroups/', 'App\Http\Controllers\v3\InventorySyncController@productGroupsSync'); // ok
+            Route::post('/bybest-productcategories/', 'App\Http\Controllers\v3\InventorySyncController@productCategorySync'); //ok
+            Route::post('/bybest-productcollections/', 'App\Http\Controllers\v3\InventorySyncController@productCollectionSync'); // ok
+            Route::post('/bybest-productgallery/', 'App\Http\Controllers\v3\InventorySyncController@productGallerySync'); // ok
+            Route::post('/bybest-productstock/', 'App\Http\Controllers\v3\InventorySyncController@productStockSync'); // ok
+            Route::post('/bybest-articlecats/', 'App\Http\Controllers\v3\ArticleSyncController@articleCategoriesSync');
+            Route::post('/bybest-articles/', 'App\Http\Controllers\v3\ArticleSyncController@articlesSync');
+            Route::post('/bybest-users', 'App\Http\Controllers\v3\GeneralSyncController@syncUsersFromBB');
+            Route::post('/bybest-coupons/', 'App\Http\Controllers\v3\OrdersSyncController@couponsSync');
+            Route::post('/bybest-orders/', 'App\Http\Controllers\v3\OrdersSyncController@ordersSync');
+            Route::post('/bybest-orderproducts/', 'App\Http\Controllers\v3\OrdersSyncController@orderProductsSync');
+
+            Route::post('/bybest-sliders/', 'App\Http\Controllers\v3\BbWebSyncController@slidersSync');
+            Route::post('/bybest-mainmenus/', 'App\Http\Controllers\v3\BbWebSyncController@mainMenuSync');
 
         });
 
@@ -454,6 +562,16 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::put('/rental-unit/{id}/price-per-night', 'App\Http\Controllers\v1\AccommodationController@updatePricePerNight');
             Route::post('/rental-unit/{id}/upload-room-photo/{roomId}', 'App\Http\Controllers\v1\AccommodationController@rentalRoomUploadPhoto');
 
+
+            Route::prefix('rental-units/{rentalUnitId}/calendar-connections')->group(function () {
+                Route::get('/', [CalendarConnectionController::class, 'index']);
+                Route::get('/logs', [CalendarConnectionController::class, 'logs']);
+                Route::post('/', [CalendarConnectionController::class, 'store']);
+                Route::put('/{connectionId}', [CalendarConnectionController::class, 'update']);
+                Route::post('/{connectionId}/refresh', [CalendarConnectionController::class, 'refresh']);
+                Route::post('/{connectionId}/disconnect', [CalendarConnectionController::class, 'disconnect']);
+            });
+
             // booking api route with ics file
             Route::group(['prefix' => 'third-party-booking'], function () {
                 Route::post('{id}/store', 'App\Http\Controllers\v1\BookingController@storeThirdPartyBooking');
@@ -524,7 +642,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::post('/shipping-zones', 'App\Http\Controllers\v1\RetailController@createShippingZone');
             Route::delete('/shipping-zones/{id}', 'App\Http\Controllers\v1\RetailController@deleteShippingZone');
             // inventory-master
-            Route::get('scan-activities','App\Http\Controllers\v1\RetailController@scanHistory');
+            Route::get('scan-activities', 'App\Http\Controllers\v1\RetailController@scanHistory');
 
         });
 
@@ -582,9 +700,45 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::post('{deviceId}/exitlog', [AnalyticsController::class, 'setExitLog']);
             });
 
+            Route::prefix('vt-clients')->group(function () {
+                Route::get('/', [VtClientsController::class, 'index']);
+                Route::get('/stats', [VtClientsController::class, 'getSubscriptionStats']);
+                Route::get('/expiring-soon', [VtClientsController::class, 'getExpiringSoon']);
+                Route::get('/plans', [VtClientsController::class, 'getPlans']);  // New route for retrieving plans
+                Route::get('/{id}', [VtClientsController::class, 'show']);
+                Route::post('/subscribe', [VtClientsController::class, 'subscribe']); // New subscription endpoint
+
+            });
+
+
+            Route::prefix('analytics')->group(function () {
+                Route::get('/heatmap', [ActivityAnalyticsController::class, 'getActivityHeatmap']);
+                Route::get('/distribution', [ActivityAnalyticsController::class, 'getActivityDistribution']);
+                Route::get('/recent', [ActivityAnalyticsController::class, 'getRecentActivities']);
+                Route::get('/trends', [ActivityAnalyticsController::class, 'getActivityTrends']);
+            });
+
+            Route::prefix('detection-activities')->group(function () {
+                // Global list of all detection activities
+                Route::get('/global', [VenueDetectionActivityController::class, 'listGlobal']);
+                // List available activities for venue
+                Route::get('/', [VenueDetectionActivityController::class, 'listAvailable']);
+
+                // Enable/Configure for venue
+                Route::post('/', [VenueDetectionActivityController::class, 'store']);
+
+                // Device assignments (device_id in request body)
+                Route::get('/by-device', [VenueDetectionActivityController::class, 'listByDevice']);
+                Route::post('/assign', [VenueDetectionActivityController::class, 'assignToDevice']);
+                Route::put('/{id}', [VenueDetectionActivityController::class, 'updateDeviceActivity']);
+                Route::delete('/{id}', [VenueDetectionActivityController::class, 'deleteFromDevice']);
+
+
+
+
+            });
+
         });
-
-
 
 
         // Inventory Configuration
@@ -846,7 +1000,6 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::post('/change-subscribe', 'App\Http\Controllers\v1\RestaurantController@changeSubscription');
 
 
-
             Route::get('/usage-credits-history', 'App\Http\Controllers\v1\RestaurantController@usageCreditsHistory');
             Route::get('/wallet-history', 'App\Http\Controllers\v1\RestaurantController@walletHistory');
             Route::post('/custom-pricing-contact-sales', 'App\Http\Controllers\v2\SubscriptionsController@customPricingContactSalesAdminRequest');
@@ -873,6 +1026,149 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
         Route::group(['prefix' => 'ai'], function () {
             Route::post('/post-chat', 'App\Http\Controllers\v1\AI\Admin\ChatbotController@sendChat');
             Route::post('/vb-assistant-ask', 'App\Http\Controllers\v1\AI\Admin\VBAssistantController@ask');
+        });
+
+
+        // VB Apps
+        Route::group(['prefix' => 'vb-apps'], function () {
+            Route::prefix('staff/admin')->group(function () {
+                // Business Management
+                Route::put('business/update-geofence-and-qr', [BusinessController::class, 'updateGeofenceAndQR']);
+
+                // TODO: manage these + dynamic data
+                Route::get('dashboard', [\App\Http\Controllers\v3\DashboardController::class, 'index']);
+                Route::get('productivity', [\App\Http\Controllers\v3\ProductivityController::class, 'index']);
+                Route::get('productivity/export', [\App\Http\Controllers\v3\ProductivityController::class, 'export']);
+                Route::get('attendance', [\App\Http\Controllers\AppSuite\Staff\AttendanceController::class, 'index']);
+                Route::get('attendance/export', [\App\Http\Controllers\AppSuite\Staff\AttendanceController::class, 'export']);
+//                Route::get('status-overview', [\App\Http\Controllers\v3\DashboardController::class, 'project_status_overview']);
+//                Route::get('employees/{id}/performance-history', [\App\Http\Controllers\v3\DashboardController::class, 'staff_performance_history']);
+//                Route::get('top-performers', [\App\Http\Controllers\v3\DashboardController::class, 'top_performers']);
+//                Route::get('completion-status', [\App\Http\Controllers\v3\DashboardController::class, 'task_completion_status']);
+//                Route::get('completion-by-department', [\App\Http\Controllers\v3\DashboardController::class, 'task_completion_by_department']);
+//                Route::get('recent-activities', [\App\Http\Controllers\v3\DashboardController::class, 'recent_activities']);
+//                // Miscellaneous
+//                Route::get('overview', [\App\Http\Controllers\v3\DashboardController::class, 'overview']);
+//                Route::get('search', [\App\Http\Controllers\v3\DashboardController::class, 'search']);
+//                Route::get('export', [\App\Http\Controllers\v3\DashboardController::class, 'export']);
+                // Reports and Analytics
+                Route::prefix('reports')->group(function () {
+                    Route::get('time-tracking', [StaffReportController::class, 'timeTracking']);
+                    Route::get('task-completion', [StaffReportController::class, 'taskCompletion']);
+                    Route::get('productivity-trend', [\App\Http\Controllers\v3\DashboardController::class, 'productivity_trend']);
+                    Route::get('department-averages', [\App\Http\Controllers\v3\DashboardController::class, 'department_averages']);
+                    Route::get('staffing-forecast', [\App\Http\Controllers\v3\DashboardController::class, 'staffing_forecast']);
+                });
+
+
+                // Department Management
+                Route::get('departments', [CompanySetupController::class, 'listDepartments']);
+                Route::get('departments/{id}', [CompanySetupController::class, 'getDepartment']);
+                Route::post('departments', [CompanySetupController::class, 'createDepartment']);
+                Route::put('departments/{id}', [CompanySetupController::class, 'updateDepartment']);
+                Route::delete('/departments/{id}', [CompanySetupController::class, 'deleteDepartment']);
+
+                // Role Management
+                Route::get('roles', [CompanySetupController::class, 'listRoles']);
+                Route::post('roles/custom', [CompanySetupController::class, 'createCustomRole']);
+                Route::get('roles/custom', [CompanySetupController::class, 'listCustomRoles']);
+                Route::put('roles/custom/{id}', [CompanySetupController::class, 'updateCustomRole']);
+                Route::delete('roles/custom/{id}', [CompanySetupController::class, 'deleteCustomRole']);
+                Route::post('roles/attach', [CompanySetupController::class, 'attachRole']);
+                Route::post('roles/detach', [CompanySetupController::class, 'detachRole']);
+
+                // Employee Management
+                Route::get('employees', [CompanySetupController::class, 'listEmployees']);
+                // todo: make this better -- activities
+                Route::get('employees/{id}', [CompanySetupController::class, 'getEmployee']);
+                // todo: add what requires the admin side on full
+                Route::get('employees/full/{id}', [CompanySetupController::class, 'getEmployeeFullProfile']);
+                Route::post('employees', [CompanySetupController::class, 'createEmployee']);
+                Route::post('employees-update/{id}', [CompanySetupController::class, 'updateEmployee']);
+                Route::delete('employees/{id}', [CompanySetupController::class, 'deleteEmployee']);
+
+                Route::prefix('teams')->group(function () {
+                    Route::get('/', [TeamController::class, 'listTeams']);
+                    Route::get('/{id}', [TeamController::class, 'getTeam']);
+                    Route::post('/', [TeamController::class, 'createTeam']);
+                    Route::put('/{id}', [TeamController::class, 'updateTeam']);
+                    Route::delete('/{id}', [TeamController::class, 'deleteTeam']);
+
+                    Route::get('/{id}/departments', [TeamController::class, 'getTeamDepartments']);
+                    Route::put('/{id}/departments', [TeamController::class, 'updateTeamDepartments']);
+                    // todo: send notification
+                    Route::post('{teamId}/assign-employees', [TeamController::class, 'assignEmployeesToTeam']);
+                    // todo: send notification
+                    Route::post('{teamId}/remove-employees', [TeamController::class, 'removeEmployeesFromTeam']);
+                    Route::get('{teamId}/employees', [TeamController::class, 'getTeamEmployees']);
+                    Route::post('/{id}/assign-team-leader', [TeamController::class, 'assignTeamLeader']);
+                    Route::post('assign-operations-manager', [TeamController::class, 'assignOperationsManager']);
+                });
+
+                Route::prefix('activity')->group(function () {
+                    Route::get('/', [AdminStaffController::class, 'activity']);
+                    Route::get('/performance-metrics', [AdminStaffController::class, 'getPerformanceMetrics']);
+
+
+                });
+
+                // Project Management
+                Route::prefix('projects')->group(function () {
+                    Route::get('/', [AdminProjectController::class, 'index']);
+                    Route::post('/', [AdminProjectController::class, 'store']);
+                    Route::put('{id}', [AdminProjectController::class, 'update']);
+                    Route::delete('{id}', [AdminProjectController::class, 'destroy']);
+                    Route::post('{id}/assign-employee', [AdminProjectController::class, 'assignEmployee']);
+                    Route::post('{id}/unassign-employee', [AdminProjectController::class, 'unassignEmployee']);
+                    Route::post('{id}/assign-team', [AdminProjectController::class, 'assignTeam']);
+                    Route::post('{id}/assign-project-manager', [AdminProjectController::class, 'assignProjectManager']);
+                    Route::get('/statuses', [AdminProjectController::class, 'getProjectStatuses']);
+                    Route::get('{id}', [AdminProjectController::class, 'show']); // New route for project details
+                    Route::post('/{id}/assign-team-leaders', [AdminProjectController::class, 'assignTeamLeaders']);
+                    Route::post('/{id}/assign-operations-managers', [AdminProjectController::class, 'assignOperationsManagers']);
+
+                    // todo: add comment section at project
+                    // Note: also admin
+
+
+                    Route::get('{id}/app-galleries', [AdminProjectController::class, 'getAppGalleriesByProjectId']);
+                    Route::post('{id}/app-galleries', [AdminProjectController::class, 'addAppGallery']);
+                    Route::delete('app-galleries/{galleryId}', [AdminProjectController::class, 'removeAppGallery']);
+
+                });
+
+                Route::prefix('app-clients')->group(function () {
+                    Route::get('/', [AppClientController::class, 'listClients']);
+                    Route::get('/{id}', [AppClientController::class, 'getClient']);
+                    Route::post('/', [AppClientController::class, 'createClient']);
+                    Route::put('/{id}', [AppClientController::class, 'updateClient']);
+                    Route::delete('/{id}', [AppClientController::class, 'deleteClient']);
+                });
+
+                Route::get('countries', [CompanySetupController::class, 'listCountries']);
+                Route::get('states/{countryId}', [CompanySetupController::class, 'listStatesByCountry']);
+                Route::get('cities/{stateId}', [CompanySetupController::class, 'listCitiesByState']);
+
+                // Task Management
+                Route::prefix('tasks')->group(function () {
+                    Route::get('/', [AdminTaskController::class, 'index']); // List all tasks
+                    Route::get('/statuses', [AdminTaskController::class, 'getTaskStatuses']);
+                    Route::get('/{id}', [AdminTaskController::class, 'show']); // Get task details
+                    Route::post('/', [AdminTaskController::class, 'store']); // Create new task
+                    Route::put('{id}', [AdminTaskController::class, 'update']); // Update task
+                    Route::delete('{id}', [AdminTaskController::class, 'destroy']); // Delete task
+                    Route::post('{id}/assign', [AdminTaskController::class, 'assignEmployee']); // Assign task to an employee
+                    Route::post('{id}/unassign', [AdminTaskController::class, 'unassignEmployee']); // Unassign task from employee
+
+                    // todo: add comment section at task details
+
+                });
+
+
+
+
+
+            });
         });
     });
 });
@@ -983,6 +1279,8 @@ Route::middleware(['superadmin_api_key'])->prefix('v1')->group(function () {
         Route::get('/marketing-analytics', 'App\Http\Controllers\v1\BlogsController@blogsListAndReadCount');
         Route::post('/store-multiple-blogs', 'App\Http\Controllers\v1\BlogsController@storeBlog');
         Route::put('/update-blog', 'App\Http\Controllers\v1\BlogsController@updateBlog');
+        Route::post('/blogs/{id}', 'App\Http\Controllers\v1\BlogsController@updateBlogNew');
+        Route::get('/blogs/{id}', 'App\Http\Controllers\v1\BlogsController@getOneBlogNew');
         Route::put('/update-blog-status', 'App\Http\Controllers\v1\BlogsController@updateStatus');
 
     });
@@ -1057,6 +1355,176 @@ Route::middleware(['superadmin_api_key'])->prefix('v1')->group(function () {
 
         });
     });
+
+    // VB Apps
+    Route::group(['prefix' => 'vb-apps'], function () {
+        Route::prefix('/app-configurations')->group(function () {
+            Route::post('/configurations', [AppConfigurationController::class, 'store']);
+            Route::get('/configurations/{app_id}', [AppConfigurationController::class, 'show']);
+            Route::put('/configurations/{app_id}', [AppConfigurationController::class, 'update']);
+            Route::delete('/configurations/{app_id}', [AppConfigurationController::class, 'destroy']);
+        });
+    });
+});
+
+// API Calls for EndUser
+Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
+
+    Route::middleware(['jwt'])->group(function () {
+
+        Route::prefix('end-user')->group(function () {
+            // booking api route
+            Route::group(['prefix' => 'bookings'], function () {
+                Route::get('/', [BookingsController::class, 'index']);
+                Route::get('/details/{bookingId}', [BookingsController::class, 'bookingDetails']);
+            });
+
+            Route::get('/orders', 'App\Http\Controllers\v3\EndUserController@getOrders');
+            Route::get('/orders/{id}', 'App\Http\Controllers\v3\EndUserController@getOrderDetails');
+            Route::get('/activities', 'App\Http\Controllers\v3\EndUserController@getActivities');
+            Route::get('/wallet/info', 'App\Http\Controllers\v3\EndUserController@walletInfo');
+            Route::get('/wallet/payment-methods', 'App\Http\Controllers\v3\EndUserController@getPaymentMethods');
+            Route::get('/promotions', 'App\Http\Controllers\v3\EndUserController@getPromotions');
+            Route::get('/wishlist', [EndUserController::class, 'getWishlist']);
+            Route::post('/wishlist/add', [EndUserController::class, 'addToWishlist']);
+            Route::delete('/wishlist/{productId}', [EndUserController::class, 'removeFromWishlist']);
+            Route::get('/{id}', 'App\Http\Controllers\v3\EndUserController@getOne');
+
+            Route::group(['prefix' => 'chat'], function () {
+                Route::get('/', 'App\Http\Controllers\v1\EndUserChatController@index');
+                Route::post('/start-conversation', 'App\Http\Controllers\v1\EndUserChatController@startConversation');
+                Route::post('/messages', 'App\Http\Controllers\v1\EndUserChatController@storeMessage');
+                Route::get('/messages/{chatId}', 'App\Http\Controllers\v1\EndUserChatController@getMessages');
+            });
+
+            Route::group(['prefix' => 'setting'], function () {
+                Route::post('/reset-password', 'App\Http\Controllers\v1\AuthController@resetPassword');
+                Route::post('/update-preferences', 'App\Http\Controllers\v1\EndUserController@updatePreferences');
+                Route::get('/preferences', 'App\Http\Controllers\v1\EndUserController@getPreferences');
+                Route::post('/update-profile', 'App\Http\Controllers\v1\EndUserController@updateProfile');
+            });
+        });
+    });
+});
+
+// API Calls for VB Apps
+Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
+
+    Route::group(['prefix' => 'vb-apps'], function () {
+        Route::get('/web-app-config', [AppWhitelabelController::class, 'webAppConfig']);
+        Route::post('/verify-supabase', [\App\Http\Controllers\AppSuite\Staff\AuthenticationController::class, 'getConnection']);
+    });
+
+    Route::middleware(['jwt'])->group(function () {
+
+        Route::group(['prefix' => 'vb-apps'], function () {
+            Route::group(['prefix' => 'products'], function () {
+                Route::get('/', [VBAppProductsController::class, 'index']);
+                Route::get('/gift-suggestions', [VBAppProductsController::class, 'giftSuggestions']);
+            });
+            Route::group(['prefix' => 'customers'], function () {
+                Route::get('/', [VBAppCustomersController::class, 'index']);
+                Route::get('/{id}', [VBAppCustomersController::class, 'show']);
+                Route::post('/{id}/feedback', [VBAppCustomersController::class, 'storeFeedback']);
+            });
+
+            Route::prefix('staff')->group(function () {
+
+                // Employee routes
+                Route::prefix('employee')->middleware(['auth:api'])->group(function () {
+                    Route::get('current-session', [EmployeeTimesheetController::class, 'getCurrentSession']);
+                    Route::get('projects', [EmployeeProjectController::class, 'index']);
+                    Route::get('projects/{id}', [EmployeeProjectController::class, 'show']);
+
+                    Route::get('tasks', [EmployeeTaskController::class, 'index']);
+                    Route::get('tasks/{id}', [EmployeeTaskController::class, 'show']);
+                     Route::put('tasks/{id}/status', [EmployeeTaskController::class, 'updateStatus']);
+
+                    Route::get('reports', [StaffReportController::class, 'employeeReport']);
+
+                    Route::get('time-entries', [TimeEntryController::class, 'index']);
+                    Route::post('time-entries', [TimeEntryController::class, 'store']);
+                    Route::put('time-entries/{id}', [TimeEntryController::class, 'update']);
+                    Route::delete('time-entries/{id}', [TimeEntryController::class, 'destroy']);
+                    Route::post('time-entries/start', [TimeEntryController::class, 'startTimer']);
+                    Route::post('time-entries/stop', [TimeEntryController::class, 'stopTimer']);
+
+                    // Route::get('/tasks', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'tasks']); // Not needed, maybe remove
+                    // Route::get('/projects', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'assigned_projects']); // Not needed, maybe remove
+                    Route::get('/time-entries', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'time_entries']);
+                    Route::post('/update-profile', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_profile']);
+                    Route::post('/save-firebase-token', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'save_firebase_token']);
+
+                    Route::prefix('projects')->group(function () {
+                        Route::get('/{id}/app-galleries', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'getAppGalleriesByProjectId']);
+                        Route::post('/{id}/app-galleries', [\App\Http\Controllers\AppSuite\Staff\StaffController::class, 'addAppGallery']);
+                        Route::delete('/app-galleries/{galleryId}', [\App\Http\Controllers\AppSuite\Staff\StaffController::class, 'removeAppGallery']);
+
+                        Route::get('/{id}/supplies-requests', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'getSuppliesRequests']);
+                        Route::post('/{id}/supplies-requests', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'addSuppliesRequest']);
+                        Route::get('/{id}/quality-inspections', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'getQualityInspections']);
+                        Route::post('/{id}/quality-inspections', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'addQualityInspection']);
+                        Route::get('/{id}/work-orders', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'getWorkOrders']);
+                        Route::post('/{id}/work-orders', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'addWorkOrder']);
+                        Route::get('/{id}/project-issues', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'getProjectIssues']);
+                        Route::post('/{id}/project-issues', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'addProjectIssue']);
+
+                        // Employee timesheet routes
+                        Route::post('/{id}/clock-in', [EmployeeTimesheetController::class, 'clockIn']);
+                        Route::post('/{id}/clock-out', [EmployeeTimesheetController::class, 'clockOut']);
+                        Route::get('/{id}/my-timesheets', [EmployeeTimesheetController::class, 'getMyTimesheets']);
+
+                        Route::get('/{id}/breaks', [EmployeeTimesheetController::class, 'getMyBreaks']);
+                        Route::post('/{id}/breaks/start', [EmployeeTimesheetController::class, 'startBreak']);
+                        Route::put('/{id}/breaks/{break_id}/end', [EmployeeTimesheetController::class, 'endBreak']);
+                        // View own timesheet details
+                        Route::get('/{id}/timesheet-details', [EmployeeTimesheetController::class, 'getTimesheetDetails']);
+
+                        // comments routes
+                        Route::get('/{projectId}/comments', [CommentController::class, 'getComments']);
+                        Route::post('/{projectId}/comments', [CommentController::class, 'addComment']);
+                        Route::delete('/comments/{id}', [CommentController::class, 'deleteComment']);
+
+                        // L2 Employee timesheet routes
+                        Route::get('l2/{id}/timesheets', [L2EmployeeTimesheetController::class, 'getProjectTimesheets']);
+                        Route::get('l2/{id}/active-employees', [L2EmployeeTimesheetController::class, 'getActiveEmployees']);
+                        Route::put('l2/timesheets/{id}', [L2EmployeeTimesheetController::class, 'updateTimesheet']);
+                        Route::get('l2/{id}/timesheet-report', [L2EmployeeTimesheetController::class, 'generateReport']);
+
+                        Route::get('l2/{id}/breaks', [L2EmployeeTimesheetController::class, 'getAllBreaks']);
+                        Route::put('l2/{id}/breaks/{break_id}', [L2EmployeeTimesheetController::class, 'updateBreak']);
+
+                        // Overtime Management
+                        Route::get('l2/{id}/overtime', [L2EmployeeTimesheetController::class, 'getOvertimeSummary']);
+                        Route::put('l2/{id}/overtime/approve', [L2EmployeeTimesheetController::class, 'approveOvertime']);
+
+                        // Compliance
+                        Route::get('l2/{id}/compliance', [L2EmployeeTimesheetController::class, 'getComplianceStatus']);
+                        Route::get('l2/{id}/compliance/report', [L2EmployeeTimesheetController::class, 'generateComplianceReport']);
+
+                    });
+                });
+            });
+
+            Route::group(['prefix' => 'shift'], function () {
+                Route::post('/shifts', [ShiftController::class, 'store']);
+            });
+
+            Route::group(['prefix' => 'attendance'], function () {
+                Route::post('/', [AttendanceController::class, 'recordAttendance']);
+            });
+
+            Route::group(['prefix' => 'notifications'], function () {
+                Route::get('/', [NotificationsController::class, 'index']);
+                Route::put('/{id}/mark-as-read', [NotificationsController::class, 'markAsRead']);
+                Route::put('/mark-all-as-read', [NotificationsController::class, 'markAllAsRead']);
+                Route::delete('/{id}', [NotificationsController::class, 'destroy']);
+            });
+
+        });
+
+
+    });
 });
 
 
@@ -1090,5 +1558,57 @@ Route::middleware(['sn_platform_api_key'])->prefix('v1')->group(function () {
 // Public
 Route::prefix('v3/tm-api')->group(function () {
     Route::get('/get-started/leads', [\App\Http\Controllers\v2\OnboardingController::class, 'getStartedLeads']);
-    Route::post('/paysera/checkout/test', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@testCheckout');
+    Route::post('/checkout/test', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@testCheckout');
+
+    Route::prefix('/onboarding-analytics')->group(function () {
+        Route::get('/overview', [OnboardingAnalyticsController::class, 'getOverview']);
+        Route::get('/step-analysis', [OnboardingAnalyticsController::class, 'getStepAnalysis']);
+        Route::get('/acquisition-analysis', [OnboardingAnalyticsController::class, 'getAcquisitionAnalysis']);
+        Route::get('/onboarding-steps', [OnboardingAnalyticsController::class, 'getOnboardingSteps']);
+        Route::get('/industry-analysis', [OnboardingAnalyticsController::class, 'getIndustryAnalysis']);
+        Route::get('/conversion-timeline', [OnboardingAnalyticsController::class, 'getConversionTimeline']);
+        Route::get('/subscription-analysis', [OnboardingAnalyticsController::class, 'getSubscriptionAnalysis']);
+    });
+
+    Route::prefix('/logs')->group(function () {
+        Route::get('/onboarding-error-analysis', [OnboardingAnalyticsController::class, 'getErrorAnalysis']);
+    });
+
+
+    Route::prefix('/post-onboarding-analytics')->group(function () {
+        Route::get('/user-engagement', [OnboardingAnalyticsController::class, 'getUserEngagementRate']);
+        Route::get('/feature-adoption', [OnboardingAnalyticsController::class, 'getFeatureAdoptionRate']);
+        Route::get('/revenue-growth', [OnboardingAnalyticsController::class, 'getRevenueGrowth']);
+        Route::get('/churn-prediction', [OnboardingAnalyticsController::class, 'getChurnPrediction']);
+        Route::get('/industry-comparison', [OnboardingAnalyticsController::class, 'getIndustryComparison']);
+        Route::get('/venue-performance', [OnboardingAnalyticsController::class, 'getVenuePerformance']);
+    });
+
+
 });
+
+Route::post('api/v1/white-label/bb/bkt-webhook', 'App\Http\Controllers\v3\Whitelabel\BktPaymentController@webhook')->name('webhook.bkt');
+
+
+Route::get('api/v1/calendar/{obfuscatedId}/{token}.ics', [CalendarConnectionController::class, 'generateIcs'])
+    ->name('rental-unit.ics');
+
+
+Route::get('api/v1/end-user/messages/{chatId}', 'App\Http\Controllers\v1\EndUserChatController@getMessages');
+
+
+
+//Route::prefix('checkin-methods')->group(function () {
+//    Route::post('create', 'App\Http\Controllers\v3\CheckinController@create');
+//    Route::get('get/{id}', 'App\Http\Controllers\v3\CheckinController@get');
+//    Route::get('get-all', 'App\Http\Controllers\v3\CheckinController@getAll');
+//    Route::put('update/{id}', 'App\Http\Controllers\v3\CheckinController@update');
+//    Route::delete('delete/{id}', 'App\Http\Controllers\v3\CheckinController@delete');
+//    //
+//    Route::post('user-check-in-out-methods/create', 'App\Http\Controllers\v3\UserCheckInOutMethodsController@create');
+//    Route::get('user-check-in-out-methods/get/{id}', 'App\Http\Controllers\v3\UserCheckInOutMethodsController@get');
+//    Route::get('user-check-in-out-methods/get-all', 'App\Http\Controllers\v3\UserCheckInOutMethodsController@getAll');
+//
+//    //updateToken
+//    Route::post('update-token', 'App\Http\Controllers\v1\FCMController@updateToken');
+//});

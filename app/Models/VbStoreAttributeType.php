@@ -11,7 +11,7 @@ class VbStoreAttributeType extends Model
 
     protected $table = 'vb_store_attributes_types';
 
-    protected $fillable = ['type', 'description'];
+    protected $fillable = ['type', 'type_al', 'description', 'description_al', 'bybest_id'];
 
     public function attributes(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
