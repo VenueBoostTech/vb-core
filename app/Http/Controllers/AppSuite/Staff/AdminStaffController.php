@@ -6,10 +6,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Employee;
 use App\Models\StaffActivity;
 use App\Services\VenueService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class AdminStaffController extends Controller
 {
@@ -303,5 +306,158 @@ class AdminStaffController extends Controller
             'staff_performance' => $staffPerformance,
             'insights' => $insights
         ]);
+    }
+
+    /**
+     * Get employee activities
+     */
+    public function getEmployeeActivities(Request $request, $employeeId): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        try {
+            $employee = Employee::where('restaurant_id', $venue->id)
+                ->findOrFail($employeeId);
+
+            $query = StaffActivity::with([
+                'trackable',
+                'venue:id,name'
+            ])
+                ->where('venue_id', $venue->id)
+                ->where('employee_id', $employeeId)
+                ->latest();
+
+            // Add date range filter if provided
+            if ($request->has('start_date') && $request->has('end_date')) {
+                $query->whereBetween('created_at', [
+                    $request->start_date,
+                    $request->end_date
+                ]);
+            }
+
+            // Get paginated results
+            $activities = $query->paginate($request->input('per_page', 15));
+
+            // Format activities
+            $formattedActivities = $activities->map(function($activity) {
+                $metadata = $activity->metadata;
+
+                return [
+                    'id' => $activity->id,
+                    'type' => $activity->type,
+                    'timestamp' => $activity->created_at->format('Y-m-d H:i:s'),
+                    'description' => $activity->getActivityDescription(),
+                    'icon' => $activity->getIconClass(),
+                    'metadata' => [
+                        'project_name' => $metadata['project_name'] ?? null,
+                        'duration' => $metadata['duration'] ?? null,
+                        'rating' => $metadata['rating'] ?? null,
+                        'priority' => $metadata['priority'] ?? null,
+                        'media_type' => $metadata['media_type'] ?? null,
+                        'location' => $metadata['location'] ?? null,
+                    ],
+                    'priority_class' => $activity->getPriorityClass()
+                ];
+            });
+
+            // Get activity summary
+            $summary = [
+                'total_activities' => $activities->total(),
+                'activity_types' => StaffActivity::where('employee_id', $employeeId)
+                    ->selectRaw('type, COUNT(*) as count')
+                    ->groupBy('type')
+                    ->get(),
+                'most_active_time' => StaffActivity::where('employee_id', $employeeId)
+                    ->selectRaw('HOUR(created_at) as hour, COUNT(*) as count')
+                    ->groupBy('hour')
+                    ->orderByDesc('count')
+                    ->first()
+            ];
+
+            return response()->json([
+                'activities' => $formattedActivities,
+                'summary' => $summary,
+                'pagination' => [
+                    'current_page' => $activities->currentPage(),
+                    'total' => $activities->total(),
+                    'per_page' => $activities->perPage(),
+                    'total_pages' => $activities->lastPage(),
+                ]
+            ]);
+
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'Employee not found'], 404);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Update employee status
+     */
+    public function updateEmployeeStatus(Request $request, $employeeId): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $validator = Validator::make($request->all(), [
+            'status' => ['required', Rule::in([
+                'active',
+                'inactive',
+                'on-break',
+                'off-duty',
+                'on-leave',      // For employees on vacation or other types of leave
+                'suspended',     // For temporary suspension of employment
+                'probation',     // For employees under probationary period
+                'terminated'
+            ])]
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $employee = Employee::where('restaurant_id', $venue->id)
+                ->findOrFail($employeeId);
+
+            $oldStatus = $employee->status;
+            $newStatus = $request->status;
+
+            // Update the status
+            $employee->status = $newStatus;
+            $employee->save();
+
+            // Track the status change
+            $activity = StaffActivity::create([
+                'employee_id' => $employee->id,
+                'venue_id' => $venue->id,
+                'type' => 'status_change',
+                'metadata' => [
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus,
+                    'changed_at' => now()->format('Y-m-d H:i:s'),
+                    'department' => $employee->department?->name,
+                    'timestamp' => now()->format('Y-m-d H:i:s')
+                ]
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Status updated successfully',
+                'status' => $newStatus
+            ]);
+
+        } catch (ModelNotFoundException $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Employee not found'], 404);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }
