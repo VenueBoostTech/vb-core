@@ -1086,6 +1086,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::get('employees/{id}', [CompanySetupController::class, 'getEmployee']);
                 // todo: add what requires the admin side on full
                 Route::get('employees/full/{id}', [CompanySetupController::class, 'getEmployeeFullProfile']);
+                Route::post('employees/{id}/status', [AdminStaffController::class, 'updateEmployeeStatus']);
                 Route::post('employees', [CompanySetupController::class, 'createEmployee']);
                 Route::post('employees-update/{id}', [CompanySetupController::class, 'updateEmployee']);
                 Route::delete('employees/{id}', [CompanySetupController::class, 'deleteEmployee']);
@@ -1111,7 +1112,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::prefix('activity')->group(function () {
                     Route::get('/', [AdminStaffController::class, 'activity']);
                     Route::get('/performance-metrics', [AdminStaffController::class, 'getPerformanceMetrics']);
-
+                    Route::get('{id}/activity', [AdminStaffController::class, 'getEmployeeActivities']);
 
                 });
 
