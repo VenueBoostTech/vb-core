@@ -345,8 +345,8 @@ class ActivityTrackingService
             StaffActivity::TYPE_TIMESHEET_VIEW,
             $timesheet,
             [
-                'status' => $timesheet->status,
-                'total_hours' => $timesheet->total_hours,
+                //'status' => $timesheet->status,
+                'total_hours' => $timesheet->regular_hours,
                 'breaks_count' => $timesheet->breaks->count()
             ]
         );

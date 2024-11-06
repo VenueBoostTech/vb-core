@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Employee extends Model
@@ -237,4 +238,63 @@ class Employee extends Model
     {
         return $this->hasMany(AppProjectTimesheet::class, 'overtime_approved_by');
     }
+
+
+    /**
+     * Get the employee's location history
+     */
+    public function locations(): HasMany
+    {
+        return $this->hasMany(EmployeeLocation::class);
+    }
+
+    /**
+     * Get the employee's latest recorded location
+     */
+    public function latestLocation(): HasOne
+    {
+        return $this->hasOne(EmployeeLocation::class)
+            ->latest('recorded_at');
+    }
+
+    /**
+     * Get the employee's preferences including communication and tracking settings
+     */
+    public function preferences(): HasOne
+    {
+        return $this->hasOne(EmployeePreference::class);
+    }
+
+    /**
+     * Helper method to check if location tracking is enabled
+     */
+    public function isLocationTrackingEnabled(): bool
+    {
+        return $this->preferences?->location_tracking_enabled ?? false;
+    }
+
+    /**
+     * Helper method to check if background tracking is enabled
+     */
+    public function isBackgroundTrackingEnabled(): bool
+    {
+        return $this->preferences?->background_tracking_enabled ?? false;
+    }
+
+    /**
+     * Helper method to check if employee accepts email notifications
+     */
+    public function acceptsEmailNotifications(): bool
+    {
+        return $this->preferences?->email_notifications ?? false;
+    }
+
+    /**
+     * Helper method to check if employee accepts SMS notifications
+     */
+    public function acceptsSmsNotifications(): bool
+    {
+        return $this->preferences?->sms_notifications ?? false;
+    }
+
 }

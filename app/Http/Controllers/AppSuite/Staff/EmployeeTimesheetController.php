@@ -166,13 +166,13 @@ class EmployeeTimesheetController extends Controller
             ->with(['task:id,name'])
             ->latest();
 
-        if ($request->status) {
-            $query->where('status', $request->status);
+        if ($request?->status) {
+            $query->where('status', $request?->status);
         }
 
         $timesheets = $query->paginate($perPage);
         // Track timesheet view activity
-        $this->activityService->trackTimesheetView($authEmployee, null);
+        // $this->activityService->trackTimesheetView($authEmployee, null);
 
 
         return response()->json([
@@ -387,7 +387,7 @@ class EmployeeTimesheetController extends Controller
         ]);
     }
 
-    public function getTimesheetDetails(Request $request, $projectId): JsonResponse
+    public function getTimesheetDetails(Request $request, $projectId, $timesheetId): JsonResponse
     {
         $authEmployee = $this->venueService->employee();
         if ($authEmployee instanceof JsonResponse) return $authEmployee;
@@ -397,7 +397,8 @@ class EmployeeTimesheetController extends Controller
             return response()->json(['error' => 'Venue not found'], 404);
         }
 
-        $timesheet = AppProjectTimesheet::where('app_project_id', $projectId)
+        $timesheet = AppProjectTimesheet::where('id', $timesheetId)
+            ->where('app_project_id', $projectId)
             ->where('employee_id', $authEmployee->id)
             ->where('venue_id', $venue->id)
             ->with(['breaks' => function($query) {

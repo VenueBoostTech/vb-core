@@ -1458,6 +1458,11 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     Route::get('/time-entries', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'time_entries']);
                     Route::post('/update-profile', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_profile']);
                     Route::post('/save-firebase-token', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'save_firebase_token']);
+                    Route::post('/update-communication-preferences', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_communication_preferences']);
+                    Route::post('/update-tracking-preferences', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_tracking_preferences']);
+                    Route::post('/update-location', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_location']);
+                    Route::get('/tracking-status', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'get_tracking_status']);
+                    Route::get('/profile', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'get_profile']);
 
                     Route::prefix('projects')->group(function () {
                         Route::get('/{id}/app-galleries', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'getAppGalleriesByProjectId']);
@@ -1482,7 +1487,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                         Route::post('/{id}/breaks/start', [EmployeeTimesheetController::class, 'startBreak']);
                         Route::put('/{id}/breaks/{break_id}/end', [EmployeeTimesheetController::class, 'endBreak']);
                         // View own timesheet details
-                        Route::get('/{id}/timesheet-details', [EmployeeTimesheetController::class, 'getTimesheetDetails']);
+                        Route::get('/{id}/timesheet-details/{timesheetId}/details', [EmployeeTimesheetController::class, 'getTimesheetDetails']);
 
                         // comments routes
                         Route::get('/{projectId}/comments', [CommentController::class, 'getComments']);
