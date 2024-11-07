@@ -73,7 +73,7 @@ class CheckoutController extends Controller
                 return response()->json(['message' => 'Product not found'], 404);
             }
 
-            $exchange_rate = Currency::where('is_primary', '=', true)->first();
+            
             $currency_all = Currency::where('currency_alpha', '=', 'LEK')->first();
             $currency_eur = Currency::where('currency_alpha', '=', 'EUR')->first();
             $location = Location::get($request->ip());
@@ -93,7 +93,7 @@ class CheckoutController extends Controller
                     ->rightJoin('store_products', 'store_products.id', '=', 'store_products_variants.product_id')
                     ->select(
                         'store_products_variants.sale_price',
-                        'store_products_variants.regular_price',
+                        'store_products_variants.price',
                         'store_products_variants.stock_quantity',
                         'store_products_variants.currency_alpha',
                         'store_products_variants.bb_points',
@@ -117,9 +117,9 @@ class CheckoutController extends Controller
                     ->get();
             } else {
 
-                $product_details = DB::table('vb_store_products')
-                    ->select('vb_store_products.*')
-                    ->where('vb_store_products.id', '=', $product->id)->first();
+                $product_details = DB::table('products')
+                    ->select('products.*')
+                    ->where('products.id', '=', $product->id)->first();
 
                 $attributes = VbStoreProductAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.id', '=', 'vb_store_product_attributes.attribute_id')
                     ->join('vb_store_attributes', 'vb_store_attributes.id', '=', 'vb_store_attributes_options.attribute_id')
@@ -136,25 +136,25 @@ class CheckoutController extends Controller
 
             if ($product_details->currency_alpha === 'EUR') {
                 if (!$sale_valid) {
-                    $total_order += ($product_details->regular_price) * $currency_all->exchange;
-                    $total_order_eur += $product_details->regular_price;
+                    $total_order += ($product_details->price) * $currency_all->exchange;
+                    $total_order_eur += $product_details->price;
                 } else {
-                    $product_subtotal = ($product_details->regular_price) * $currency_all->exchange;
+                    $product_subtotal = ($product_details->price) * $currency_all->exchange;
                     $product_discount = (float)$product_details->sale_price / 100;
                     $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
                     $total_order += $product_discounted_subtotal;
-                    $total_order_eur += ($product_details->regular_price - ($product_details->regular_price * $product_discount));
+                    $total_order_eur += ($product_details->price - ($product_details->price * $product_discount));
                 }
             } else {
                 if (!$sale_valid) {
-                    $total_order += $product_details->regular_price;
-                    $total_order_eur += $product_details->regular_price / $currency_eur->exchange;
+                    $total_order += $product_details->price;
+                    $total_order_eur += $product_details->price / $currency_eur->exchange_rate;
                 } else {
-                    $product_subtotal = $product_details->regular_price;
+                    $product_subtotal = $product_details->price;
                     $product_discount = (float)$product_details->sale_price / 100;
                     $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
                     $total_order += $product_discounted_subtotal;
-                    $total_order_eur += $product_discounted_subtotal / $currency_eur->exchange;
+                    $total_order_eur += $product_discounted_subtotal / $currency_eur->exchange_rate;
                 }
             }
             $first_name = $request->input('first_name');
@@ -365,22 +365,7 @@ class CheckoutController extends Controller
     public function finalizeOrder($venue, $customer, $order_products, $total_price, $transactionId)
     {
         try {
-            $user = User::create([
-                'name' => $customer['first_name'] . ' ' . $customer['last_name'],
-                'email' => $customer['email'],
-                'password' => Hash::make('1234'),
-                'country_code' => 'US',
-                'enduser' => true
-            ]);
-
-            $customer = Customer::create([
-                'user_id' => $user->id,
-                'name' => $customer['first_name'] . ' ' . $customer['last_name'],
-                'email' => $customer['email'],
-                'phone' => $customer['phone'],
-                'address' => $customer['address'],
-                'venue_id' => $venue->id,
-            ]);
+            $customer = Customer::where('email', $customer['email'])->first();
 
             // Create the order
             $order = Order::create([

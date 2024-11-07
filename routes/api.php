@@ -173,8 +173,8 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::get('/payment/success', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@success')->name('payment.success');
         Route::get('/payment/cancel', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@cancel')->name('payment.cancel');
         Route::get('/payment/callback', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@callback')->name('payment.callback');
-        // Route::post('/quick-checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@quickCheckout');
-        Route::post('/checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@quickCheckout');
+        Route::post('/quick-checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@quickCheckout');
+        Route::post('/checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@checkout');
         Route::post('/initiate-bkt-payment', 'App\Http\Controllers\v3\Whitelabel\BktPaymentController@initiatePayment');
 
     });
@@ -1382,6 +1382,10 @@ Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
                 Route::get('/details/{bookingId}', [BookingsController::class, 'bookingDetails']);
             });
 
+            Route::get('countries', 'App\Http\Controllers\v3\EndUserController@listcountries');
+            Route::get('states/{countryId}', 'App\Http\Controllers\v3\EndUserController@listStatesByCountry');
+            Route::get('cities/{stateId}', 'App\Http\Controllers\v3\EndUserController@listCitiesByState');
+
             Route::get('/orders', 'App\Http\Controllers\v3\EndUserController@getOrders');
             Route::get('/orders/{id}', 'App\Http\Controllers\v3\EndUserController@getOrderDetails');
             Route::get('/activities', 'App\Http\Controllers\v3\EndUserController@getActivities');
@@ -1529,6 +1533,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
             Route::group(['prefix' => 'notifications'], function () {
                 Route::get('/', [NotificationsController::class, 'index']);
+                Route::get('/counts', [NotificationsController::class, 'getCounts']);  // New route
                 Route::put('/{id}/mark-as-read', [NotificationsController::class, 'markAsRead']);
                 Route::put('/mark-all-as-read', [NotificationsController::class, 'markAllAsRead']);
                 Route::delete('/{id}', [NotificationsController::class, 'destroy']);

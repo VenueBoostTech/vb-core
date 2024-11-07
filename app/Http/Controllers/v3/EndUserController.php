@@ -46,6 +46,89 @@ class EndUserController extends Controller
         $this->endUserService = $endUserService;
     }
 
+    /**
+     * List all active countries
+     */
+    public function listCountries(): JsonResponse
+    {
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        try {
+            $countries = Country::where('active', true)
+                ->select('id', 'name', 'code')
+                ->orderBy('name')
+                ->get();
+
+            return response()->json([
+                'data' => $countries
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch countries: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * List states by country
+     */
+    public function listStatesByCountry($countryId): JsonResponse
+    {
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        try {
+            $states = State::where('country_id', $countryId)
+                ->where('active', 1)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get();
+
+            return response()->json([
+                'data' => $states
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch states: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * List cities by state
+     */
+    public function listCitiesByState($stateId): JsonResponse
+    {
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        try {
+            $cities = City::where('states_id', $stateId)
+                ->where('active', true)
+                ->select('id', 'name')
+                ->orderBy('name')
+                ->get();
+
+            return response()->json([
+                'data' => $cities
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Failed to fetch cities: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function getOrders(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
@@ -58,7 +141,7 @@ class EndUserController extends Controller
         $customer = Customer::where('user_id', $user->id)->first();
 
         $perPage = $request->input('per_page', 15);
-        $orders = Order::where('customer_id', $customer->id)->paginate($perPage);
+        $orders = Order::where('customer_id', $customer->id)->with('orderProducts.product')->paginate($perPage);
 
         $paginatedData = [
             'data' => $orders->items(),
