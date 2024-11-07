@@ -503,6 +503,14 @@ class AuthController extends Controller
     protected function respondWithTokenForEndUser(string $token, string $source): JsonResponse
     {
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
+        $refreshTtl = $ttl * 8; // Refresh token TTL (8x longer)
+
+        // Generate refresh token
+        $refreshToken = JWTAuth::claims([
+            'refresh' => true,
+            'exp' => now()->addSeconds($refreshTtl)->timestamp
+        ])->fromUser(auth()->user());
+
         $user = auth()->user();
 
         if ($source == 'bybest.shop_web') {
@@ -556,8 +564,10 @@ class AuthController extends Controller
                 'name' => $venue?->name,
             ],
             'access_token' => $token,
+            'refresh_token' => $refreshToken,  // Added refresh token
             'token_type' => 'bearer',
             'expires_in' => $ttl,
+            'refresh_expires_in' => $refreshTtl  // Added refresh token expiration
         ]);
     }
 

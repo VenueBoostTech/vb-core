@@ -580,6 +580,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             // booking api route
             Route::group(['prefix' => 'booking'], function () {
                 Route::get('/', 'App\Http\Controllers\v1\BookingController@index');
+                Route::get('/{id}', 'App\Http\Controllers\v1\BookingController@getBookingDetails');
                 Route::patch('/change-status', 'App\Http\Controllers\v1\BookingController@changeStatus');
             });
         });
