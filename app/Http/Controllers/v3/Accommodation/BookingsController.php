@@ -4,6 +4,7 @@ namespace App\Http\Controllers\v3\Accommodation;
 
 use App\Http\Controllers\Controller;
 use App\Models\Booking;
+use App\Models\Chat;
 use App\Models\Gallery;
 use App\Models\Guest;
 use App\Models\RentalUnit;
@@ -60,11 +61,10 @@ class BookingsController extends Controller
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
         if ($userOrResponse instanceof JsonResponse) {
-            return $userOrResponse; // If it's a JsonResponse, return it immediately
+            return $userOrResponse;
         }
 
-        $user = $userOrResponse; // Now we know it's a User object
-
+        $user = $userOrResponse;
         $guest = Guest::where('user_id', $user->id)->first();
 
         if (!$guest) {
@@ -94,16 +94,32 @@ class BookingsController extends Controller
             ];
         });
 
+        // Get or create chat for this booking
+        $chat = Chat::firstOrCreate(
+            [
+                'booking_id' => $booking->id,
+                'end_user_id' => $user->id,
+                'type' => Chat::TYPE_BOOKING
+            ],
+            [
+                'venue_user_id' => $booking->rentalUnit->venue->user_id,
+                'venue_id' => $booking->rentalUnit->venue_id,
+                'status' => Chat::STATUS_ACTIVE
+            ]
+        );
+
         $bookingDetails = [
             'id' => $booking->id,
             'rental_unit_name' => $booking->rentalUnit->name,
+            'unit_code' => $booking->rentalUnit->unit_code,
             'check_in' => $booking->check_in_date,
             'check_out' => $booking->check_out_date,
             'total' => $booking->total_amount,
             'currency' => $booking->rentalUnit->currency,
             'status' => $booking->status,
             'guest_count' => $booking->guest_nr,
-            'rental_unit_photo' => count($modifiedGallery) > 0 ? $modifiedGallery[0]['photo_path'] : null
+            'rental_unit_photo' => count($modifiedGallery) > 0 ? $modifiedGallery[0]['photo_path'] : null,
+            'chat_id' => $chat->id
         ];
 
         return response()->json($bookingDetails);

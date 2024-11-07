@@ -114,5 +114,10 @@ class Guest extends Model
         return $this->hasMany(Booking::class);
     }
 
+    public function guestMarketingSettings(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(GuestMarketingSettings::class);
+    }
+
 
 }

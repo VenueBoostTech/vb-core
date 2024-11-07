@@ -101,7 +101,7 @@ class EndUserChatController extends Controller
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
         if ($userOrResponse instanceof JsonResponse) {
-            return $userOrResponse; // If it's a JsonResponse, return it immediately
+            return $userOrResponse;
         }
 
         $venue = Restaurant::where('id', $request->venue_id)->first();
@@ -112,29 +112,46 @@ class EndUserChatController extends Controller
 
         $validator = Validator::make($request->all(), [
             'user_id' => 'required|exists:users,id',
-            'order_id' => 'required|exists:orders,id',
+            'type' => 'required|in:order,booking',
+            'order_id' => 'required_if:type,order|exists:orders,id',
+            'booking_id' => 'required_if:type,booking|exists:bookings,id',
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 400);
         }
 
-        // Check if the chat already exists for this order
-        $chat = Chat::where('end_user_id', $request->user_id)
+        // Check if the chat already exists
+        $chatQuery = Chat::where('end_user_id', $request->user_id)
             ->where('venue_user_id', $venue->user_id)
             ->where('venue_id', $userOrResponse?->customer?->venue_id)
-            ->where('order_id', $request->order_id)
-            ->first();
+            ->where('type', $request->type);
+
+        if ($request->type === Chat::TYPE_ORDER) {
+            $chatQuery->where('order_id', $request->order_id);
+        } else {
+            $chatQuery->where('booking_id', $request->booking_id);
+        }
+
+        $chat = $chatQuery->first();
 
         // If the chat doesn't exist, create a new one
         if (!$chat) {
-            $chat = Chat::create([
+            $chatData = [
                 'end_user_id' => $request->user_id,
                 'venue_user_id' => $venue->user_id,
-                'order_id' => $request->order_id,
                 'venue_id' => $venue->id,
                 'status' => Chat::STATUS_ACTIVE,
-            ]);
+                'type' => $request->type
+            ];
+
+            if ($request->type === Chat::TYPE_ORDER) {
+                $chatData['order_id'] = $request->order_id;
+            } else {
+                $chatData['booking_id'] = $request->booking_id;
+            }
+
+            $chat = Chat::create($chatData);
         }
 
         return response()->json($chat, 201);

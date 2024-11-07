@@ -190,4 +190,9 @@ class User extends Authenticatable implements JWTSubject
     {
         return $this->hasMany(NotificationSetting::class);
     }
+
+    public function guestMarketingSettings(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(GuestMarketingSettings::class);
+    }
 }

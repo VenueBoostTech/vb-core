@@ -180,6 +180,10 @@ class EmployeeProfileController extends Controller
         $validator = Validator::make($request->all(), [
             'token' => 'required|string',
             'device_id' => 'required|string',
+            'device_type' => ['required', 'string', 'in:ios,android'],
+            'device_model' => 'nullable|string',
+            'os_version' => 'nullable|string',
+            'app_version' => 'nullable|string'
         ]);
 
         if ($validator->fails()) {
@@ -187,9 +191,28 @@ class EmployeeProfileController extends Controller
         }
 
         $user = auth()->user();
-        $user->firebaseTokens()->create($request->all());
 
-        return response()->json(['message' => 'Token saved successfully'], 200);
+        // Deactivate old token for this device if exists
+        $user->firebaseTokens()
+            ->where('device_id', $request->device_id)
+            ->update(['is_active' => false]);
+
+        // Save new token
+        $token = $user->firebaseTokens()->create([
+            'firebase_token' => $request->token,
+            'device_id' => $request->device_id,
+            'device_type' => $request->device_type,
+            'device_model' => $request->device_model,
+            'os_version' => $request->os_version,
+            'app_version' => $request->app_version,
+            'is_active' => true,
+            'last_used_at' => now()
+        ]);
+
+        return response()->json([
+            'message' => 'Token saved successfully',
+            'token' => $token
+        ]);
     }
 
     public function get_profile(Request $request)

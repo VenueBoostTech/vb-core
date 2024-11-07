@@ -9,11 +9,22 @@ class Chat extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['end_user_id', 'venue_user_id', 'venue_id', 'status'];
+    protected $fillable = [
+        'end_user_id',
+        'venue_user_id',
+        'venue_id',
+        'status',
+        'order_id',
+        'booking_id',
+        'type'
+    ];
 
     const STATUS_ACTIVE = 'active';
     const STATUS_ARCHIVED = 'archived';
     const STATUS_DELETED = 'deleted';
+
+    const TYPE_ORDER = 'order';
+    const TYPE_BOOKING = 'booking';
 
     public function endUser(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
@@ -38,5 +49,10 @@ class Chat extends Model
     public function order(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Order::class);
+    }
+
+    public function booking(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Booking::class);
     }
 }
