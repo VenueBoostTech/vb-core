@@ -4,6 +4,7 @@ namespace App\Http\Controllers\v1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -269,6 +270,79 @@ class EmployeeProfileController extends Controller
                 'allow_clockinout' => true
             ]
         ]);
+    }
+
+    public function update_profile_picture(Request $request): JsonResponse
+    {
+        $employee = auth()->user()->employee;
+        if (!$employee) {
+            return response()->json(['error' => 'Employee not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'profile_picture' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()->first()], 400);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            if ($request->hasFile('profile_picture')) {
+                // Delete old profile picture if exists
+                if ($employee->profile_picture) {
+                    try {
+                        Storage::disk('s3')->delete($employee->profile_picture);
+                    } catch (\Exception $e) {
+                        \Log::error('Failed to delete old profile picture: ' . $e->getMessage());
+                    }
+                }
+
+                // Upload new photo to AWS S3
+                $path = Storage::disk('s3')->putFile(
+                    'profile_pictures',
+                    $request->file('profile_picture')
+                );
+
+                // Update employee profile picture
+                $employee->update([
+                    'profile_picture' => $path
+                ]);
+
+                // Generate temporary URL for response
+                $profilePicture = null;
+                try {
+                    $profilePicture = Storage::disk('s3')->temporaryUrl($path, now()->addMinutes(5));
+                } catch (\Exception $e) {
+                    \Log::error('Error generating profile picture URL: ' . $e->getMessage());
+                    $profilePicture = $this->getInitials($employee->name);
+                }
+
+                DB::commit();
+
+                return response()->json([
+                    'message' => 'Profile picture updated successfully',
+                    'profile_picture' => $profilePicture,
+                    'employee' => [
+                        'id' => $employee->id,
+                        'name' => $employee->name,
+                        'profile_picture' => $profilePicture
+                    ]
+                ]);
+            }
+
+            DB::rollBack();
+            return response()->json(['error' => 'No profile picture uploaded'], 400);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Failed to update profile picture: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to update profile picture'
+            ], 500);
+        }
     }
 
     /**

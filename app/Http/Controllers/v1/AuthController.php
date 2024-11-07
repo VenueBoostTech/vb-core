@@ -20,6 +20,7 @@ use App\Models\VenueCustomizedExperience;
 use App\Models\VenueIndustry;
 use App\Models\VenuePauseHistory;
 use App\Models\VenueType;
+use App\Helpers\UserActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -126,7 +127,7 @@ class AuthController extends Controller
 
             // Save new token
             $user->firebaseTokens()->create([
-                'token' => $request->firebase_token,
+                'firebase_token' => $request->firebase_token,
                 'device_id' => $request->device_id,
                 'device_type' => $request->device_type,
                 'device_model' => $request->device_model,
@@ -215,6 +216,8 @@ class AuthController extends Controller
             'app_source' => $request->source,
             'venue_id' => $request->venue_id,
         ]);
+
+        UserActivityLogger::log(auth()->user()->id, 'Login');
 
         return $this->respondWithTokenForEndUser($token, $request->source);
     }
@@ -609,12 +612,12 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $user = auth()->user();
-        $deviceId = $request->device_id;
-
         try {
-            // Deactivate Firebase token for this device
-            if ($deviceId) {
+            $user = auth()->user();
+            $deviceId = $request->device_id;
+
+            // Check if user exists and has device ID before deactivating tokens
+            if ($user && $deviceId) {
                 $user->firebaseTokens()
                     ->where('device_id', $deviceId)
                     ->update(['is_active' => false]);
@@ -1519,6 +1522,8 @@ class AuthController extends Controller
         $credentials = $request->only('email', 'password');
         $token = JWTAuth::attempt($credentials);
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
+
+        UserActivityLogger::log(auth()->user()->id, 'Sign Up');
 
         return response()->json([
             'message' => 'We sent a verification email',

@@ -22,6 +22,8 @@ use App\Models\StoreSetting;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WishlistItem;
+use App\Models\UserActivityLog;
+use App\Helpers\UserActivityLogger;
 use App\Services\EndUserService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -33,6 +35,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Mail;
 
 class EndUserController extends Controller
 {
@@ -372,26 +375,45 @@ class EndUserController extends Controller
         $user = $userOrResponse; // Now we know it's a User object
 
         $validator = Validator::make($request->all(), [
-            'current_password' => 'required',
-            'new_password' => 'required',
-            'confirm_password' => 'required|same:new_password',
+            'currentPassword' => 'required',
+            'newPassword' => 'required',
+            'confirmPassword' => 'required|same:newPassword',
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 400);
         }
 
-        if (!Hash::check($request->current_password, $user->password)) {
-            return response()->json(['error' => 'Current password is incorrect'], 400);
+        if (!Hash::check($request->currentPassword, $user->password)) {
+            return response()->json(['message' => 'Current password is incorrect'], 400);
         }
 
-        $user->password = Hash::make($request->new_password);
+        $user->password = Hash::make($request->newPassword);
         $user->save();
 
         Mail::to($user->email)->send(new PasswordConfirmationMail($user->email, $user->name));
 
+        UserActivityLogger::log(auth()->user()->id, 'Reset password');
 
         return response()->json(['message' => 'Password updated successfully'], 200);
+    }
+
+    // get user security activities
+    public function getUserActivities(Request $request): JsonResponse
+    {
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        $user = $userOrResponse;
+
+        $activities = UserActivityLog::where('user_id', $user->id)->orderBy('created_at', 'desc')->limit(3)->get();
+
+        return response()->json([
+            'activities' => $activities
+        ], 200);
     }
 
     public function getMarketingSettings(Request $request): JsonResponse
@@ -525,6 +547,7 @@ class EndUserController extends Controller
             'address' => $addressData
         ], 200);
     }
+
     public function updateProfile(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
