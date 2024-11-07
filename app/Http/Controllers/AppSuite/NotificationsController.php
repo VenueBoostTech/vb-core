@@ -4,87 +4,151 @@ namespace App\Http\Controllers\AppSuite;
 
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
-use App\Services\VenueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class NotificationsController extends Controller
 {
-    protected VenueService $venueService;
-
-    public function __construct(VenueService $venueService)
-    {
-        $this->venueService = $venueService;
-    }
-
     public function index(Request $request): JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
-        $employee = $this->venueService->employee();
+        $employee = auth()->user()->employee;
 
-        if ($venue->id !== $employee->restaurant_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        $perPage = $request->input('per_page', 20);
+        $filter = $request->input('filter'); // unread, read, all
+
+        $query = Notification::where('employee_id', $employee->id)
+            ->with(['notificationType:id,name,icon']) // Include type info
+            ->orderBy('created_at', 'desc');
+
+        // Apply filters
+        if ($filter === 'unread') {
+            $query->whereNull('read_at');
+        } elseif ($filter === 'read') {
+            $query->whereNotNull('read_at');
         }
-        $notifications = Notification::where('employee_id', $employee->id)
-            ->orderBy('created_at', 'desc')
-            ->paginate(20);
 
-        return response()->json($notifications);
+        $notifications = $query->paginate($perPage);
+
+        // Get unread count
+        $unreadCount = Notification::where('employee_id', $employee->id)
+            ->whereNull('read_at')
+            ->count();
+
+        return response()->json([
+            'notifications' => $notifications->items(),
+            'unread_count' => $unreadCount,
+            'pagination' => [
+                'current_page' => $notifications->currentPage(),
+                'per_page' => $notifications->perPage(),
+                'total' => $notifications->total(),
+                'last_page' => $notifications->lastPage()
+            ]
+        ]);
     }
 
     public function markAsRead(Request $request, $id): JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
-        $employee = $this->venueService->employee();
+        $employee = auth()->user()->employee;
 
-        if ($venue->id !== $employee->restaurant_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        try {
+            DB::beginTransaction();
+
+            $notification = Notification::where('id', $id)
+                ->where('employee_id', $employee->id)
+                ->whereNull('read_at')
+                ->firstOrFail();
+
+            $notification->update(['read_at' => now()]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Notification marked as read',
+                'unread_count' => Notification::where('employee_id', $employee->id)
+                    ->whereNull('read_at')
+                    ->count()
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'error' => 'Notification not found or already read'
+            ], 404);
         }
-
-        $notification = Notification::where('id', $id)->where('employee_id', $employee->id)->first();
-
-        if (!$notification) {
-            return response()->json(['message' => 'Notification not found'], 404);
-        }
-
-        $notification->update(['read_at' => now()]);
-
-        return response()->json(['message' => 'Notification marked as read']);
     }
 
     public function markAllAsRead(Request $request): JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
-        $employee = $this->venueService->employee();
+        $employee = auth()->user()->employee;
 
-        if ($venue->id !== $employee->restaurant_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        try {
+            DB::beginTransaction();
+
+            $count = Notification::where('employee_id', $employee->id)
+                ->whereNull('read_at')
+                ->update(['read_at' => now()]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => "{$count} notifications marked as read",
+                'unread_count' => 0
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'error' => 'Failed to mark notifications as read'
+            ], 500);
         }
-
-        Notification::where('employee_id', $employee->id)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
-
-        return response()->json(['message' => 'All notifications marked as read']);
     }
 
-    public function destroy(Request $request, $id): JsonResponse
+    public function destroy($id): JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
-        $employee = $this->venueService->employee();
+        $employee = auth()->user()->employee;
 
-        if ($venue->id !== $employee->restaurant_id) {
-            return response()->json(['error' => 'Unauthorized'], 403);
+        try {
+            DB::beginTransaction();
+
+            $notification = Notification::where('id', $id)
+                ->where('employee_id', $employee->id)
+                ->firstOrFail();
+
+            $notification->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Notification deleted successfully',
+                'unread_count' => Notification::where('employee_id', $employee->id)
+                    ->whereNull('read_at')
+                    ->count()
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'error' => 'Notification not found'
+            ], 404);
         }
+    }
 
-        $notification = Notification::where('id', $id)->where('employee_id', $employee->id)->first();
+    // New method to get notification counts
+    public function getCounts(): JsonResponse
+    {
+        $employee = auth()->user()->employee;
 
-        if (!$notification) {
-            return response()->json(['message' => 'Notification not found'], 404);
-        }
+        $counts = [
+            'total' => Notification::where('employee_id', $employee->id)->count(),
+            'unread' => Notification::where('employee_id', $employee->id)
+                ->whereNull('read_at')
+                ->count(),
+            'read' => Notification::where('employee_id', $employee->id)
+                ->whereNotNull('read_at')
+                ->count()
+        ];
 
-        $notification->delete();
-
-        return response()->json(['message' => 'Notification deleted successfully']);
+        return response()->json($counts);
     }
 }
