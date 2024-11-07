@@ -13,7 +13,7 @@ class UserService
     public function isOwner(User $user): bool
     {
         $employee = Employee::where('user_id', $user->id)->first();
-        return true;
+        return $employee && $employee->role_id === 2;
     }
 
     public function checkOwnerAuthorization(): ?JsonResponse

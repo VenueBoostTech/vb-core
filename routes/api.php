@@ -82,7 +82,6 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
     ], function ($router) {
         Route::post('/resend-verify-email', 'App\Http\Controllers\v1\AuthController@resendVerifyEmail');
 
-
     });
 
 
@@ -1402,10 +1401,14 @@ Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
             });
 
             Route::group(['prefix' => 'setting'], function () {
-                Route::post('/reset-password', 'App\Http\Controllers\v1\AuthController@resetPassword');
-                Route::post('/update-preferences', 'App\Http\Controllers\v1\EndUserController@updatePreferences');
-                Route::get('/preferences', 'App\Http\Controllers\v1\EndUserController@getPreferences');
-                Route::post('/update-profile', 'App\Http\Controllers\v1\EndUserController@updateProfile');
+                Route::post('/reset-password', 'App\Http\Controllers\v3\EndUserController@resetPassword');
+                Route::get('/user-security-activities', 'App\Http\Controllers\v3\EndUserController@getUserActivities');
+                Route::get('/marketing-settings', 'App\Http\Controllers\v3\EndUserController@getMarketingSettings');
+                Route::post('/marketing-settings', 'App\Http\Controllers\v3\EndUserController@updateMarketingSettings');
+                Route::get('/profile', 'App\Http\Controllers\v3\EndUserController@getGuestProfile');
+                Route::put('/profile', 'App\Http\Controllers\v3\EndUserController@updateProfile');
+                Route::put('/customer-profile', 'App\Http\Controllers\v3\EndUserController@updateCustomerProfile');
+                Route::get('/customer-profile', 'App\Http\Controllers\v3\EndUserController@getCustomerProfile');
             });
         });
     });
@@ -1457,6 +1460,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     // Route::get('/projects', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'assigned_projects']); // Not needed, maybe remove
                     Route::get('/time-entries', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'time_entries']);
                     Route::post('/update-profile', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_profile']);
+                    Route::post('/update-profile-picture', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_profile_picture']);
                     Route::post('/save-firebase-token', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'save_firebase_token']);
                     Route::post('/update-communication-preferences', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_communication_preferences']);
                     Route::post('/update-tracking-preferences', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_tracking_preferences']);

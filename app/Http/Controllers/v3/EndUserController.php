@@ -7,22 +7,35 @@ use App\Http\Controllers\v1\OrdersController;
 use App\Mail\PasswordConfirmationMail;
 use App\Models\Address;
 use App\Models\Chat;
+use App\Models\City;
+use App\Models\Country;
 use App\Models\Customer;
+use App\Models\CustomerAddress;
+use App\Models\EndUserAddress;
+use App\Models\Guest;
+use App\Models\GuestMarketingSettings;
 use App\Models\LoginActivity;
 use App\Models\Order;
 use App\Models\Promotion;
+use App\Models\State;
 use App\Models\StoreSetting;
+use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WishlistItem;
+use App\Models\UserActivityLog;
+use App\Helpers\UserActivityLogger;
 use App\Services\EndUserService;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Mail;
 
 class EndUserController extends Controller
 {
@@ -362,136 +375,424 @@ class EndUserController extends Controller
         $user = $userOrResponse; // Now we know it's a User object
 
         $validator = Validator::make($request->all(), [
-            'current_password' => 'required',
-            'new_password' => 'required',
-            'confirm_password' => 'required|same:new_password',
+            'currentPassword' => 'required',
+            'newPassword' => 'required',
+            'confirmPassword' => 'required|same:newPassword',
         ]);
 
         if ($validator->fails()) {
             return response()->json($validator->errors(), 400);
         }
 
-        if (!Hash::check($request->current_password, $user->password)) {
-            return response()->json(['error' => 'Current password is incorrect'], 400);
+        if (!Hash::check($request->currentPassword, $user->password)) {
+            return response()->json(['message' => 'Current password is incorrect'], 400);
         }
 
-        $user->password = Hash::make($request->new_password);
+        $user->password = Hash::make($request->newPassword);
         $user->save();
 
         Mail::to($user->email)->send(new PasswordConfirmationMail($user->email, $user->name));
 
+        UserActivityLogger::log(auth()->user()->id, 'Reset password');
 
         return response()->json(['message' => 'Password updated successfully'], 200);
     }
 
-    //getPreferences
-    public function getPreferences(Request $request): \Illuminate\Http\JsonResponse
+    // get user security activities
+    public function getUserActivities(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
         if ($userOrResponse instanceof JsonResponse) {
-            return $userOrResponse; // If it's a JsonResponse, return it immediately
+            return $userOrResponse;
         }
 
-        $user = $userOrResponse; // Now we know it's a User object
-        $preferences = [
-            'marketing_sms' => $user?->endUserPreference?->marketing_sms ?? false,
-            'marketing_email' => $user?->endUserPreference?->marketing_email ?? false,
-            'promotion_sms' => $user?->endUserPreference?->promotion_sms ?? false,
-            'promotion_email' => $user?->endUserPreference?->promotion_email ?? false,
-        ];
+        $user = $userOrResponse;
 
-        return response()->json(['preferences' => $preferences], 200);
+        $activities = UserActivityLog::where('user_id', $user->id)->orderBy('created_at', 'desc')->limit(3)->get();
+
+        return response()->json([
+            'activities' => $activities
+        ], 200);
     }
 
-    //updatePreferences
-    public function updatePreferences(Request $request): \Illuminate\Http\JsonResponse
+    public function getMarketingSettings(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
         if ($userOrResponse instanceof JsonResponse) {
-            return $userOrResponse; // If it's a JsonResponse, return it immediately
+            return $userOrResponse;
         }
 
-        $user = $userOrResponse; // Now we know it's a User object
+        $user = $userOrResponse;
+
+        // Get or create marketing settings
+        $marketingSettings = GuestMarketingSettings::firstOrCreate(
+            ['guest_id' => $user->guest->id],
+            [
+                'user_id' => $user->id,
+                'promotion_sms_notify' => true,
+                'promotion_email_notify' => true,
+                'booking_sms_notify' => true,
+                'booking_email_notify' => true
+            ]
+        );
+
+        return response()->json([
+            'marketing_settings' => [
+                'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
+                'promotion_email_notify' => $marketingSettings->promotion_email_notify,
+                'booking_sms_notify' => $marketingSettings->booking_sms_notify,
+                'booking_email_notify' => $marketingSettings->booking_email_notify
+            ]
+        ], 200);
+    }
+
+    //updateMarketingSettings
+    public function updateMarketingSettings(Request $request): JsonResponse
+    {
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        $user = $userOrResponse;
 
         $validator = Validator::make($request->all(), [
-            'notifications.order_status' => 'required|boolean',
-            'notifications.marketing_sms' => 'required|boolean',
-            'notifications.marketing_email' => 'required|boolean',
-            'notifications.promotion_sms' => 'required|boolean',
-            'notifications.promotion_email' => 'required|boolean',
+            'promotion_sms_notify' => 'required|boolean',
+            'promotion_email_notify' => 'required|boolean',
+            'booking_sms_notify' => 'required|boolean',
+            'booking_email_notify' => 'required|boolean'
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json(['errors' => $validator->errors()], 400);
         }
 
-        //if user has no endUserPreference, create one or update the existing one
-        if (!$user->endUserPreference) {
-            $user->endUserPreference()->create([
-                'order_status' => $request->order_status,
-                'marketing_sms' => $request->marketing_sms,
-                'marketing_email' => $request->marketing_email,
-                'promotion_sms' => $request->promotion_sms,
-                'promotion_email' => $request->promotion_email,
-            ]);
-        } else {
-            $user->endUserPreference->order_status = $request->order_status;
-            $user->endUserPreference->marketing_sms = $request->marketing_sms;
-            $user->endUserPreference->marketing_email = $request->marketing_email;
-            $user->endUserPreference->promotion_sms = $request->promotion_sms;
-            $user->endUserPreference->promotion_email = $request->promotion_email;
-            $user->endUserPreference->save();
-        }
+        $marketingSettings = GuestMarketingSettings::updateOrCreate(
+            [
+                'guest_id' => $user->guest->id
+            ],
+            [
+                'user_id' => $user->id,
+                'promotion_sms_notify' => $request->promotion_sms_notify,
+                'promotion_email_notify' => $request->promotion_email_notify,
+                'booking_sms_notify' => $request->booking_sms_notify,
+                'booking_email_notify' => $request->booking_email_notify
+            ]
+        );
 
-        return response()->json(['message' => 'Preferences updated successfully'], 200);
+        return response()->json([
+            'message' => 'Marketing settings updated successfully',
+            'marketing_settings' => $marketingSettings
+        ], 200);
     }
 
     //updateProfile
 
-    public function updateProfile(Request $request): \Illuminate\Http\JsonResponse
+    public function getGuestProfile(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
         if ($userOrResponse instanceof JsonResponse) {
-            return $userOrResponse; // If it's a JsonResponse, return it immediately
+            return $userOrResponse;
         }
 
-        $user = $userOrResponse; // Now we know it's a User object
+        $user = $userOrResponse;
+
+        // Get Guest
+        $guest = Guest::where('user_id', $user->id)->first();
+        if (!$guest) {
+            return response()->json(['error' => 'Guest not found'], 404);
+        }
+
+        // Get EndUserAddress with related address
+        $endUserAddress = EndUserAddress::with('address')
+            ->where('user_id', $user->id)
+            ->latest()
+            ->first();
+
+        // Prepare address data
+        $addressData = null;
+        if ($endUserAddress && $endUserAddress->address) {
+            $addressData = [
+                'id' => $endUserAddress->address->id,
+                'address_line1' => $endUserAddress->address->address_line1,
+                'address_line2' => $endUserAddress->address->address_line2,
+                'state' => $endUserAddress->address->state,
+                'city' => $endUserAddress->address->city,
+                'postcode' => $endUserAddress->address->postcode,
+                'country' => $endUserAddress->address->country,
+                'latitude' => $endUserAddress->address->latitude,
+                'longitude' => $endUserAddress->address->longitude,
+                'country_id' => $endUserAddress->address->country_id,
+                'state_id' => $endUserAddress->address->state_id,
+                'city_id' => $endUserAddress->address->city_id,
+            ];
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'name' => $user->name
+            ],
+            'guest' => [
+                'id' => $guest->id,
+                'email' => $guest->email,
+                'phone' => $guest->phone,
+            ],
+            'address' => $addressData
+        ], 200);
+    }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        $user = $userOrResponse;
+
+        // First check if email is actually changing
+        if ($request->email !== $user->email) {
+            // Check both users and guests tables for email uniqueness
+            $userExists = User::where('email', $request->email)
+                ->where('id', '!=', $user->id)
+                ->exists();
+
+            $guestExists = Guest::where('email', $request->email)
+                ->where('user_id', '!=', $user->id)
+                ->exists();
+
+            if ($userExists || $guestExists) {
+                return response()->json([
+                    'errors' => [
+                        'email' => ['The email has already been taken.']
+                    ]
+                ], 400);
+            }
+        }
 
         $validator = Validator::make($request->all(), [
-            'first_name' => 'required',
-            'last_name' => 'required',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'phone' => 'required',
-            'country_id' => 'required',
-            'street_address' => 'required',
-            'city' => 'required',
-            'state' => 'required',
-            'postcode' => 'required',
+            'first_name' => ['required', 'string'],
+            'last_name' => ['required', 'string'],
+            'phone' => ['required', 'string'],
+            'email' => ['required', 'email'],
+            'address.address_line1' => ['required', 'string'],
+            'address.address_line2' => ['nullable', 'string'],
+            'address.city_id' => ['required', 'exists:cities,id'],
+            'address.state_id' => ['required', 'exists:states,id'],
+            'address.postcode' => ['required', 'string'],
+            'address.country_id' => ['required', 'exists:countries,id'],
+            'address.latitude' => ['nullable', 'numeric'],
+            'address.longitude' => ['nullable', 'numeric']
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json(['errors' => $validator->errors()], 400);
         }
-        //First add thee address in the address table
-        $saveAddress = Address::create([
-            'address_line1' => $request->street_address,
-            'city' => $request->city,
-            'state' => $request->state,
-            'postcode' => $request->postcode,
-            'country_id' => $request->country_id,
-        ]);
 
-        //Then update the user endUserAddress
-        $user->endUserAddresses()->create([
-            'address_id' => $saveAddress->id,
-            'user_id' => $user->id,
-        ]);
+        try {
+            DB::beginTransaction();
 
-        return response()->json(['message' => 'Profile updated successfully'], 200);
+            // Update User
+            $user->update([
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'name' => $request->first_name . ' ' . $request->last_name,
+                'email' => $request->email
+            ]);
+
+            // Update Guest
+            $guest = Guest::where('user_id', $user->id)->first();
+            if ($guest) {
+                $guest->update([
+                    'name' => $request->first_name . ' ' . $request->last_name,
+                    'email' => $request->email,
+                    'phone' => $request->phone
+                ]);
+            }
+
+            // Create or Update Address
+            if ($request->has('address')) {
+                // Get location names from IDs
+                $country = Country::find($request->address['country_id']);
+                $state = State::find($request->address['state_id']);
+                $city = City::find($request->address['city_id']);
+
+                $address = Address::create([
+                    'address_line1' => $request->address['address_line1'],
+                    'address_line2' => $request->address['address_line2'] ?? null,
+                    'city' => $city->name,
+                    'state' => $state->name,
+                    'postcode' => $request->address['postcode'],
+                    'country' => $country->name,
+                    'country_id' => $request->address['country_id'],
+                    'state_id' => $request->address['state_id'],
+                    'city_id' => $request->address['city_id'],
+                    'latitude' => $request->address['latitude'] ?? null,
+                    'longitude' => $request->address['longitude'] ?? null
+                ]);
+
+                // Create or update EndUserAddress
+                EndUserAddress::updateOrCreate(
+                    ['user_id' => $user->id],
+                    ['address_id' => $address->id]
+                );
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Profile updated successfully',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                ],
+                'guest' => [
+                    'id' => $guest->id,
+                    'phone' => $guest->phone,
+                    'email' => $guest->email,
+                ],
+                'address' => $address ?? null
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Sentry\captureException($e);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 
+    public function updateCustomerProfile(Request $request): JsonResponse {
+
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        $user = $userOrResponse;
+
+        $validator = Validator::make($request->all(), [
+            'first_name' => 'required|string',
+            'last_name' => 'required|string',
+            'phone' => 'required|string',
+            'email' => 'required|string|email',
+            'street_address' => 'required|string',
+            'cId' => 'required',
+            'uId' => 'required',
+            'aId' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        try {
+            $user = User::where('id', $user->id)->first();
+            $user->first_name = $request->first_name;
+            $user->last_name = $request->last_name;
+            $user->name = $request->first_name . ' ' . $request->last_name;
+            $user->email = $request->email;
+            $user->save();
+
+            $customer = Customer::where('user_id', $user->id)->first();
+            $customer->name = $request->first_name . ' ' . $request->last_name;
+            $customer->email = $request->email;
+            $customer->phone = $request->phone;
+            $customer->address = $request->street_address;
+            $customer->save();
+
+            $address = Address::where('id', $request->aId)->first();
+            $address->address_line1 = $request->street_address;
+            $address->state = $request->state;
+            $address->city = $request->city;
+            $address->postcode = $request->zip;
+            $address->country = $request->country;
+            $address->save();
+
+            return response()->json([
+                'message' => 'Profile updated successfully',
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'email_verified_at' => $user->email_verified_at,
+                ],
+            ], 200);
+        } catch (\Exception $e) {
+            \Sentry\captureException($e);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function getCustomerProfile(Request $request): JsonResponse
+    {
+
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        $user = $userOrResponse;
+
+        $customer = Customer::where('user_id', $user->id)->first();
+        if (!$customer) {
+            return response()->json(['error' => 'Customer not found'], 404);
+        }
+
+        $customerAddress = CustomerAddress::where('customer_id', $customer->id)->first();
+        if (!$customerAddress) {
+            return response()->json(['error' => 'Customer Address not found'], 404);
+        }
+
+        $address = Address::where('id', $customerAddress->address_id)->first();
+        if (!$address) {
+            return response()->json(['error' => 'Address not found'], 404);
+        }
+
+        $user = User::where('id', $request->uId)->first();  // Get the user
+        if (!$user) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+
+        return response()->json([
+            'user' => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+            ],
+            'customer' => [
+                'id' => $customer->id,
+                'email' => $customer->email,
+                'phone' => $customer->phone,
+            ],
+            'address' => [
+                'id' => $address->id,
+                'address_line1' => $address->address_line1,
+                'address_line2' => $address->address_line2,
+                'state' => $address->state,
+                'city' => $address->city,
+                'postcode' => $address->postcode,
+                'country' => $address->country,
+                'is_for_retail' => $address->is_for_retail,
+                'latitude' => $address->latitude,
+                'longitude' => $address->longitude,
+                'country_id' => $address->country_id,
+                'state_id' => $address->state_id,
+                'city_id' => $address->city_id,
+            ],
+        ], 200);
+    }
 
 }

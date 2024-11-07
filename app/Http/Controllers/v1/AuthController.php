@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\v1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Address;
 use App\Models\AffiliatePlan;
 use App\Models\AffiliateWallet;
 use App\Models\AffiliateWalletHistory;
 use App\Models\Customer;
+use App\Models\CustomerAddress;
 use App\Models\FirebaseUserToken;
 use App\Models\HotelRestaurant;
 use App\Models\LoginActivity;
@@ -18,6 +20,7 @@ use App\Models\VenueCustomizedExperience;
 use App\Models\VenueIndustry;
 use App\Models\VenuePauseHistory;
 use App\Models\VenueType;
+use App\Helpers\UserActivityLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,8 +33,6 @@ use App\Mail\EmailChangeVerifyEmail;
 use App\Mail\UserVerifyEmail;
 use App\Mail\ByBestShopUserVerifyEmail;
 use JWTAuth;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 use App\Models\User;
 use Carbon\Carbon;
@@ -85,6 +86,13 @@ class AuthController extends Controller
             'email' => 'required|email',
             'password' => 'required',
             'source_app' => 'nullable|string|in:sales-associate,event,flow-master,inventory,metri-coach,pos,staff',
+            // Add Firebase and device fields
+            'firebase_token' => 'nullable|string',
+            'device_id' => 'nullable|string',
+            'device_type' => 'nullable|string|in:ios,android',
+            'device_model' => 'nullable|string',
+            'os_version' => 'nullable|string',
+            'app_version' => 'nullable|string'
         ]);
 
         if ($validator->fails()) {
@@ -100,16 +108,34 @@ class AuthController extends Controller
             $allow_clockinout = true;
         }
 
-        // Check for the specific email and password combination
         if ($credentials['email'] === 'vt-test-camera@venueboost.io' && $credentials['password'] === 'VB2232!$-') {
-            // Attempt to authenticate as 'bybestapartments@gmail.com' with 'Test12345!'
             $credentials = ['email' => 'bybestapartments@gmail.com', 'password' => 'Test12345!'];
             $visionTrack = true;
         }
 
-
         if (!$token = JWTAuth::attempt($credentials)) {
             return response()->json(['error' => 'Email or password is incorrect. Please try again.'], 401);
+        }
+
+        // Handle Firebase token if provided
+        $user = auth()->user();
+        if ($request->firebase_token && $request->device_id) {
+            // Deactivate old tokens for this device
+            $user->firebaseTokens()
+                ->where('device_id', $request->device_id)
+                ->update(['is_active' => false]);
+
+            // Save new token
+            $user->firebaseTokens()->create([
+                'firebase_token' => $request->firebase_token,
+                'device_id' => $request->device_id,
+                'device_type' => $request->device_type,
+                'device_model' => $request->device_model,
+                'os_version' => $request->os_version,
+                'app_version' => $request->app_version,
+                'is_active' => true,
+                'last_used_at' => now()
+            ]);
         }
 
         return $this->respondWithToken($token, $sourceApp, $visionTrack, $allow_clockinout);
@@ -190,6 +216,8 @@ class AuthController extends Controller
             'app_source' => $request->source,
             'venue_id' => $request->venue_id,
         ]);
+
+        UserActivityLogger::log(auth()->user()->id, 'Login');
 
         return $this->respondWithTokenForEndUser($token, $request->source);
     }
@@ -347,6 +375,8 @@ class AuthController extends Controller
             return response()->json([
                 'user' => [
                     'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
                     'name' => $user->name,
                     'email' => $user->email,
                     'restaurants' => $restaurants,
@@ -367,6 +397,8 @@ class AuthController extends Controller
         return response()->json([
             'user' => [
                 'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
                 'name' => $user->name,
                 'email' => $user->email,
                 'employee' => $employee,
@@ -578,23 +610,34 @@ class AuthController extends Controller
      *     @OA\Response(response="401", description="Unauthenticated")
      * )
      */
-    public function logout(): JsonResponse
+    public function logout(Request $request): JsonResponse
     {
-
-        $token = JWTAuth::getToken();
-
-        if (!$token) {
-            throw new BadRequestHttpException('Token not provided');
-        }
         try {
-            JWTAuth::invalidate(JWTAuth::getToken());
+            $user = auth()->user();
+            $deviceId = $request->device_id;
+
+            // Check if user exists and has device ID before deactivating tokens
+            if ($user && $deviceId) {
+                $user->firebaseTokens()
+                    ->where('device_id', $deviceId)
+                    ->update(['is_active' => false]);
+            }
+
+            // Invalidate JWT token
+            $token = JWTAuth::getToken();
+            if ($token) {
+                JWTAuth::invalidate($token);
+            }
+
             auth()->logout();
+
+            return response()->json(['message' => 'Successfully logged out']);
+
         } catch (TokenInvalidException $e) {
-            throw new AccessDeniedHttpException('The token is invalid');
+            return response()->json(['error' => 'The token is invalid'], 401);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to logout'], 500);
         }
-
-        return response()->json(['message' => 'Successfully logged out']);
-
     }
 
     /**
@@ -1369,15 +1412,32 @@ class AuthController extends Controller
             'last_name' => 'required|string',
             'password' => 'required|string',
             'source' => 'required|string',
+            'phone_number' => 'required|string',
             'referral_code' => 'nullable|string',
+            'postcode' => 'required',
         ]);
 
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 400);
         }
 
+        $address = Address::create([
+            'address_line1' => $request->country . ' ' . $request->state . ' ' . $request->city . ' ' . $request->postcode,
+            'state' => $request->state,
+            'city' => $request->city,
+            'postcode' => $request->postcode,
+            'country' => $request->country,
+            'is_for_retail' => true,
+        ]);
+
+        if (!$address) {
+            return response()->json(['error' => 'Address not created'], 400);
+        }
+
         // create user first
         $user = User::create([
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
             'name' => $request->first_name . ' ' . $request->last_name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
@@ -1406,13 +1466,22 @@ class AuthController extends Controller
                 'user_id' => $user->id,
                 'name' => $request->first_name . ' ' . $request->last_name,
                 'email' => $request->email,
-                'phone' => '',
-                'address' => '',
+                'phone' => $request->phone_number,
+                'address' => $request->country . ' ' . $request->state . ' ' . $request->city . ' ' . $request->postcode,
                 'venue_id' => $venue->id,
             ]);
 
             if (!$customer) {
                 return response()->json(['error' => 'Customer not created'], 400);
+            }
+
+            $customerAddress = CustomerAddress::create([
+                'customer_id' => $customer->id,
+                'address_id' => $address->id,
+            ]);
+
+            if (!$customerAddress) {
+                return response()->json(['error' => 'Customer Address is not created'], 400);
             }
 
             // Insert user to CRM Pixel Breeze
@@ -1454,11 +1523,15 @@ class AuthController extends Controller
         $token = JWTAuth::attempt($credentials);
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
 
+        UserActivityLogger::log(auth()->user()->id, 'Sign Up');
+
         return response()->json([
             'message' => 'We sent a verification email',
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
                 'email' => $user->email,
                 'email_verified_at' => $user->email_verified_at,
             ],
