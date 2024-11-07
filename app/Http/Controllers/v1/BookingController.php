@@ -865,6 +865,129 @@ class BookingController extends Controller
         return response()->json(['message' => 'Booking status updated successfully', 'data' => $booking]);
     }
 
+    public function getBookingDetails(Request $request, $id): JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $booking = Booking::with([
+            'rentalUnit.accommodation_detail',
+            'rentalUnit.accommodation_rules',
+            'rentalUnit.accommodation_host_profile',
+            'guest',
+            'receipt',
+            'priceBreakdowns'
+        ])->where('venue_id', $venue->id)
+            ->where('id', $id)
+            ->first();
+
+        if (!$booking) {
+            return response()->json(['error' => 'Booking not found'], 404);
+        }
+
+        // Get rental unit gallery
+        $gallery = Gallery::where('rental_unit_id', $booking->rental_unit_id)
+            ->with('photo')
+            ->get()
+            ->map(function ($item) {
+                return [
+                    'photo_id' => $item->photo_id,
+                    'photo_url' => Storage::disk('s3')->temporaryUrl($item->photo->image_path, '+5 minutes')
+                ];
+            });
+
+        // Calculate nights and dates
+        $checkIn = Carbon::parse($booking->check_in_date);
+        $checkOut = Carbon::parse($booking->check_out_date);
+        $nights = $checkIn->diffInDays($checkOut);
+
+        return response()->json([
+            'booking' => [
+                'id' => $booking->id,
+                'confirmation_code' => $booking->confirmation_code,
+                'status' => $booking->status,
+                'created_at' => $booking->created_at,
+
+                // Dates
+                'check_in' => [
+                    'date' => $checkIn->format('Y-m-d'),
+                    'formatted' => $checkIn->format('M d, Y'),
+                    'time' => $booking->rentalUnit->accommodation_rules->check_in_from ?? 'N/A'
+                ],
+                'check_out' => [
+                    'date' => $checkOut->format('Y-m-d'),
+                    'formatted' => $checkOut->format('M d, Y'),
+                    'time' => $booking->rentalUnit->accommodation_rules->checkout_until ?? 'N/A'
+                ],
+                'nights' => $nights,
+
+                // Guest Info
+                'guest' => [
+                    'id' => $booking->guest->id,
+                    'name' => $booking->guest->name,
+                    'email' => $booking->guest->email,
+                    'phone' => $booking->guest->phone,
+                    'is_verified' => (bool)$booking->guest->user?->email_verified_at,
+                    'number_of_guests' => $booking->guest_nr
+                ],
+
+                // Payment Info
+                'payment' => [
+                    'method' => $booking->paid_with,
+                    'stripe_payment_id' => $booking->stripe_payment_id,
+                    'subtotal' => $booking->subtotal,
+                    'discount' => $booking->discount_price,
+                    'total' => $booking->total_amount,
+                    'prepayment' => $booking->prepayment_amount,
+                    'currency' => $booking->rentalUnit->currency,
+                    'receipt_id' => $booking->receipt?->receipt_id,
+                    'receipt_status' => $booking->receipt?->status
+                ],
+
+                // Property Info
+                'property' => [
+                    'id' => $booking->rentalUnit->id,
+                    'name' => $booking->rentalUnit->name,
+                    'type' => $booking->rentalUnit->accommodation_type,
+                    'address' => $booking->rentalUnit->address,
+                    'host' => [
+                        'name' => $booking->rentalUnit->accommodation_host_profile->host_name ?? 'N/A',
+                        'phone' => $booking->rentalUnit->accommodation_host_profile->host_phone ?? 'N/A'
+                    ],
+                    'photos' => $gallery,
+                    'details' => [
+                        'size' => $booking->rentalUnit->accommodation_detail->size ?? 'N/A',
+                        'bedrooms' => $booking->rentalUnit->accommodation_detail->bedrooms ?? 0,
+                        'bathrooms' => $booking->rentalUnit->accommodation_detail->bathrooms ?? 0
+                    ]
+                ],
+
+                // Price History
+                'price_history' => $booking->priceBreakdowns->map(function ($breakdown) {
+                    return [
+                        'type' => $breakdown->type,
+                        'price_difference' => $breakdown->price_difference,
+                        'total_adjustment' => $breakdown->total_adjustment,
+                        'previous_total' => $breakdown->previous_total,
+                        'new_total' => $breakdown->new_total,
+                        'created_at' => $breakdown->created_at
+                    ];
+                })
+            ]
+        ]);
+    }
+
     private function generateConfirmationCode($length = 12): string
         {
         $characters = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';

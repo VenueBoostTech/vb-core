@@ -178,7 +178,7 @@ class EndUserController extends Controller
                 'customer',
                 'reservation',
                 'restaurant',
-                'orderProducts',
+                'orderProducts.product',
                 'inventoryActivities',
                 'orderDelivery',
                 'paymentMethod',
