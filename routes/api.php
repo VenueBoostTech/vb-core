@@ -1529,6 +1529,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
             Route::group(['prefix' => 'notifications'], function () {
                 Route::get('/', [NotificationsController::class, 'index']);
+                Route::get('/counts', [NotificationsController::class, 'getCounts']);  // New route
                 Route::put('/{id}/mark-as-read', [NotificationsController::class, 'markAsRead']);
                 Route::put('/mark-all-as-read', [NotificationsController::class, 'markAllAsRead']);
                 Route::delete('/{id}', [NotificationsController::class, 'destroy']);
