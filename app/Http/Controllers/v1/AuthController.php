@@ -32,8 +32,6 @@ use App\Mail\EmailChangeVerifyEmail;
 use App\Mail\UserVerifyEmail;
 use App\Mail\ByBestShopUserVerifyEmail;
 use JWTAuth;
-use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 use App\Models\User;
 use Carbon\Carbon;
@@ -1391,113 +1389,6 @@ class AuthController extends Controller
             \Sentry\captureException($e);
             return response()->json(['message' => $e->getMessage()], 500);
         }
-    }
-
-    // TODO: update the customer profile
-
-    public function updateProfile(Request $request): JsonResponse {
-        $validator = Validator::make($request->all(), [
-            'first_name' => 'required|string',
-            'last_name' => 'required|string',
-            'phone' => 'required|string',
-            'email' => 'required|string|email',
-            'street_address' => 'required|string',
-            'cId' => 'required',
-            'uId' => 'required',
-            'aId' => 'required',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 400);
-        }
-
-        try {
-            $user = User::where('id', $request->uId)->first();
-            $user->first_name = $request->first_name;
-            $user->last_name = $request->last_name;
-            $user->name = $request->first_name . ' ' . $request->last_name;
-            $user->email = $request->email;
-            $user->save();
-
-            $customer = Customer::where('id', $request->cId)->first();
-            $customer->name = $request->first_name . ' ' . $request->last_name;
-            $customer->email = $request->email;
-            $customer->phone = $request->phone;
-            $customer->address = $request->street_address;
-            $customer->save();
-
-            $address = Address::where('id', $request->aId)->first();
-            $address->address_line1 = $request->street_address;
-            $address->state = $request->state;
-            $address->city = $request->city;
-            $address->postcode = $request->zip;
-            $address->country = $request->country;
-            $address->save();
-
-            return response()->json([
-                'message' => 'Profile updated successfully',
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
-                    'email_verified_at' => $user->email_verified_at,
-                ],
-            ], 200);
-        } catch (\Exception $e) {
-            \Sentry\captureException($e);
-            return response()->json(['message' => $e->getMessage()], 500);
-        }
-    }
-
-    public function getCustomerProfile(Request $request): JsonResponse
-    {
-        $customer = Customer::where('id', $request->id)->first();
-        if (!$customer) {
-            return response()->json(['error' => 'Customer not found'], 404);
-        }
-
-        $customerAddress = CustomerAddress::where('customer_id', $customer->id)->first();
-        if (!$customerAddress) {
-            return response()->json(['error' => 'Customer Address not found'], 404);
-        }
-
-        $address = Address::where('id', $customerAddress->address_id)->first();
-        if (!$address) {
-            return response()->json(['error' => 'Address not found'], 404);
-        }
-
-        $user = User::where('id', $request->uId)->first();  // Get the user
-        if (!$user) {
-            return response()->json(['error' => 'User not found'], 404);
-        }
-
-        return response()->json([
-            'user' => [
-                'id' => $user->id,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-            ],
-            'customer' => [
-                'id' => $customer->id,
-                'email' => $customer->email,
-                'phone' => $customer->phone,
-            ],
-            'address' => [
-                'id' => $address->id,
-                'address_line1' => $address->address_line1,
-                'address_line2' => $address->address_line2,
-                'state' => $address->state,
-                'city' => $address->city,
-                'postcode' => $address->postcode,
-                'country' => $address->country,
-                'is_for_retail' => $address->is_for_retail,
-                'latitude' => $address->latitude,
-                'longitude' => $address->longitude,
-                'country_id' => $address->country_id,
-                'state_id' => $address->state_id,
-                'city_id' => $address->city_id,
-            ],
-        ], 200);
     }
 
     public function registerEndUser(Request $request): JsonResponse

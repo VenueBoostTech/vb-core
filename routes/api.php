@@ -74,8 +74,6 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::post('/logout-affiliate', 'App\Http\Controllers\v1\AuthController@logout');
         Route::post('/logout-enduser', 'App\Http\Controllers\v1\AuthController@logout');
         Route::post('/verify-email', 'App\Http\Controllers\v1\AuthController@verifyEmail');
-        Route::post('/update-customer', 'App\Http\Controllers\v1\AuthController@updateProfile');
-        Route::get('/get-customer-data', 'App\Http\Controllers\v1\AuthController@getCustomerProfile');
     });
 
     Route::group([
@@ -1408,6 +1406,8 @@ Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
                 Route::post('/marketing-settings', 'App\Http\Controllers\v3\EndUserController@updateMarketingSettings');
                 Route::get('/profile', 'App\Http\Controllers\v3\EndUserController@getGuestProfile');
                 Route::put('/profile', 'App\Http\Controllers\v3\EndUserController@updateProfile');
+                Route::put('/customer-profile', 'App\Http\Controllers\v1\EndUserController@updateCustomerProfile');
+                Route::get('/customer-profile', 'App\Http\Controllers\v1\EndUserController@getCustomerProfile');
             });
         });
     });
