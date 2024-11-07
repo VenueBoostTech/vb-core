@@ -19,30 +19,86 @@ class BbProductsController extends Controller
     public function singleProduct($product_id, $product_url): \Illuminate\Http\JsonResponse
     {
         try {
-            $currency = Currency::where('is_primary', '=', true)->first();
-
-            $product = Product::select("store_products.*",
-                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_products.product_name, '$.en')) AS product_name_en"),
-                DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_products.product_short_description, '$.en')) AS product_short_description_en"),
-                DB::raw("(SELECT MAX(store_products_variants.sale_price) FROM store_products_variants WHERE store_products_variants.product_id = store_products.id) as var_sale_price"),
-                DB::raw("(SELECT MIN(store_products_variants.date_sale_start) FROM store_products_variants WHERE store_products_variants.product_id = store_products.id) as var_date_sale_start"),
-                DB::raw("(SELECT MAX(store_products_variants.date_sale_end) FROM store_products_variants WHERE store_products_variants.product_id = store_products.id) as var_date_sale_end"),
-                DB::raw("(SELECT MAX(store_products_variants.regular_price) FROM store_products_variants WHERE store_products_variants.product_id = store_products.id) as max_regular_price"),
-                DB::raw("(SELECT MIN(store_products_variants.regular_price) FROM store_products_variants WHERE store_products_variants.product_id = store_products.id) as min_regular_price"),
-                DB::raw("(SELECT COUNT(store_products_variants.currency_alpha) FROM store_products_variants WHERE store_products_variants.product_id = store_products.id AND store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha"))
+            $product = Product::select(
+                "products.*",
+                DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
+                DB::raw("(SELECT MIN(vb_store_products_variants.date_sale_start) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_start"),
+                DB::raw("(SELECT MAX(vb_store_products_variants.date_sale_end) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_end"),
+                DB::raw("(SELECT MAX(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as max_regular_price"),
+                DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_regular_price"),
+                DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
+            )
                 ->where('id', '=', $product_id)
                 ->where('product_url', '=', $product_url)
                 ->with(['attribute.option', 'galley', 'postal'])
                 ->first();
 
             if (!$product) {
-                return response()->json(['error' => 'Product not found'], 404);
+                return response()->json(['error' => 'Not found product'], 404);
             }
 
-            $brand = Brand::where('id', '=', $product->brand_id)->first();
-            $bb_members = Member::where('status_id', '=', 1)->first();
 
-            // ... (keep other queries as needed, adjusting for API use)
+            // $currency = Currency::where('is_primary', '=', true)->first();
+            $brand = Brand::where('id', '=', $product->brand_id)->first();
+            $bb_memebers = Member::first();
+
+            $related_products = Product
+                ::where('products.title', 'LIKE', '%' . substr($product->title, 0, strlen($product->title) / 2) . '%')
+                ->select(
+                    "products.*",
+                    DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
+                    DB::raw("(SELECT MIN(vb_store_products_variants.date_sale_start) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_start"),
+                    DB::raw("(SELECT MAX(vb_store_products_variants.date_sale_end) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_end"),
+                    DB::raw("(SELECT MAX(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as max_regular_price"),
+                    DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_regular_price"),
+                    DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
+                )
+                ->where('products.brand_id', '=', $brand->id)
+                ->where('products.id', '<>', $product->id)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.warehouse_alpha')
+                ->whereNotNull('products.currency_alpha')
+                ->where('products.product_status', '=', 1)
+                ->with(['attribute.option', 'galley'])
+                ->limit(4)->get();
+
+            $related_products_cros = Product
+                ::where('products.id', '<>', $product->id)
+                ->where('products.brand_id', '=', $brand->id)
+                ->where('products.product_status', '=', 1)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.warehouse_alpha')
+                ->whereNotNull('products.currency_alpha')
+                ->select(
+                    "products.*",
+                    DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
+                    DB::raw("(SELECT MIN(vb_store_products_variants.date_sale_start) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_start"),
+                    DB::raw("(SELECT MAX(vb_store_products_variants.date_sale_end) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_end"),
+                    DB::raw("(SELECT MAX(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as max_regular_price"),
+                    DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_regular_price"),
+                    DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
+                )
+                ->with(['attribute.option', 'galley'])
+                ->limit(4 - count($related_products))->get();
+
+            $related_products = $related_products->concat($related_products_cros);
+
+            $atributes = DB::table('store_product_atributes')->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_atributes.atribute_id')
+                ->join('store_attributes', 'store_attributes.id', '=', 'store_attributes_options.attribute_id')
+                ->select(
+                    DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
+                    DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes_options.option_name, '$." . App::getLocale() . "')) AS option_name"),
+                    'store_attributes_options.order_id'
+                )
+                ->orderBy('store_attributes_options.order_id', 'asc')
+                ->where('store_product_atributes.product_id', '=', $product->id)
+                ->get();
+
+            $wish_list_products = app('wishlist')->getContent();
+            $payment_methods = PaymentMothod::where('status_id', '=', 1)->orderBy('id', 'ASC')->get();
+            $countries = Country::all();
+            $cities = City::all();
+
 
             $response_data = [
                 'currency' => $currency,
@@ -78,7 +134,8 @@ class BbProductsController extends Controller
                     $selected_key = 0;
                     try {
                         $selected_key = intval($selected[$key]);
-                    } catch(\Throwable $th) {}
+                    } catch (\Throwable $th) {
+                    }
 
                     if (intval($variant_attr->atribute_id) != $selected_key) {
                         $is_matched = false;
