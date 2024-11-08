@@ -137,8 +137,17 @@ class ChatController extends Controller
             return response()->json($validator->errors(), 400);
         }
 
-        // Check if the chat already exists
-        $chat = Chat::where('end_user_id', $request->user_id)
+        // Check if the chat already exists with all necessary relationships
+        $chat = Chat::with([
+            'endUser',
+            'messages' => function($query) {
+                $query->orderBy('created_at', 'desc');
+            },
+            'order.items.product',  // Include order details if exists
+            'booking.rentalUnit',   // Include booking details if exists
+            'booking.guest'
+        ])
+            ->where('end_user_id', $request->user_id)
             ->where('venue_user_id', $venue->user_id)
             ->where('venue_id', $venue->id)
             ->first();
@@ -147,12 +156,70 @@ class ChatController extends Controller
         if (!$chat) {
             $chat = Chat::create([
                 'end_user_id' => $request->user_id,
-                'venue_user_id' =>$venue->user->id,
+                'venue_user_id' => $venue->user->id,
                 'venue_id' => $venue->id,
                 'status' => Chat::STATUS_ACTIVE,
             ]);
+
+            // Reload the chat with all relationships
+            $chat->load([
+                'endUser',
+                'messages' => function($query) {
+                    $query->orderBy('created_at', 'desc');
+                },
+                'order.items.product',
+                'booking.rentalUnit',
+                'booking.guest'
+            ]);
         }
 
-        return response()->json($chat, 201);
+        $lastMessage = $chat->messages->first();
+        $lastMessageTime = $lastMessage ? $lastMessage->created_at : $chat->created_at;
+
+        $formattedChat = [
+            'id' => $chat->id,
+            'end_user_id' => $chat->end_user_id,
+            'end_user_name' => $chat->endUser->name ?? 'Unknown',
+            'venue_user_id' => $chat->venue_user_id,
+            'venue_id' => $chat->venue_id,
+            'status' => $chat->status,
+            'created_at' => $chat->created_at,
+            'updated_at' => $chat->updated_at,
+            'last_message_time' => $this->formatDateTime($lastMessageTime),
+            'last_message_text' => $lastMessage ? $lastMessage->content : '',
+            'sentByMe' => $lastMessage && $lastMessage->sender_id === $chat->venue_user_id,
+            'messages' => $chat->messages,
+            'order' => $chat->order ? [
+                'id' => $chat->order->id,
+                'status' => $chat->order->status,
+                'total' => $chat->order->total,
+                'items' => $chat->order->items->map(function($item) {
+                    return [
+                        'product_name' => $item->product->name,
+                        'quantity' => $item->quantity,
+                        'price' => $item->price
+                    ];
+                })
+            ] : null,
+            'booking' => $chat->booking ? [
+                'id' => $chat->booking->id,
+                'status' => $chat->booking->status,
+                'check_in_date' => $chat->booking->check_in_date,
+                'check_out_date' => $chat->booking->check_out_date,
+                'rental_unit' => [
+                    'id' => $chat->booking->rentalUnit->id,
+                    'name' => $chat->booking->rentalUnit->name
+                ],
+                'guest' => [
+                    'id' => $chat->booking->guest->id,
+                    'name' => $chat->booking->guest->name
+                ]
+            ] : null
+        ];
+
+        return response()->json([
+            'message' => $chat->wasRecentlyCreated ? 'Chat created successfully' : 'Existing chat retrieved',
+            'chat' => $formattedChat
+        ], $chat->wasRecentlyCreated ? 201 : 200);
     }
 }
