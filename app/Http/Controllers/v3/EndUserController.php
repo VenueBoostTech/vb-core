@@ -565,34 +565,70 @@ class EndUserController extends Controller
 
         $user = $userOrResponse;
 
-        $validator = Validator::make($request->all(), [
-            'promotion_sms_notify' => 'required|boolean',
-            'promotion_email_notify' => 'required|boolean',
-            'booking_sms_notify' => 'required|boolean',
-            'booking_email_notify' => 'required|boolean'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 400);
+        if($request->flag) {
+            $validator = Validator::make($request->all(), [
+                'promotion_sms_notify' => 'required|boolean',
+                'promotion_email_notify' => 'required|boolean',
+                'booking_sms_notify' => 'required|boolean',
+                'booking_email_notify' => 'required|boolean'
+            ]);
+    
+            if ($validator->fails()) {
+                return response()->json(['errors' => $validator->errors()], 400);
+            }
+    
+            $marketingSettings = GuestMarketingSettings::updateOrCreate(
+                [
+                    'guest_id' => $user->guest->id
+                ],
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => $request->promotion_sms_notify,
+                    'promotion_email_notify' => $request->promotion_email_notify,
+                    'booking_sms_notify' => $request->booking_sms_notify,
+                    'booking_email_notify' => $request->booking_email_notify
+                ]
+            );
+    
+            return response()->json([
+                'message' => 'Marketing settings updated successfully',
+                'marketing_settings' => $marketingSettings
+            ], 200);
+        } else {
+            $validator = Validator::make($request->all(), [
+                'promotion_sms_notify' => 'required|boolean',
+                'promotion_email_notify' => 'required|boolean',
+                'order_sms_notify' => 'required|boolean',
+                'order_email_notify' => 'required|boolean'
+            ]);
+    
+            if ($validator->fails()) {
+                return response()->json(['errors' => $validator->errors()], 400);
+            }
+    
+            $marketingSettings = GuestMarketingSettings::updateOrCreate(
+                [
+                    'guest_id' => $user->guest->id
+                ],
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => $request->promotion_sms_notify,
+                    'promotion_email_notify' => $request->promotion_email_notify,
+                    'booking_sms_notify' => $request->order_sms_notify,
+                    'booking_email_notify' => $request->order_email_notify
+                ]
+            );
+    
+            return response()->json([
+                'message' => 'Marketing settings updated successfully',
+                'marketing_settings' => [
+                    'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
+                    'promotion_email_notify' => $marketingSettings->promotion_email_notify,
+                    'order_sms_notify' => $marketingSettings->booking_sms_notify,
+                    'order_email_notify' => $marketingSettings->booking_email_notify
+                ]
+            ], 200);
         }
-
-        $marketingSettings = GuestMarketingSettings::updateOrCreate(
-            [
-                'guest_id' => $user->guest->id
-            ],
-            [
-                'user_id' => $user->id,
-                'promotion_sms_notify' => $request->promotion_sms_notify,
-                'promotion_email_notify' => $request->promotion_email_notify,
-                'booking_sms_notify' => $request->booking_sms_notify,
-                'booking_email_notify' => $request->booking_email_notify
-            ]
-        );
-
-        return response()->json([
-            'message' => 'Marketing settings updated successfully',
-            'marketing_settings' => $marketingSettings
-        ], 200);
     }
 
     //updateProfile
