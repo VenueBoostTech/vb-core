@@ -2,10 +2,12 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class Product extends Model
 {
@@ -26,8 +28,16 @@ class Product extends Model
         'is_for_retail',
         'article_no',
         'additional_code',
-        'sale_price', 'date_sale_start', 'date_sale_end', 'product_url',
-        'product_type', 'weight', 'length', 'width', 'height', 'brand_id',
+        'sale_price',
+        'date_sale_start',
+        'date_sale_end',
+        'product_url',
+        'product_type',
+        'weight',
+        'length',
+        'width',
+        'height',
+        'brand_id',
         'restaurant_id',
         'third_party_product_id',
         'unit_measure',
@@ -133,15 +143,18 @@ class Product extends Model
             ->withTimestamps();
     }
 
-    public function attribute() {
+    public function attribute()
+    {
         return $this->hasMany(VbStoreProductAttribute::class, 'product_id', 'id');
     }
 
-    public function galley() {
+    public function galley()
+    {
         return $this->hasMany(ProductGallery::class, 'product_id', 'id');
     }
 
-    public function postal() {
+    public function postal()
+    {
         return $this->belongsTo(Postal::class, 'shipping_class', 'id');
     }
 
@@ -208,5 +221,25 @@ class Product extends Model
     public function giftSuggestions(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(GiftSuggestion::class);
+    }
+
+    /**
+     * Check if the slider has a button.
+     */
+    protected function imagePath(): Attribute
+    {
+        return Attribute::make(
+            get: fn($value) => $value != null ? Storage::disk('s3')->temporaryUrl($value, '+5 minutes') : null,
+        );
+    }
+
+    /**
+     * Change Image path to temporary url.
+     */
+    protected function imageThumbnailPath(): Attribute
+    {
+        return Attribute::make(
+            get: fn($value) => $value != null ? Storage::disk('s3')->temporaryUrl($value, '+5 minutes') : null,
+        );
     }
 }

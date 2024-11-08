@@ -4,9 +4,14 @@ namespace App\Http\Controllers\AppSuite\Staff;
 
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\FirebaseUserToken;
+use App\Models\Notification;
+use App\Models\NotificationSetting;
+use App\Models\NotificationType;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\Department;
+use App\Models\User;
 use App\Services\VenueService;
 use App\Services\UserService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -15,6 +20,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
+use Kreait\Firebase\Messaging\CloudMessage;
 
 class TeamController extends Controller
 {
@@ -476,11 +482,93 @@ class TeamController extends Controller
             return response()->json(['error' => 'Employee must have the Team Leader role to be assigned as team leader'], 422);
         }
 
-        // Assign the team leader
-        $team->team_leader_id = $employee->id;
-        $team->save();
+        try {
+            DB::beginTransaction();
 
-        return response()->json(['message' => 'Team leader assigned successfully']);
+            // Assign the team leader
+            $team->team_leader_id = $employee->id;
+            $team->save();
+
+            // Check notification type and user settings
+            $notificationType = NotificationType::where('name', 'team_leader_assignment')->first();
+
+            if ($notificationType) {
+                // Check if user has enabled this notification type
+                $notificationEnabled = NotificationSetting::where('user_id', $employee->user_id)
+                    ->where('notification_type_id', $notificationType->id)
+                    ->where('is_enabled', true)
+                    ->exists();
+
+                $settingExists = NotificationSetting::where('user_id', $employee->user_id)
+                    ->where('notification_type_id', $notificationType->id)
+                    ->exists();
+
+                if (!$settingExists || $notificationEnabled) {
+                    // Create database notification
+                    $notification = Notification::create([
+                        'employee_id' => $employee->id,
+                        'user_id' => $employee->user_id,
+                        'venue_id' => $venue->id,
+                        'notification_type_id' => $notificationType->id,
+                        'text' => "You have been assigned as team leader for team '{$team->name}'",
+                        'sent_at' => now()
+                    ]);
+
+                    $user = User::where('id', $employee->user_id)->first();
+                    // Get user's active Firebase tokens
+                    $firebaseTokens = $user->firebaseTokens()
+                        ->where('is_active', true)
+                        ->pluck('firebase_token')
+                        ->toArray();
+
+                    if (!empty($firebaseTokens)) {
+                        $messaging = app('firebase.messaging');
+
+                        // Prepare notification message
+                        $message = CloudMessage::new()
+                            ->withNotification([
+                                'title' => 'Team Leader Assignment',
+                                'body' => "You have been assigned as team leader for team '{$team->name}'",
+                                'sound' => 'default'
+                            ])
+                            ->withData([
+                                'notification_id' => (string)$notification->id,
+                                'type' => 'team_leader_assignment',
+                                'team_id' => (string)$team->id,
+                                'venue_id' => (string)$venue->id,
+                                // Additional data for React Native handling
+                                'click_action' => 'team_details',
+                                'priority' => 'high'
+                            ]);
+
+                        // Send to each token
+                        foreach ($firebaseTokens as $token) {
+                            try {
+                                $messaging->send(
+                                    $message->withChangedTarget('token', $token)
+                                );
+                            } catch (\Exception $e) {
+                                // If token is invalid, mark it as inactive
+                                if (str_contains($e->getMessage(), 'invalid-registration-token')) {
+                                    FirebaseUserToken::where('firebase_token', $token)
+                                        ->update(['is_active' => false]);
+                                }
+                                \Log::error('Firebase notification failed: ' . $e->getMessage());
+                            }
+                        }
+                    }
+                }
+            }
+
+            DB::commit();
+
+            return response()->json(['message' => 'Team leader assigned successfully']);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Team leader assignment failed: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to assign team leader: ' . $e->getMessage()], 500);
+        }
     }
 
     public function assignOperationsManager(Request $request): JsonResponse

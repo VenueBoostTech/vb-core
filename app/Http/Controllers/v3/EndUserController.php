@@ -509,26 +509,49 @@ class EndUserController extends Controller
 
         $user = $userOrResponse;
 
-        // Get or create marketing settings
-        $marketingSettings = GuestMarketingSettings::firstOrCreate(
-            ['guest_id' => $user->guest->id],
-            [
-                'user_id' => $user->id,
-                'promotion_sms_notify' => true,
-                'promotion_email_notify' => true,
-                'booking_sms_notify' => true,
-                'booking_email_notify' => true
-            ]
-        );
+        if($request->get('flag') == 'true') {
+            // Get or create marketing settings
+            $marketingSettings = GuestMarketingSettings::firstOrCreate(
+                ['guest_id' => $user->guest->id],
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => true,
+                    'promotion_email_notify' => true,
+                    'booking_sms_notify' => true,
+                    'booking_email_notify' => true
+                ]
+            );
 
-        return response()->json([
-            'marketing_settings' => [
-                'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
-                'promotion_email_notify' => $marketingSettings->promotion_email_notify,
-                'booking_sms_notify' => $marketingSettings->booking_sms_notify,
-                'booking_email_notify' => $marketingSettings->booking_email_notify
-            ]
-        ], 200);
+            return response()->json([
+                'marketing_settings' => [
+                    'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
+                    'promotion_email_notify' => $marketingSettings->promotion_email_notify,
+                    'booking_sms_notify' => $marketingSettings->booking_sms_notify,
+                    'booking_email_notify' => $marketingSettings->booking_email_notify
+                ]
+            ], 200);
+        } else {
+            // Get or create marketing settings
+            $marketingSettings = GuestMarketingSettings::firstOrCreate(
+                ['guest_id' => $user->guest->id],
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => true,
+                    'promotion_email_notify' => true,
+                    'booking_sms_notify' => true,
+                    'booking_email_notify' => true
+                ]
+            );
+
+            return response()->json([
+                'marketing_settings' => [
+                    'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
+                    'promotion_email_notify' => $marketingSettings->promotion_email_notify,
+                    'order_sms_notify' => $marketingSettings->booking_sms_notify,
+                    'order_email_notify' => $marketingSettings->booking_email_notify
+                ]
+            ], 200);
+        }
     }
 
     //updateMarketingSettings
@@ -542,34 +565,70 @@ class EndUserController extends Controller
 
         $user = $userOrResponse;
 
-        $validator = Validator::make($request->all(), [
-            'promotion_sms_notify' => 'required|boolean',
-            'promotion_email_notify' => 'required|boolean',
-            'booking_sms_notify' => 'required|boolean',
-            'booking_email_notify' => 'required|boolean'
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 400);
+        if($request->flag) {
+            $validator = Validator::make($request->all(), [
+                'promotion_sms_notify' => 'required|boolean',
+                'promotion_email_notify' => 'required|boolean',
+                'booking_sms_notify' => 'required|boolean',
+                'booking_email_notify' => 'required|boolean'
+            ]);
+    
+            if ($validator->fails()) {
+                return response()->json(['errors' => $validator->errors()], 400);
+            }
+    
+            $marketingSettings = GuestMarketingSettings::updateOrCreate(
+                [
+                    'guest_id' => $user->guest->id
+                ],
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => $request->promotion_sms_notify,
+                    'promotion_email_notify' => $request->promotion_email_notify,
+                    'booking_sms_notify' => $request->booking_sms_notify,
+                    'booking_email_notify' => $request->booking_email_notify
+                ]
+            );
+    
+            return response()->json([
+                'message' => 'Marketing settings updated successfully',
+                'marketing_settings' => $marketingSettings
+            ], 200);
+        } else {
+            $validator = Validator::make($request->all(), [
+                'promotion_sms_notify' => 'required|boolean',
+                'promotion_email_notify' => 'required|boolean',
+                'order_sms_notify' => 'required|boolean',
+                'order_email_notify' => 'required|boolean'
+            ]);
+    
+            if ($validator->fails()) {
+                return response()->json(['errors' => $validator->errors()], 400);
+            }
+    
+            $marketingSettings = GuestMarketingSettings::updateOrCreate(
+                [
+                    'guest_id' => $user->guest->id
+                ],
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => $request->promotion_sms_notify,
+                    'promotion_email_notify' => $request->promotion_email_notify,
+                    'booking_sms_notify' => $request->order_sms_notify,
+                    'booking_email_notify' => $request->order_email_notify
+                ]
+            );
+    
+            return response()->json([
+                'message' => 'Marketing settings updated successfully',
+                'marketing_settings' => [
+                    'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
+                    'promotion_email_notify' => $marketingSettings->promotion_email_notify,
+                    'order_sms_notify' => $marketingSettings->booking_sms_notify,
+                    'order_email_notify' => $marketingSettings->booking_email_notify
+                ]
+            ], 200);
         }
-
-        $marketingSettings = GuestMarketingSettings::updateOrCreate(
-            [
-                'guest_id' => $user->guest->id
-            ],
-            [
-                'user_id' => $user->id,
-                'promotion_sms_notify' => $request->promotion_sms_notify,
-                'promotion_email_notify' => $request->promotion_email_notify,
-                'booking_sms_notify' => $request->booking_sms_notify,
-                'booking_email_notify' => $request->booking_email_notify
-            ]
-        );
-
-        return response()->json([
-            'message' => 'Marketing settings updated successfully',
-            'marketing_settings' => $marketingSettings
-        ], 200);
     }
 
     //updateProfile
@@ -662,18 +721,14 @@ class EndUserController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
-            'first_name' => ['required', 'string'],
-            'last_name' => ['required', 'string'],
-            'phone' => ['required', 'string'],
-            'email' => ['required', 'email'],
-            'address.address_line1' => ['required', 'string'],
-            'address.address_line2' => ['nullable', 'string'],
-            'address.city_id' => ['required', 'exists:cities,id'],
-            'address.state_id' => ['required', 'exists:states,id'],
-            'address.postcode' => ['required', 'string'],
-            'address.country_id' => ['required', 'exists:countries,id'],
-            'address.latitude' => ['nullable', 'numeric'],
-            'address.longitude' => ['nullable', 'numeric']
+            'first_name' => 'required|string',
+            'last_name' => 'required|string',
+            'phone' => 'required|string',
+            'email' => 'required|string|email',
+            'street_address' => 'required|string',
+            'cId' => 'required',
+            'uId' => 'required',
+            'aId' => 'nullable',
         ]);
 
         if ($validator->fails()) {
@@ -697,9 +752,39 @@ class EndUserController extends Controller
                 $guest->update([
                     'name' => $request->first_name . ' ' . $request->last_name,
                     'email' => $request->email,
-                    'phone' => $request->phone
+                    'phone' => $request->phone,
+                    'address' => $request->street_address,
                 ]);
             }
+
+            $address = Address::where('id', $request->aId)->exists();
+            if($address) {
+                $address->address_line1 = $request->street_address;
+                $address->state = $request->state;
+                $address->city = $request->city;
+                $address->postcode = $request->zip;
+                $address->country = $request->country;
+                $address->save();
+
+                EndUserAddress::updateOrCreate(
+                    ['user_id' => $user->id],
+                    ['address_id' => $address->id]
+                );
+            } else {
+                $address = Address::create([
+                    'address_line1' => $request->street_address,
+                    'city' => $request->city,
+                    'state' => $request->state,
+                    'postcode' => $request->zip,
+                    'country' => $request->country,
+                ]);
+
+                EndUserAddress::updateOrCreate(
+                    ['user_id' => $user->id],
+                    ['address_id' => $address->id]
+                );
+            }
+            
 
             // Create or Update Address
             if ($request->has('address')) {
