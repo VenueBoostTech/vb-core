@@ -154,7 +154,31 @@ class EndUserChatController extends Controller
             $chat = Chat::create($chatData);
         }
 
-        return response()->json($chat, 201);
+        // Load relationships based on chat type
+        $chat->load([
+            'endUser:id,name,email',
+            'venueUser:id,name,email',
+            'venue:id,name,logo',
+            'messages' => function($query) {
+                $query->orderBy('created_at', 'desc')
+                    ->limit(20); // Get last 20 messages
+            },
+            'messages.user:id,name,email',
+            $request->type === Chat::TYPE_ORDER ? 'order' : 'booking'
+        ]);
+
+        // If venue has logo, generate temporary URL
+        if ($chat->venue && $chat->venue->logo) {
+            $chat->venue->logo = Storage::disk('s3')->temporaryUrl(
+                $chat->venue->logo,
+                now()->addMinutes(5)
+            );
+        }
+
+        return response()->json([
+            'message' => $chat->wasRecentlyCreated ? 'Chat created successfully' : 'Chat retrieved successfully',
+            'chat' => $chat
+        ], $chat->wasRecentlyCreated ? 201 : 200);
     }
 
     // Socket use

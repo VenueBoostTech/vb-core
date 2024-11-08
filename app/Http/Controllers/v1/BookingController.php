@@ -5,6 +5,7 @@ namespace App\Http\Controllers\v1;
 use App\Mail\GuestReceiptEmail;
 use App\Mail\NewBookingEmail;
 use App\Mail\RentalUnitBookingConfirmationEmail;
+use App\Models\Chat;
 use App\Models\Gallery;
 use App\Models\Guest;
 use App\Models\LoyaltyTier;
@@ -907,6 +908,21 @@ class BookingController extends Controller
                 ];
             });
 
+
+        // Get or create chat for this booking
+        $chat = Chat::firstOrCreate(
+            [
+                'booking_id' => $booking->id,
+                'end_user_id' => $booking->guest->user?->id,
+                'type' => Chat::TYPE_BOOKING
+            ],
+            [
+                'venue_user_id' => $booking->rentalUnit->venue->user_id,
+                'venue_id' => $booking->rentalUnit->venue_id,
+                'status' => Chat::STATUS_ACTIVE
+            ]
+        );
+
         // Calculate nights and dates
         $checkIn = Carbon::parse($booking->check_in_date);
         $checkOut = Carbon::parse($booking->check_out_date);
@@ -931,6 +947,7 @@ class BookingController extends Controller
                     'time' => $booking->rentalUnit->accommodation_rules->checkout_until ?? 'N/A'
                 ],
                 'nights' => $nights,
+                'chat' => $chat,
 
                 // Guest Info
                 'guest' => [

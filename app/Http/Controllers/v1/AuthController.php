@@ -10,6 +10,7 @@ use App\Models\AffiliateWalletHistory;
 use App\Models\Customer;
 use App\Models\CustomerAddress;
 use App\Models\FirebaseUserToken;
+use App\Models\Guest;
 use App\Models\HotelRestaurant;
 use App\Models\LoginActivity;
 use App\Models\MarketingLink;
@@ -505,10 +506,14 @@ class AuthController extends Controller
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
         $refreshTtl = $ttl * 8; // Refresh token TTL (8x longer)
 
+        // Calculate expiration timestamps
+        $expiresAt = now()->addSeconds($ttl)->timestamp;
+        $refreshExpiresAt = now()->addSeconds($refreshTtl)->timestamp;
+
         // Generate refresh token
         $refreshToken = JWTAuth::claims([
             'refresh' => true,
-            'exp' => now()->addSeconds($refreshTtl)->timestamp
+            'exp' => $refreshExpiresAt
         ])->fromUser(auth()->user());
 
         $user = auth()->user();
@@ -540,7 +545,8 @@ class AuthController extends Controller
                 $walletBalance = null;
             }
         } else {
-            $venue = null;
+            $guest = Guest::where('user_id', $user->id)->first();
+            $venue = Restaurant::where('id', $guest?->restaurant_id)->first();
             $referralCode = null;
             $currentTierName = null;
             $walletBalance = null;
@@ -556,6 +562,7 @@ class AuthController extends Controller
                 'currentTierName' => $currentTierName,
                 'walletBalance' => $walletBalance,
                 'enduser'=> $user->enduser,
+                'venue'=> $venue,
                 'customer'=> $user->customer ?? null,
                 'venue_app_key' => $venue->app_key ?? null,
             ],
@@ -564,10 +571,12 @@ class AuthController extends Controller
                 'name' => $venue?->name,
             ],
             'access_token' => $token,
-            'refresh_token' => $refreshToken,  // Added refresh token
+            'refresh_token' => $refreshToken,
             'token_type' => 'bearer',
             'expires_in' => $ttl,
-            'refresh_expires_in' => $refreshTtl  // Added refresh token expiration
+            'expires_at' => $expiresAt,
+            'refresh_expires_in' => $refreshTtl,
+            'refresh_expires_at' => $refreshExpiresAt
         ]);
     }
 
