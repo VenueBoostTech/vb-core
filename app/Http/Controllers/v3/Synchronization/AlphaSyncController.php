@@ -99,8 +99,8 @@ class AlphaSyncController extends Controller
         } else {
             // Perform the regular admin auth check
             $venue = $this->venueService->adminAuthCheck();
-
-            if (!$venue) {
+    
+            if (method_exists($venue, 'getStatusCode') && $venue->getStatusCode() != 200) {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
 
@@ -333,7 +333,7 @@ class AlphaSyncController extends Controller
             // Perform the regular admin auth check
             $venue = $this->venueService->adminAuthCheck();
 
-            if (!$venue) {
+            if (method_exists($venue, 'getStatusCode') && $venue->getStatusCode() != 200) {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
 
@@ -544,7 +544,7 @@ class AlphaSyncController extends Controller
             // Perform the regular admin auth check
             $venue = $this->venueService->adminAuthCheck();
 
-            if (!$venue) {
+            if (method_exists($venue, 'getStatusCode') && $venue->getStatusCode() != 200) {
                 return response()->json(['error' => 'Unauthorized'], 403);
             }
 

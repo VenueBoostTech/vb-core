@@ -13,10 +13,10 @@ use Illuminate\Support\Facades\DB;
 
 class BbCategoriesController extends Controller
 {
-    public function categoryProducts(Request $request): \Illuminate\Http\JsonResponse
+    public function categoryProducts(Request $request, string $category_url): \Illuminate\Http\JsonResponse
     {
         try {
-            $category_url = $request->input('category_url');
+            // $category_url = $request->input('category_url');
             // Assuming you have similar logic as in the original controller
             // Retrieve category, products, filters, etc.
 
@@ -291,7 +291,7 @@ class BbCategoriesController extends Controller
     public function showAllCategories(Request $request): \Illuminate\Http\JsonResponse
     {
         try {
-            $categories = Category::orderBy('name', 'ASC')->get();
+            $categories = Category::orderBy('title', 'ASC')->get();
 
             return response()->json([
                 'categories' => $categories

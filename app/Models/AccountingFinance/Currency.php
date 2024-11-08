@@ -15,6 +15,7 @@ class Currency extends Model
         'name',
         'exchange_rate',
         'currency_alpha',
+        'is_primary'
     ];
 
     protected $casts = [

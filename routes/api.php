@@ -113,9 +113,9 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::get('/products/searchpreview', [BbSearchController::class, 'searchProductPreview']);
 
         Route::prefix('category')->group(function () {
+            Route::get('/list', [BbCategoriesController::class, 'showAllCategories']);
             Route::get('/{category_url}', [BbCategoriesController::class, 'categoryProducts']);
             Route::get('/products/search', [BbCategoriesController::class, 'searchProducts']);
-            Route::get('/list', [BbCategoriesController::class, 'showAllCategories']);
         });
 
         Route::prefix('group')->group(function () {
@@ -1538,6 +1538,9 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                 Route::put('/{id}/mark-as-read', [NotificationsController::class, 'markAsRead']);
                 Route::put('/mark-all-as-read', [NotificationsController::class, 'markAllAsRead']);
                 Route::delete('/{id}', [NotificationsController::class, 'destroy']);
+
+                Route::get('/settings', [NotificationsController::class, 'getSettings']);
+                Route::put('/settings', [NotificationsController::class, 'updateSettings']);
             });
 
         });
