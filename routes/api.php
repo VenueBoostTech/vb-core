@@ -18,6 +18,7 @@ use App\Http\Controllers\AppSuite\Staff\EmployeeReportController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeTaskController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeTimesheetController;
 use App\Http\Controllers\AppSuite\Staff\L2EmployeeTimesheetController;
+use App\Http\Controllers\AppSuite\Staff\ServiceManagementController;
 use App\Http\Controllers\AppSuite\Staff\ShiftController;
 use App\Http\Controllers\AppSuite\Staff\StaffReportController;
 use App\Http\Controllers\AppSuite\Staff\TeamController;
@@ -1148,6 +1149,21 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::post('/', [AppClientController::class, 'createClient']);
                     Route::put('/{id}', [AppClientController::class, 'updateClient']);
                     Route::delete('/{id}', [AppClientController::class, 'deleteClient']);
+                });
+
+
+                Route::prefix('service-categories')->group(function () {
+                    Route::get('/', [ServiceManagementController::class, 'listCategories']);
+                    Route::post('/', [ServiceManagementController::class, 'createCategory']);
+                    Route::put('/{id}', [ServiceManagementController::class, 'updateCategory']);
+                    Route::delete('/{id}', [ServiceManagementController::class, 'deleteCategory']);
+                });
+
+                Route::prefix('services')->group(function () {
+                    Route::get('/', [ServiceManagementController::class, 'listServices']);
+                    Route::post('/', [ServiceManagementController::class, 'createService']);
+                    Route::put('/{id}', [ServiceManagementController::class, 'updateService']);
+                    Route::delete('/{id}', [ServiceManagementController::class, 'deleteService']);
                 });
 
                 Route::get('countries', [CompanySetupController::class, 'listCountries']);
