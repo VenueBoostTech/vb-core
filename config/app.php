@@ -201,6 +201,8 @@ return [
         Milon\Barcode\BarcodeServiceProvider::class,
         SimpleSoftwareIO\QrCode\QrCodeServiceProvider::class,
 
+        App\Providers\LeaveManagementServiceProvider::class,
+
     ],
 
     /*

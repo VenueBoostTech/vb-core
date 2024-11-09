@@ -1532,11 +1532,16 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
                     });
                 });
+
+                Route::group(['prefix' => 'shifts'], function () {
+                    Route::get('/', [ShiftController::class, 'getShiftsData']);
+                    Route::get('/leave-types', [ShiftController::class, 'getLeaveTypes']);
+                    Route::get('/leave-balance', [ShiftController::class, 'getLeaveBalance']);
+                    Route::post('/time-off', [ShiftController::class, 'requestTimeOff']);
+                });
             });
 
-            Route::group(['prefix' => 'shift'], function () {
-                Route::post('/shifts', [ShiftController::class, 'store']);
-            });
+
 
             Route::group(['prefix' => 'attendance'], function () {
                 Route::post('/', [AttendanceController::class, 'recordAttendance']);

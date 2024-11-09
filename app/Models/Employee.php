@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\HasLeaveManagement;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -13,6 +14,7 @@ class Employee extends Model
 {
     use hasFactory;
     use SoftDeletes;
+    use HasLeaveManagement;
 
     protected $table = 'employees';
 
@@ -295,6 +297,36 @@ class Employee extends Model
     public function acceptsSmsNotifications(): bool
     {
         return $this->preferences?->sms_notifications ?? false;
+    }
+
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
+
+    public function leaveRequests(): HasMany
+    {
+        return $this->hasMany(Schedule::class)->where('status', 'time_off');
+    }
+
+    public function getCurrentShiftAttribute()
+    {
+        return $this->schedules()
+            ->where('date', now()->toDateString())
+            ->where('status', '!=', 'time_off')
+            ->first();
+    }
+
+    public function getLeaveBalanceAttribute()
+    {
+        $currentYear = now()->year;
+        $totalLeaveDays = config('leave.annual_days', 30);
+
+        $usedDays = $this->leaveRequests()
+            ->whereYear('date', $currentYear)
+            ->sum('total_days');
+
+        return $totalLeaveDays - $usedDays;
     }
 
 }

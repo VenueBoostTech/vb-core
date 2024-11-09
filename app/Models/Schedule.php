@@ -10,7 +10,23 @@ class Schedule extends Model
     use HasFactory;
 
     protected $fillable = [
-        'employee_id', 'date', 'start_time', 'end_time', 'status', 'time_off_request', 'restaurant_id'
+        'employee_id',
+        'restaurant_id',
+        'date',
+        'end_date',
+        'start_time',
+        'end_time',
+        'status',
+        'leave_type_id',
+        'reason',
+        'total_days'
+    ];
+
+    protected $casts = [
+        'date' => 'date',
+        'end_date' => 'date',
+        'start_time' => 'datetime',
+        'end_time' => 'datetime',
     ];
 
     public function employee()
@@ -18,8 +34,13 @@ class Schedule extends Model
         return $this->belongsTo(Employee::class);
     }
 
-    public function restaurant()
+    public function venue(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return $this->belongsTo(Restaurant::class);
+        return $this->belongsTo(Restaurant::class, 'restaurant_id');
+    }
+
+    public function leaveType()
+    {
+        return $this->belongsTo(LeaveType::class);
     }
 }
