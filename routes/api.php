@@ -1539,13 +1539,17 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     Route::get('/leave-balance', [ShiftController::class, 'getLeaveBalance']);
                     Route::post('/time-off', [ShiftController::class, 'requestTimeOff']);
                 });
+
+                Route::group(['prefix' => 'attendance'], function () {
+                    Route::get('/', [AttendanceController::class, 'getAttendanceData']);
+                    Route::post('/check-in', [AttendanceController::class, 'checkIn']);
+                    Route::post('/check-out', [AttendanceController::class, 'checkOut']);
+                });
             });
 
 
 
-            Route::group(['prefix' => 'attendance'], function () {
-                Route::post('/', [AttendanceController::class, 'recordAttendance']);
-            });
+
 
             Route::group(['prefix' => 'notifications'], function () {
                 Route::get('/', [NotificationsController::class, 'index']);
@@ -1635,6 +1639,7 @@ Route::get('api/v1/end-user/messages/{chatId}', 'App\Http\Controllers\v1\EndUser
 
 
 
+// OLD Routes -- Keep here, maybe delete on the future
 //Route::prefix('checkin-methods')->group(function () {
 //    Route::post('create', 'App\Http\Controllers\v3\CheckinController@create');
 //    Route::get('get/{id}', 'App\Http\Controllers\v3\CheckinController@get');

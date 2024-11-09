@@ -317,6 +317,11 @@ class Employee extends Model
             ->first();
     }
 
+    public function shifts(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Shift::class, 'employee_id');
+    }
+
     public function getLeaveBalanceAttribute()
     {
         $currentYear = now()->year;
