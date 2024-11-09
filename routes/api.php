@@ -14,6 +14,7 @@ use App\Http\Controllers\AppSuite\Staff\BusinessController;
 use App\Http\Controllers\AppSuite\Staff\CommentController;
 use App\Http\Controllers\AppSuite\Staff\CompanySetupController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeProjectController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeReportController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeTaskController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeTimesheetController;
 use App\Http\Controllers\AppSuite\Staff\L2EmployeeTimesheetController;
@@ -1530,6 +1531,9 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
             Route::group(['prefix' => 'attendance'], function () {
                 Route::post('/', [AttendanceController::class, 'recordAttendance']);
+            });
+            Route::group(['prefix' => 'reports'], function () {
+                Route::get('/data', [EmployeeReportController::class, 'getReportData']);
             });
 
             Route::group(['prefix' => 'notifications'], function () {

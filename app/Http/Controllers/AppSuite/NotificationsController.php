@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use App\Models\NotificationSetting;
 use App\Models\NotificationType;
+use App\Services\VenueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,13 @@ use Illuminate\Support\Facades\Validator;
 
 class NotificationsController extends Controller
 {
+
+    protected VenueService $venueService;
+
+    public function __construct(VenueService $venueService)
+    {
+        $this->venueService = $venueService;
+    }
     public function index(Request $request): JsonResponse
     {
         $employee = auth()->user()->employee;
