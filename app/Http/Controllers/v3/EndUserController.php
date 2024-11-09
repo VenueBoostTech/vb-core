@@ -416,7 +416,7 @@ class EndUserController extends Controller
 
         $user = $userOrResponse;
 
-        $perPage = $request->input('per_page', 15);
+        $perPage = $request->get('per_page');
         $all_promotions = Promotion::with(['discounts', 'coupons'])
             ->where('venue_id', $user->customer->venue_id)
             ->where('status', 1)
@@ -430,12 +430,14 @@ class EndUserController extends Controller
             'total_pages' => $all_promotions->lastPage(),
         ];
 
+        $all_promotions = Promotion::with(['discounts', 'coupons']);
+
         // You can still keep the additional promotion filtering if needed
-        $currentPromotions = $all_promotions->where('status', 1);
-        $pastPromotions = $all_promotions->whereDate('end_time', '<', Carbon::now()->toDateTimeString());
+        $currentPromotions = $all_promotions->where('status', 1)->paginate($perPage);
+        $pastPromotions = $all_promotions->whereDate('end_time', '<', Carbon::now()->toDateTimeString())->paginate($perPage);
         $usedPromotions = $all_promotions->whereHas('orders', function ($query) use ($user) {
             $query->where('customer_id', $user->customer->id);
-        });
+        })->paginate($perPage);
 
         return response()->json([
             'promotions' => $paginatedData,
