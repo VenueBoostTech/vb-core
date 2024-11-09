@@ -8,12 +8,109 @@ use App\Models\AppProjectTimesheet;
 use App\Models\Task;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class EmployeeReportController extends Controller
 {
-    public function getReportData(): JsonResponse
+    public function getReportData(Request $request): JsonResponse
     {
+        if ($request->input('is_demo', false)) {
+            return response()->json([
+                'weeklyAttendance' => [
+                    [
+                        'onTime' => 20,
+                        'early' => 10,
+                        'late' => 5
+                    ],
+                    [
+                        'onTime' => 25,
+                        'early' => 12,
+                        'late' => 3
+                    ],
+                    [
+                        'onTime' => 18,
+                        'early' => 8,
+                        'late' => 7
+                    ]
+                ],
+                'taskStats' => [
+                    'inProgress' => 35,
+                    'overdue' => 10,
+                    'upcoming' => 25,
+                    'completed' => 30
+                ],
+                'topTasks' => [
+                    [
+                        'title' => 'Change language',
+                        'project' => 'BoA App v1',
+                        'time' => '6h spent • ' . now()->format('d/m/Y'),
+                        'status' => 'Completed'
+                    ],
+                    [
+                        'title' => 'Redo base code',
+                        'project' => 'BoA App v1',
+                        'time' => '8h spent • ' . now()->format('d/m/Y'),
+                        'status' => 'Pending'
+                    ],
+                    [
+                        'title' => 'Update UI design',
+                        'project' => 'BoA App v1',
+                        'time' => '4h spent • ' . now()->format('d/m/Y'),
+                        'status' => 'In Progress'
+                    ]
+                ],
+                'topProjects' => [
+                    [
+                        'title' => 'BoA App v1',
+                        'project' => 'Software Developer',
+                        'time' => '45h spent • ' . now()->format('d/m/Y'),
+                        'status' => '60/100%'
+                    ],
+                    [
+                        'title' => 'Client Portal',
+                        'project' => 'Software Developer',
+                        'time' => '32h spent • ' . now()->format('d/m/Y'),
+                        'status' => '80/100%'
+                    ],
+                    [
+                        'title' => 'Mobile App',
+                        'project' => 'Software Developer',
+                        'time' => '28h spent • ' . now()->format('d/m/Y'),
+                        'status' => '40/100%'
+                    ]
+                ],
+                'tasksProgress' => [
+                    'totalTrackedTime' => 124.5,
+                    'mostConsumingProject' => 'BoA App v1',
+                    'leastConsumingProject' => 'Mobile App'
+                ],
+                'productivityTrends' => [
+                    'tasksCompleted' => [
+                        'value' => 200,
+                        'trend' => '-8%'
+                    ],
+                    'hoursWorked' => [
+                        'value' => 44,
+                        'trend' => '+24%'
+                    ],
+                    'productivityScore' => [
+                        'value' => '80/100',
+                        'trend' => '+6%'
+                    ]
+                ],
+                'monthlyProductivity' => [
+                    'Jun' => 145,
+                    'Jul' => 156,
+                    'Aug' => 142,
+                    'Sep' => 168,
+                    'Oct' => 158,
+                    'Nov' => 172
+                ]
+            ]);
+        }
+
+        // Original code for real data
         $employee = auth()->user()->employee;
 
         try {
@@ -31,7 +128,6 @@ class EmployeeReportController extends Controller
             return response()->json(['error' => 'Failed to generate report'], 500);
         }
     }
-
     private function getWeeklyAttendance($employee): array
     {
         $currentDate = Carbon::now();

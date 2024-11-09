@@ -1443,6 +1443,15 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
             Route::prefix('staff')->group(function () {
 
+                Route::group(['prefix' => 'reports'], function () {
+                    Route::get('/data', [EmployeeReportController::class, 'getReportData']);
+                });
+
+                Route::group(['prefix' => 'dashboard'], function () {
+                    Route::get('/', [\App\Http\Controllers\AppSuite\Staff\EmployeeDashboardController::class, 'getDashboardData']);
+                    Route::get('/export', [\App\Http\Controllers\AppSuite\Staff\EmployeeDashboardController::class, 'exportData']);
+                });
+
                 // Employee routes
                 Route::prefix('employee')->middleware(['auth:api'])->group(function () {
                     Route::get('current-session', [EmployeeTimesheetController::class, 'getCurrentSession']);
@@ -1531,9 +1540,6 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
             Route::group(['prefix' => 'attendance'], function () {
                 Route::post('/', [AttendanceController::class, 'recordAttendance']);
-            });
-            Route::group(['prefix' => 'reports'], function () {
-                Route::get('/data', [EmployeeReportController::class, 'getReportData']);
             });
 
             Route::group(['prefix' => 'notifications'], function () {
