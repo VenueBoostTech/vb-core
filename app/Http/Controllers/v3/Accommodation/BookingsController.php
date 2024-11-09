@@ -119,7 +119,8 @@ class BookingsController extends Controller
             'status' => $booking->status,
             'guest_count' => $booking->guest_nr,
             'rental_unit_photo' => count($modifiedGallery) > 0 ? $modifiedGallery[0]['photo_path'] : null,
-            'chat_id' => $chat->id
+            'chat_id' => $chat->id,
+            'booking' => $booking,
         ];
 
         return response()->json($bookingDetails);
@@ -168,6 +169,7 @@ class BookingsController extends Controller
                     return [
                         'id' => $booking->id,
                         'rental_unit_name' => $booking->rentalUnit->name,
+                        'rental_unit_code' => $booking->rentalUnit->unit_code,
                         'check_in' => $booking->check_in_date,
                         'check_out' => $booking->check_out_date,
                         'total' => $booking->total_amount,
