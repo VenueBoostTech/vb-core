@@ -4,6 +4,7 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -37,6 +38,7 @@ class User extends Authenticatable implements JWTSubject
         'company_vat',
         'status',
         'old_platform_user_id',
+        'is_app_client'
     ];
 
     /**
@@ -194,5 +196,17 @@ class User extends Authenticatable implements JWTSubject
     public function guestMarketingSettings(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(GuestMarketingSettings::class);
+    }
+
+    // Add relation to AppClient
+    public function appClient(): HasOne
+    {
+        return $this->hasOne(AppClient::class, 'user_id');
+    }
+
+    // Helper method to check if user is a client
+    public function isClient(): bool
+    {
+        return $this->is_app_client;
     }
 }

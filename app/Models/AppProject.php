@@ -7,11 +7,16 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class AppProject extends Model
 {
     use HasFactory, SoftDeletes;
+
+    // Add project source constants
+    public const SOURCE_MANUAL = 'manual';
+    public const SOURCE_SERVICE_REQUEST = 'service_request';
 
     public const STATUS_PLANNING = 'planning';
     public const STATUS_IN_PROGRESS = 'in_progress';
@@ -46,7 +51,13 @@ class AppProject extends Model
         'address_id',
         'project_category',
         'deal_status',
-        'client_id'
+        'client_id',
+        // Add new service request related fields
+        'project_source',
+        'service_id',
+        'quoted_price',
+        'final_price',
+        'service_details'
     ];
 
     protected $casts = [
@@ -55,9 +66,33 @@ class AppProject extends Model
         'estimated_hours' => 'float',
         'estimated_budget' => 'decimal:2',
         'project_category' => 'string',
-        'deal_status' => 'string'
+        'deal_status' => 'string',
+        // Add new casts
+        'project_source' => 'string',
+        'quoted_price' => 'decimal:2',
+        'final_price' => 'decimal:2',
+        'service_details' => 'array'
     ];
 
+    // Add new relationship to Service
+    public function service(): BelongsTo
+    {
+        return $this->belongsTo(Service::class);
+    }
+
+    // Add relationship to ServiceRequest
+    public function serviceRequest(): HasOne
+    {
+        return $this->hasOne(ServiceRequest::class, 'app_project_id');
+    }
+
+    // Helper method to check if project is from service request
+    public function isServiceRequest(): bool
+    {
+        return $this->project_source === self::SOURCE_SERVICE_REQUEST;
+    }
+
+    // Existing relationships...
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
@@ -85,22 +120,22 @@ class AppProject extends Model
         return $this->belongsTo(Employee::class, 'project_manager_id');
     }
 
-    public function timeEntries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function timeEntries(): HasMany
     {
         return $this->hasMany(TimeEntry::class, 'project_id');
     }
 
-    public function tasks(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function tasks(): HasMany
     {
         return $this->hasMany(Task::class, 'project_id');
     }
 
-    public function teamLeaders()
+    public function teamLeaders(): BelongsToMany
     {
         return $this->belongsToMany(Employee::class, 'project_team_leader', 'project_id', 'employee_id');
     }
 
-    public function operationsManagers()
+    public function operationsManagers(): BelongsToMany
     {
         return $this->belongsToMany(Employee::class, 'project_operations_manager', 'project_id', 'employee_id');
     }
@@ -115,7 +150,6 @@ class AppProject extends Model
         return $this->belongsTo(AppClient::class);
     }
 
-    // Relation to AppGallery
     public function appGalleries(): HasMany
     {
         return $this->hasMany(AppGallery::class, 'app_project_id');
