@@ -396,7 +396,8 @@ class AuthController extends Controller
                 'token_type' => 'bearer',
                 'expires_in' => $ttl,
                 'expires_at' => $expiresAt,
-                'account_type' => $user->isClient() ? true : null,
+                'account_type' => $user->is_app_client ? 'client' : 'business',
+                'is_app_client' => $user->is_app_client,
                 'refresh_expires_in' => $refreshTtl,
                 'refresh_expires_at' => $refreshExpiresAt
 
@@ -421,7 +422,8 @@ class AuthController extends Controller
             'token_type' => 'bearer',
             'expires_in' => $ttl,
             'expires_at' => $expiresAt,
-            'account_type' => $user->isClient() ? true : null,
+            'account_type' => $user->is_app_client ? 'client' : 'business',
+            'is_app_client' => $user->is_app_client,
             'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
             'refresh_expires_at' => $refreshExpiresAt
         ]);
@@ -757,14 +759,18 @@ class AuthController extends Controller
             // Get new access token
             $newAccessToken = JWTAuth::refresh($token);
 
-            // Calculate TTL
+            // Calculate TTL and timestamps
             $ttl = config('jwt.ttl') * 60; // Convert minutes to seconds
             $refreshTtl = $ttl * 3;
+
+            // Calculate expiration timestamps
+            $expiresAt = now()->addSeconds($ttl)->timestamp;
+            $refreshExpiresAt = now()->addSeconds($refreshTtl)->timestamp;
 
             // Generate new refresh token
             $newRefreshToken = JWTAuth::claims([
                 'refresh' => true,
-                'exp' => now()->addSeconds($refreshTtl)->timestamp
+                'exp' => $refreshExpiresAt
             ])->fromUser($user);
 
             return response()->json([
@@ -773,7 +779,9 @@ class AuthController extends Controller
                 'refresh_token' => $newRefreshToken,
                 'token_type' => 'bearer',
                 'expires_in' => $ttl,
-                'refresh_expires_in' => $refreshTtl
+                'expires_at' => $expiresAt,
+                'refresh_expires_in' => $refreshTtl,
+                'refresh_expires_at' => $refreshExpiresAt
             ]);
 
         } catch (TokenInvalidException $e) {
