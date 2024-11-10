@@ -390,6 +390,7 @@ class AuthController extends Controller
                 'refresh_token' => $refreshToken, // Add refresh token
                 'token_type' => 'bearer',
                 'expires_in' => $ttl,
+                'account_type' => $user->isClient ? true : null,
                 'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
             ]);
         }
@@ -411,6 +412,7 @@ class AuthController extends Controller
             'refresh_token' => $refreshToken, // Add refresh token
             'token_type' => 'bearer',
             'expires_in' => $ttl,
+            'account_type' => $user->isClient ? true : null,
             'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
         ]);
     }
