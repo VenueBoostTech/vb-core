@@ -12,6 +12,7 @@ class GuestMarketingSettings extends Model
     protected $fillable = [
         'user_id',
         'guest_id',
+        'customer_id',
         'promotion_sms_notify',
         'promotion_email_notify',
         'booking_sms_notify',

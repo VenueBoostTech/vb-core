@@ -345,23 +345,36 @@ class EndUserController extends Controller
 
     public function walletInfo(Request $request): \Illuminate\Http\JsonResponse
     {
+        // Perform end user authentication check
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
+        // If it's a JsonResponse, return it immediately
         if ($userOrResponse instanceof JsonResponse) {
-            return $userOrResponse; // If it's a JsonResponse, return it immediately
+            return $userOrResponse;
         }
 
         $user = $userOrResponse; // Now we know it's a User object
 
-        // Fetch wallet info from CRM
-        $crmResponse = $this->fetchWalletInfoFromCRM($user->id);
+        // Get the source from the request (default to 'bybestshop_web' if not provided)
+        $source = $request->query('source', 'bybestshop_web');
 
+        // Validate source
+        if (!in_array($source, ['metrosuites', 'bybestshop_web'])) {
+            return response()->json(['error' => 'Invalid source provided'], 400);
+        }
+
+        // Fetch wallet info from CRM based on the source
+        $crmResponse = $this->fetchWalletInfoFromCRM($user->id, $source);
+
+        // If CRM response is unsuccessful, return an error response
         if (!$crmResponse['success']) {
             return response()->json(['error' => 'Failed to fetch wallet information from CRM'], 500);
         }
 
+        // Extract data from CRM response
         $crmData = $crmResponse['result']['endUser'];
 
+        // Prepare wallet info response
         $walletInfo = new \stdClass();
         $walletInfo->balance = $crmData['wallet']['balance'] ?? 0;
         $walletInfo->currency = 'Lek';
@@ -373,20 +386,34 @@ class EndUserController extends Controller
         return response()->json(['wallet_info' => $walletInfo], 200);
     }
 
-    private function fetchWalletInfoFromCRM($userId)
+    private function fetchWalletInfoFromCRM($userId, $source)
     {
-        $BYBEST_SHOP_ID = '66551ae760ba26d93d6d3a32'; // ByBest Shop CRM ID
+        // Define subAccountId based on the source
+        $subAccountIds = [
+            'metrosuites' => '6730cb67d23dc622500cbf0d', // Metrosuites crm id
+            'bybestshop_web' => '66551ae760ba26d93d6d3a32', // ByBest Shop CRM ID
+        ];
 
+        // Ensure the source has a corresponding subAccountId
+        if (!isset($subAccountIds[$source])) {
+            return ['success' => false];
+        }
+
+        $subAccountId = $subAccountIds[$source];
+
+        // Make the request to the CRM API with the appropriate subAccountId
         $response = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$userId}", [
-            'subAccountId' => $BYBEST_SHOP_ID,
+            'subAccountId' => $subAccountId,
         ]);
 
+        // Return response if successful, otherwise return failure
         if ($response->successful()) {
             return $response->json();
         }
 
         return ['success' => false];
     }
+
 
     public function getPaymentMethods(Request $request): \Illuminate\Http\JsonResponse
     {
@@ -447,6 +474,47 @@ class EndUserController extends Controller
         ], 200);
     }
 
+    public function getPromotionsGuest(Request $request): JsonResponse
+    {
+        $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+        if ($userOrResponse instanceof JsonResponse) {
+            return $userOrResponse;
+        }
+
+        $user = $userOrResponse;
+
+        $perPage = $request->get('per_page');
+        $all_promotions = Promotion::with(['discounts', 'coupons'])
+            ->where('venue_id', $user->guest?->restaurant_id)
+            ->where('status', 1)
+            ->paginate($perPage);
+
+        $paginatedData = [
+            'data' => $all_promotions->items(),
+            'current_page' => $all_promotions->currentPage(),
+            'per_page' => $all_promotions->perPage(),
+            'total' => $all_promotions->total(),
+            'total_pages' => $all_promotions->lastPage(),
+        ];
+
+        $all_promotions = Promotion::with(['discounts', 'coupons']);
+
+        // You can still keep the additional promotion filtering if needed
+        $currentPromotions = $all_promotions->where('status', 1)->paginate($perPage);
+        $pastPromotions = $all_promotions->whereDate('end_time', '<', Carbon::now()->toDateTimeString())->paginate($perPage);
+//        $usedPromotions = $all_promotions->whereHas('orders', function ($query) use ($user) {
+//            $query->where('guest_id', $user->guest?->id);
+//        })->paginate($perPage);
+
+        return response()->json([
+            'promotions' => $paginatedData,
+            'current_promotions' => $currentPromotions,
+            'past_promotions' => $pastPromotions,
+            'used_promotions' => [],
+        ], 200);
+    }
+
     //write reset password that take current password and new password and confirm password
 
     public function resetPassword(Request $request): \Illuminate\Http\JsonResponse
@@ -501,6 +569,7 @@ class EndUserController extends Controller
         ], 200);
     }
 
+// Get Marketing Settings
     public function getMarketingSettings(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
@@ -510,32 +579,24 @@ class EndUserController extends Controller
         }
 
         $user = $userOrResponse;
+        $source = $request->query('source', 'bybestshop_web');
 
-        if($request->get('flag') == 'true') {
-            // Get or create marketing settings
+        if ($source === 'bybestshop_web') {
+            // For ByBest Shop, use customer_id and use booking_* fields
             $marketingSettings = GuestMarketingSettings::firstOrCreate(
-                ['guest_id' => $user->guest->id],
+                ['customer_id' => $user->customer?->id], // Using customer_id for ByBest Shop
                 [
                     'user_id' => $user->id,
                     'promotion_sms_notify' => true,
                     'promotion_email_notify' => true,
-                    'booking_sms_notify' => true,
-                    'booking_email_notify' => true
+                    'booking_ms_notify' => true,  // Changed from booking_sms_notify to booking_ms_notify
+                    'booking_ail_notify' => true // Changed from booking_email_notify to booking_ail_notify
                 ]
             );
-
-            return response()->json([
-                'marketing_settings' => [
-                    'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
-                    'promotion_email_notify' => $marketingSettings->promotion_email_notify,
-                    'booking_sms_notify' => $marketingSettings->booking_sms_notify,
-                    'booking_email_notify' => $marketingSettings->booking_email_notify
-                ]
-            ], 200);
         } else {
-            // Get or create marketing settings
+            // Default to MetroSuites, use guest_id
             $marketingSettings = GuestMarketingSettings::firstOrCreate(
-                ['guest_id' => $user->guest->id],
+                ['guest_id' => $user->guest->id], // Using guest_id for MetroSuites
                 [
                     'user_id' => $user->id,
                     'promotion_sms_notify' => true,
@@ -544,19 +605,19 @@ class EndUserController extends Controller
                     'booking_email_notify' => true
                 ]
             );
-
-            return response()->json([
-                'marketing_settings' => [
-                    'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
-                    'promotion_email_notify' => $marketingSettings->promotion_email_notify,
-                    'order_sms_notify' => $marketingSettings->booking_sms_notify,
-                    'order_email_notify' => $marketingSettings->booking_email_notify
-                ]
-            ], 200);
         }
+
+        return response()->json([
+            'marketing_settings' => [
+                'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
+                'promotion_email_notify' => $marketingSettings->promotion_email_notify,
+                'booking_sms_notify' => $marketingSettings->booking_sms_notify,  // Changed to booking_sms_notify
+                'booking_email_notify' => $marketingSettings->booking_email_notify // Changed to booking_email_notify
+            ]
+        ], 200);
     }
 
-    //updateMarketingSettings
+    // Update Marketing Settings
     public function updateMarketingSettings(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
@@ -566,71 +627,55 @@ class EndUserController extends Controller
         }
 
         $user = $userOrResponse;
+        $source = $request->get('source'); // Add source to differentiate between MetroSuites and ByBest Shop
 
-        if($request->flag) {
-            $validator = Validator::make($request->all(), [
-                'promotion_sms_notify' => 'required|boolean',
-                'promotion_email_notify' => 'required|boolean',
-                'booking_sms_notify' => 'required|boolean',
-                'booking_email_notify' => 'required|boolean'
-            ]);
-    
-            if ($validator->fails()) {
-                return response()->json(['errors' => $validator->errors()], 400);
-            }
-    
-            $marketingSettings = GuestMarketingSettings::updateOrCreate(
-                [
-                    'guest_id' => $user->guest->id
-                ],
-                [
-                    'user_id' => $user->id,
-                    'promotion_sms_notify' => $request->promotion_sms_notify,
-                    'promotion_email_notify' => $request->promotion_email_notify,
-                    'booking_sms_notify' => $request->booking_sms_notify,
-                    'booking_email_notify' => $request->booking_email_notify
-                ]
-            );
-    
-            return response()->json([
-                'message' => 'Marketing settings updated successfully',
-                'marketing_settings' => $marketingSettings
-            ], 200);
-        } else {
-            $validator = Validator::make($request->all(), [
-                'promotion_sms_notify' => 'required|boolean',
-                'promotion_email_notify' => 'required|boolean',
-                'order_sms_notify' => 'required|boolean',
-                'order_email_notify' => 'required|boolean'
-            ]);
-    
-            if ($validator->fails()) {
-                return response()->json(['errors' => $validator->errors()], 400);
-            }
-    
-            $marketingSettings = GuestMarketingSettings::updateOrCreate(
-                [
-                    'guest_id' => $user->guest->id
-                ],
-                [
-                    'user_id' => $user->id,
-                    'promotion_sms_notify' => $request->promotion_sms_notify,
-                    'promotion_email_notify' => $request->promotion_email_notify,
-                    'booking_sms_notify' => $request->order_sms_notify,
-                    'booking_email_notify' => $request->order_email_notify
-                ]
-            );
-    
-            return response()->json([
-                'message' => 'Marketing settings updated successfully',
-                'marketing_settings' => [
-                    'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
-                    'promotion_email_notify' => $marketingSettings->promotion_email_notify,
-                    'order_sms_notify' => $marketingSettings->booking_sms_notify,
-                    'order_email_notify' => $marketingSettings->booking_email_notify
-                ]
-            ], 200);
+        // Validate the input data
+        $validator = Validator::make($request->all(), [
+            'promotion_sms_notify' => 'nullable|boolean',
+            'promotion_email_notify' => 'nullable|boolean',
+            'booking_sms_notify' => 'nullable|boolean', // Changed to booking_sms_notify
+            'booking_email_notify' => 'nullable|boolean' // Changed to booking_email_notify
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 400);
         }
+
+        if ($source === 'bybestshop_web') {
+            // For ByBest Shop, use customer_id and use booking_* fields
+            $marketingSettings = GuestMarketingSettings::updateOrCreate(
+                ['customer_id' => $user->id], // Using customer_id for ByBest Shop
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => $request->promotion_sms_notify,
+                    'promotion_email_notify' => $request->promotion_email_notify,
+                    'booking_sms_notify' => $request->booking_sms_notify, // Changed to booking_sms_notify
+                    'booking_email_notify' => $request->booking_email_notify // Changed to booking_email_notify
+                ]
+            );
+        } else {
+            // Default to MetroSuites, use guest_id
+            $marketingSettings = GuestMarketingSettings::updateOrCreate(
+                ['guest_id' => $user->guest->id], // Using guest_id for MetroSuites
+                [
+                    'user_id' => $user->id,
+                    'promotion_sms_notify' => $request->promotion_sms_notify,
+                    'promotion_email_notify' => $request->promotion_email_notify,
+                    'booking_sms_notify' => $request->booking_sms_notify, // Keep booking_sms_notify for MetroSuites
+                    'booking_email_notify' => $request->booking_email_notify // Keep booking_email_notify for MetroSuites
+                ]
+            );
+        }
+
+        return response()->json([
+            'message' => 'Marketing settings updated successfully',
+            'marketing_settings' => [
+                'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
+                'promotion_email_notify' => $marketingSettings->promotion_email_notify,
+                'booking_sms_notify' => $marketingSettings->booking_sms_notify,  // Changed to booking_sms_notify
+                'booking_email_notify' => $marketingSettings->booking_email_notify // Changed to booking_email_notify
+            ]
+        ], 200);
     }
 
     //updateProfile
@@ -786,7 +831,7 @@ class EndUserController extends Controller
                     ['address_id' => $address->id]
                 );
             }
-            
+
 
             // Create or Update Address
             if ($request->has('address')) {

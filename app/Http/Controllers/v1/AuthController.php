@@ -220,7 +220,7 @@ class AuthController extends Controller
 
         UserActivityLogger::log(auth()->user()->id, 'Login');
 
-        return $this->respondWithTokenForEndUser($token, $request->source);
+        return $this->respondWithTokenForEndUser($token, $request->source, $request->password);
     }
 
     /**
@@ -233,11 +233,16 @@ class AuthController extends Controller
     protected function respondWithToken(string $token, ?string $sourceApp = null, $visionTrack, $allow_clockinout): JsonResponse
     {
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
-        $refreshTtl = $ttl * 3; // Refresh token TTL (3x longer)
+        $refreshTtl = $ttl * 8; // Refresh token TTL (3x longer)
+
+        // Calculate expiration timestamps
+        $expiresAt = now()->addSeconds($ttl)->timestamp;
+        $refreshExpiresAt = now()->addSeconds($refreshTtl)->timestamp;
+
         // Generate refresh token
         $refreshToken = JWTAuth::claims([
             'refresh' => true,
-            'exp' => now()->addSeconds($refreshTtl)->timestamp
+            'exp' => $refreshExpiresAt
         ])->fromUser(auth()->user());
         $user = auth()->user();
 
@@ -390,8 +395,11 @@ class AuthController extends Controller
                 'refresh_token' => $refreshToken, // Add refresh token
                 'token_type' => 'bearer',
                 'expires_in' => $ttl,
-                'account_type' => $user->isClient ? true : null,
-                'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
+                'expires_at' => $expiresAt,
+                'account_type' => $user->isClient() ? true : null,
+                'refresh_expires_in' => $refreshTtl,
+                'refresh_expires_at' => $refreshExpiresAt
+
             ]);
         }
 
@@ -412,8 +420,10 @@ class AuthController extends Controller
             'refresh_token' => $refreshToken, // Add refresh token
             'token_type' => 'bearer',
             'expires_in' => $ttl,
-            'account_type' => $user->isClient ? true : null,
+            'expires_at' => $expiresAt,
+            'account_type' => $user->isClient() ? true : null,
             'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
+            'refresh_expires_at' => $refreshExpiresAt
         ]);
     }
 
@@ -503,10 +513,10 @@ class AuthController extends Controller
         ]);
     }
 
-    protected function respondWithTokenForEndUser(string $token, string $source): JsonResponse
+    protected function respondWithTokenForEndUser(string $token, string $source, string $password): JsonResponse
     {
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
-        $refreshTtl = $ttl * 8; // Refresh token TTL (8x longer)
+        $refreshTtl = $ttl * 8;
 
         // Calculate expiration timestamps
         $expiresAt = now()->addSeconds($ttl)->timestamp;
@@ -519,39 +529,86 @@ class AuthController extends Controller
         ])->fromUser(auth()->user());
 
         $user = auth()->user();
+        $referralCode = null;
+        $currentTierName = null;
+        $walletBalance = null;
 
-        if ($source == 'bybest.shop_web') {
-            $BYBEST_SHOP_ID = '66551ae760ba26d93d6d3a32';
-
+        // Define subAccountId based on source
+        $subAccountId = null;
+        $customer = null;
+        $guest = null;
+        $endUserObject = new StdClass();
+        if ($source === 'bybest.shop_web') {
+            $subAccountId = '66551ae760ba26d93d6d3a32';
             $customer = Customer::where('user_id', $user->id)->first();
-            $venue = Restaurant::where('id', $customer?->venue_id)->first();
+            $endUserObject->firstName = $customer->name;
+            $endUserObject->lastName = '-';
+            $endUserObject->email = $customer->email;
+            $endUserObject->phone = $customer->phone;
+            $endUserObject->password = $password;
+        } elseif ($source === 'metrosuites') {
+            $subAccountId = '6730cb67d23dc622500cbf0d';
+            $guest = Guest::where('user_id', $user->id)->first();
+            $endUserObject->firstName = $guest->name;
+            $endUserObject->lastName = '-';
+            $endUserObject->email = $guest->email;
+            $endUserObject->phone = $guest->phone;
+            $endUserObject->password = $password;
+        }
+
+
+
+        // Insert user to CRM Pixel Breeze
+        try {
+
+            $data_string = [
+                "crm_client_customer_id" => $user->id,
+                "source" => $source,
+                "firstName" => $endUserObject->firstName,
+                "lastName" => $endUserObject->lastName,
+                "email" => $endUserObject->email,
+                "phone" => $endUserObject->phone ?? null,
+                "password" => $endUserObject->password,
+                "referral_code" =>  null,
+            ];
+
+            Http::withHeaders([
+                "Content-Type" => "application/json",
+            ])->post('https://crmapi.pixelbreeze.xyz/api/add-end-user-to-sub-account', $data_string);
+
+        } catch (\Throwable $th) {
+            \Sentry\captureException($th);
+            // You may want to log this error or handle it in some way
+        }
+
+
+
+        // Only call CRM API if subAccountId is set
+        if ($subAccountId) {
+            if ($source === 'metrosuites') {
+                $venue = Restaurant::where('id', $guest?->restaurant_id)->first();
+            } else {
+                $venue = Restaurant::where('id', $customer?->venue_id)->first();
+            }
 
             if (!$venue) {
                 return response()->json(['error' => 'User can\'t login.'], 403);
             }
 
-            // Call the CRM API
-            $response = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$user->id}", [
-                'subAccountId' => $BYBEST_SHOP_ID,
+            // Fetch data from CRM with the specified subAccountId
+            $crmResponse = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$user->id}", [
+                'subAccountId' => $subAccountId,
             ]);
 
-            if ($response->successful()) {
-                $crmData = $response->json()['result']['endUser'] ?? null;
+            if ($crmResponse->successful()) {
+                $crmData = $crmResponse->json()['result']['endUser'] ?? [];
                 $referralCode = $crmData['referralCode'] ?? null;
                 $currentTierName = $crmData['currentTierName'] ?? null;
                 $walletBalance = $crmData['wallet']['balance'] ?? null;
-            } else {
-                $venue = null;
-                $referralCode = null;
-                $currentTierName = null;
-                $walletBalance = null;
             }
         } else {
-            $guest = Guest::where('user_id', $user->id)->first();
-            $venue = Restaurant::where('id', $guest?->restaurant_id)->first();
-            $referralCode = null;
-            $currentTierName = null;
-            $walletBalance = null;
+            // If source is neither bybest.shop_web nor metrosuites
+            $venue = null;
         }
 
         return response()->json([
@@ -563,10 +620,11 @@ class AuthController extends Controller
                 'referralCode' => $referralCode,
                 'currentTierName' => $currentTierName,
                 'walletBalance' => $walletBalance,
-                'enduser'=> $user->enduser,
-                'venue'=> $venue,
-                'customer'=> $user->customer ?? null,
-                'venue_app_key' => $venue->app_key ?? null,
+                'enduser' => $user->enduser,
+                'venue' => $venue,
+                'customer' => $user->customer ?? null,
+                'guest' => $user->guest ?? null,
+                'venue_app_key' => $venue?->app_key,
             ],
             'venue' => [
                 'id' => $venue?->id,
@@ -581,6 +639,7 @@ class AuthController extends Controller
             'refresh_expires_at' => $refreshExpiresAt
         ]);
     }
+
 
     protected function respondWithTokenForSuperadmin(string $token): JsonResponse
     {
@@ -1524,7 +1583,6 @@ class AuthController extends Controller
                 // We might want to log or handle the response here
 
             } catch (\Throwable $th) {
-                dd($th);
                 \Sentry\captureException($th);
                 // You may want to log this error or handle it in some way
             }
