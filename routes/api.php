@@ -2,8 +2,13 @@
 
 use App\Http\Controllers\AppSuite\AppConfigurationController;
 use App\Http\Controllers\AppSuite\AppWhitelabelController;
+use App\Http\Controllers\AppSuite\ClientPortal\ClientInvoiceController;
+use App\Http\Controllers\AppSuite\ClientPortal\ClientServiceRequestController;
+use App\Http\Controllers\AppSuite\ClientPortal\ClientServicesController;
+use App\Http\Controllers\AppSuite\ClientPortal\WebhookController;
 use App\Http\Controllers\AppSuite\Inventory\VBAppProductsController;
 use App\Http\Controllers\AppSuite\NotificationsController;
+use App\Http\Controllers\AppSuite\Staff\AdminInvoiceController;
 use App\Http\Controllers\AppSuite\Staff\AdminProjectController;
 use App\Http\Controllers\AppSuite\Staff\AdminStaffController;
 use App\Http\Controllers\AppSuite\Staff\AdminTaskController;
@@ -14,9 +19,12 @@ use App\Http\Controllers\AppSuite\Staff\BusinessController;
 use App\Http\Controllers\AppSuite\Staff\CommentController;
 use App\Http\Controllers\AppSuite\Staff\CompanySetupController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeProjectController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeReportController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeTaskController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeTimesheetController;
 use App\Http\Controllers\AppSuite\Staff\L2EmployeeTimesheetController;
+use App\Http\Controllers\AppSuite\Staff\ServiceManagementController;
+use App\Http\Controllers\AppSuite\Staff\ServiceRequestAdminController;
 use App\Http\Controllers\AppSuite\Staff\ShiftController;
 use App\Http\Controllers\AppSuite\Staff\StaffReportController;
 use App\Http\Controllers\AppSuite\Staff\TeamController;
@@ -1147,6 +1155,42 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::post('/', [AppClientController::class, 'createClient']);
                     Route::put('/{id}', [AppClientController::class, 'updateClient']);
                     Route::delete('/{id}', [AppClientController::class, 'deleteClient']);
+                    Route::post('create-user', [AppClientController::class, 'createClientUser']);
+                    Route::post('connect-user', [AppClientController::class, 'connectExistingUser']);
+                });
+
+
+                Route::prefix('invoices')->group(function () {
+                    Route::get('/', [AdminInvoiceController::class, 'index']);
+                    Route::post('/generate', [AdminInvoiceController::class, 'generateInvoice']);
+                    Route::get('/{id}', [AdminInvoiceController::class, 'show']);
+                });
+
+                // Webhook Routes (no auth middleware)
+                Route::post('webhooks/stripe', [WebhookController::class, 'handleStripeWebhook']);
+                Route::post('webhooks/banking', [WebhookController::class, 'handleBankingWebhook']);
+
+
+
+
+                Route::prefix('service-categories')->group(function () {
+                    Route::get('/', [ServiceManagementController::class, 'listCategories']);
+                    Route::post('/', [ServiceManagementController::class, 'createCategory']);
+                    Route::put('/{id}', [ServiceManagementController::class, 'updateCategory']);
+                    Route::delete('/{id}', [ServiceManagementController::class, 'deleteCategory']);
+                });
+
+                Route::prefix('services')->group(function () {
+                    Route::get('/', [ServiceManagementController::class, 'listServices']);
+                    Route::post('/', [ServiceManagementController::class, 'createService']);
+                    Route::put('/{id}', [ServiceManagementController::class, 'updateService']);
+                    Route::delete('/{id}', [ServiceManagementController::class, 'deleteService']);
+                });
+
+                Route::prefix('service-requests')->group(function () {
+                    Route::get('/', [ServiceRequestAdminController::class, 'index']);
+                    Route::post('{id}/approve', [ServiceRequestAdminController::class, 'approve']);
+                    Route::post('{id}/decline', [ServiceRequestAdminController::class, 'decline']);
                 });
 
                 Route::get('countries', [CompanySetupController::class, 'listCountries']);
@@ -1371,6 +1415,36 @@ Route::middleware(['superadmin_api_key'])->prefix('v1')->group(function () {
     });
 });
 
+// API Call for Client Portal
+Route::middleware(['client_portal_api_key'])->prefix('v1')->group(function () {
+
+    Route::middleware(['jwt'])->group(function () {
+
+        Route::prefix('client-portal')->group(function () {
+
+            // Service Requests
+            Route::prefix('cp-service-requests')->group(function () {
+                Route::post('request', [ClientServiceRequestController::class, 'requestService']);
+                Route::get('my-requests', [ClientServiceRequestController::class, 'listMyRequests']);
+                Route::get('my-requests/{id}', [ClientServiceRequestController::class, 'getRequestDetails']);
+            });
+
+            // Service Requests
+            Route::prefix('cp-services')->group(function () {
+                Route::get('/', [ClientServicesController::class, 'index']);
+                Route::get('/available', [ClientServicesController::class, 'available']);
+                Route::get('/{id}', [ClientServicesController::class, 'show']);
+            });
+
+            // Invoices
+            Route::prefix('cp-invoices')->group(function () {
+                Route::get('/', [ClientInvoiceController::class, 'index']);
+                Route::get('/{id}', [ClientInvoiceController::class, 'show']);
+                Route::post('/{id}/pay', [ClientInvoiceController::class, 'initiatePayment']);
+            });
+        });
+    });
+});
 // API Calls for EndUser
 Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
 
@@ -1441,6 +1515,15 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
             });
 
             Route::prefix('staff')->group(function () {
+
+                Route::group(['prefix' => 'reports'], function () {
+                    Route::get('/data', [EmployeeReportController::class, 'getReportData']);
+                });
+
+                Route::group(['prefix' => 'dashboard'], function () {
+                    Route::get('/', [\App\Http\Controllers\AppSuite\Staff\EmployeeDashboardController::class, 'getDashboardData']);
+                    Route::get('/export', [\App\Http\Controllers\AppSuite\Staff\EmployeeDashboardController::class, 'exportData']);
+                });
 
                 // Employee routes
                 Route::prefix('employee')->middleware(['auth:api'])->group(function () {
@@ -1522,15 +1605,24 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
                     });
                 });
+
+                Route::group(['prefix' => 'shifts'], function () {
+                    Route::get('/', [ShiftController::class, 'getShiftsData']);
+                    Route::get('/leave-types', [ShiftController::class, 'getLeaveTypes']);
+                    Route::get('/leave-balance', [ShiftController::class, 'getLeaveBalance']);
+                    Route::post('/time-off', [ShiftController::class, 'requestTimeOff']);
+                });
+
+                Route::group(['prefix' => 'attendance'], function () {
+                    Route::get('/', [AttendanceController::class, 'getAttendanceData']);
+                    Route::post('/check-in', [AttendanceController::class, 'checkIn']);
+                    Route::post('/check-out', [AttendanceController::class, 'checkOut']);
+                });
             });
 
-            Route::group(['prefix' => 'shift'], function () {
-                Route::post('/shifts', [ShiftController::class, 'store']);
-            });
 
-            Route::group(['prefix' => 'attendance'], function () {
-                Route::post('/', [AttendanceController::class, 'recordAttendance']);
-            });
+
+
 
             Route::group(['prefix' => 'notifications'], function () {
                 Route::get('/', [NotificationsController::class, 'index']);
@@ -1619,7 +1711,7 @@ Route::get('api/v1/calendar/{obfuscatedId}/{token}.ics', [CalendarConnectionCont
 Route::get('api/v1/end-user/messages/{chatId}', 'App\Http\Controllers\v1\EndUserChatController@getMessages');
 
 
-
+// OLD Routes -- Keep here, maybe delete on the future
 //Route::prefix('checkin-methods')->group(function () {
 //    Route::post('create', 'App\Http\Controllers\v3\CheckinController@create');
 //    Route::get('get/{id}', 'App\Http\Controllers\v3\CheckinController@get');

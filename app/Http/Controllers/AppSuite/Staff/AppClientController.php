@@ -8,11 +8,14 @@ use App\Models\AppClient;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\State;
+use App\Models\User;
 use App\Services\VenueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 class AppClientController extends Controller
 {
@@ -220,6 +223,135 @@ class AppClientController extends Controller
         ];
 
         return implode(', ', array_filter($parts));
+    }
+
+    public function createClientUser(Request $request): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $validator = Validator::make($request->all(), [
+            // Client Details
+            'name' => 'required|string|max:255',
+            'type' => 'required|in:company,homeowner',
+            'contact_person' => 'nullable|string|max:255',
+            'email' => 'required|email|unique:users,email',
+            'phone' => 'nullable|string|max:20',
+            'notes' => 'nullable|string',
+            'country_code' => 'required|string',
+
+            // Address Details
+            'address' => 'required|array',
+            'address.address_line1' => 'required|string|max:255',
+            'address.city_id' => 'required|exists:cities,id',
+            'address.state_id' => 'required|exists:states,id',
+            'address.country_id' => 'required|exists:countries,id',
+            'address.postal_code' => 'required|string|max:20',
+
+            // User Account Details
+            'password' => 'required|string|min:8'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Create user account
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'country_code' => $request->country_code,
+                'is_app_client' => true
+            ]);
+
+            // Create address
+            $state = State::findOrFail($request->address['state_id']);
+            $country = Country::findOrFail($request->address['country_id']);
+            $city = City::findOrFail($request->address['city_id']);
+
+            $address = Address::create([
+                'address_line1' => $request->address['address_line1'],
+                'city_id' => $city->id,
+                'state_id' => $state->id,
+                'country_id' => $country->id,
+                'postcode' => $request->address['postal_code'],
+                'state' => $state->name,
+                'city' => $city->name,
+                'country' => $country->name,
+            ]);
+
+            // Create client record
+            $client = AppClient::create([
+                'name' => $request->name,
+                'type' => $request->type,
+                'contact_person' => $request->contact_person,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'address_id' => $address->id,
+                'venue_id' => $venue->id,
+                'notes' => $request->notes,
+                'user_id' => $user->id
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Client user created successfully',
+                'client' => [
+                    'id' => $client->id,
+                    'name' => $client->name,
+                    'email' => $client->email,
+                    'user_id' => $client->user_id
+                ]
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to create client user: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function connectExistingUser(Request $request): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $validator = Validator::make($request->all(), [
+            'client_id' => 'required|exists:app_clients,id',
+            'user_id' => 'required|exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $client = AppClient::where('venue_id', $venue->id)->findOrFail($request->client_id);
+            $user = User::findOrFail($request->user_id);
+
+            if ($user->is_app_client) {
+                return response()->json(['error' => 'User is already connected to a client'], 400);
+            }
+
+            $user->update(['is_app_client' => true]);
+            $client->update(['user_id' => $user->id]);
+
+            return response()->json([
+                'message' => 'User connected to client successfully',
+                'client' => [
+                    'id' => $client->id,
+                    'name' => $client->name,
+                    'user_id' => $client->user_id
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to connect user: ' . $e->getMessage()], 500);
+        }
     }
 
 }
