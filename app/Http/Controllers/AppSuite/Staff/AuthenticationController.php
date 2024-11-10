@@ -83,6 +83,7 @@ class AuthenticationController extends Controller
                 ],
                 'supabase_id' => $connection->supabase_id,
                 'token' => $token,
+                'account_type' => 'business',
                 'refresh_token' => $refreshToken
             ]);
 

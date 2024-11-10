@@ -1467,6 +1467,7 @@ Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
             Route::get('/wallet/info', 'App\Http\Controllers\v3\EndUserController@walletInfo');
             Route::get('/wallet/payment-methods', 'App\Http\Controllers\v3\EndUserController@getPaymentMethods');
             Route::get('/promotions', 'App\Http\Controllers\v3\EndUserController@getPromotions');
+            Route::get('/promotions-guest', 'App\Http\Controllers\v3\EndUserController@getPromotionsGuest');
             Route::get('/wishlist', [EndUserController::class, 'getWishlist']);
             Route::post('/wishlist/add', [EndUserController::class, 'addToWishlist']);
             Route::delete('/wishlist/{productId}', [EndUserController::class, 'removeFromWishlist']);
