@@ -69,6 +69,7 @@ class Kernel extends HttpKernel
         'superadmin_api_key' => \App\Http\Middleware\SuperadminApiKeyMiddleware::class,
         'enduser_api_key' => \App\Http\Middleware\EndUserApiKeyMiddleware::class,
         'vb_apps_api_key' => \App\Http\Middleware\VbAppsApiKeyMiddleware::class,
+        'client_portal_api_key' => \App\Http\Middleware\ClientPortalApiKeyMiddleware::class,
         'jwt' => \App\Http\Middleware\JwtMiddleware::class,
         'public_api_key' => \App\Http\Middleware\PublicApiKeyMiddleware::class,
     ];

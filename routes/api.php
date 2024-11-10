@@ -4,6 +4,7 @@ use App\Http\Controllers\AppSuite\AppConfigurationController;
 use App\Http\Controllers\AppSuite\AppWhitelabelController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientInvoiceController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientServiceRequestController;
+use App\Http\Controllers\AppSuite\ClientPortal\ClientServicesController;
 use App\Http\Controllers\AppSuite\ClientPortal\WebhookController;
 use App\Http\Controllers\AppSuite\Inventory\VBAppProductsController;
 use App\Http\Controllers\AppSuite\NotificationsController;
@@ -1165,23 +1166,11 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::get('/{id}', [AdminInvoiceController::class, 'show']);
                 });
 
-                // Client Routes
-                Route::prefix('cp-invoices')->group(function () {
-                    Route::get('/', [ClientInvoiceController::class, 'index']);
-                    Route::get('/{id}', [ClientInvoiceController::class, 'show']);
-                    Route::post('/{id}/pay', [ClientInvoiceController::class, 'initiatePayment']);
-                });
-
                 // Webhook Routes (no auth middleware)
                 Route::post('webhooks/stripe', [WebhookController::class, 'handleStripeWebhook']);
                 Route::post('webhooks/banking', [WebhookController::class, 'handleBankingWebhook']);
 
-                // Client Portal
-                Route::prefix('cp-service-requests')->group(function () {
-                    Route::post('request', [ClientServiceRequestController::class, 'requestService']);
-                    Route::get('my-requests', [ClientServiceRequestController::class, 'listMyRequests']);
-                    Route::get('my-requests/{id}', [ClientServiceRequestController::class, 'getRequestDetails']);
-                });
+
 
 
                 Route::prefix('service-categories')->group(function () {
@@ -1426,6 +1415,36 @@ Route::middleware(['superadmin_api_key'])->prefix('v1')->group(function () {
     });
 });
 
+// API Call for Client Portal
+Route::middleware(['client_portal_api_key'])->prefix('v1')->group(function () {
+
+    Route::middleware(['jwt'])->group(function () {
+
+        Route::prefix('client-portal')->group(function () {
+
+            // Service Requests
+            Route::prefix('cp-service-requests')->group(function () {
+                Route::post('request', [ClientServiceRequestController::class, 'requestService']);
+                Route::get('my-requests', [ClientServiceRequestController::class, 'listMyRequests']);
+                Route::get('my-requests/{id}', [ClientServiceRequestController::class, 'getRequestDetails']);
+            });
+
+            // Service Requests
+            Route::prefix('cp-services')->group(function () {
+                Route::get('/', [ClientServicesController::class, 'index']);
+                Route::get('/available', [ClientServicesController::class, 'available']);
+                Route::get('/{id}', [ClientServicesController::class, 'show']);
+            });
+
+            // Invoices
+            Route::prefix('cp-invoices')->group(function () {
+                Route::get('/', [ClientInvoiceController::class, 'index']);
+                Route::get('/{id}', [ClientInvoiceController::class, 'show']);
+                Route::post('/{id}/pay', [ClientInvoiceController::class, 'initiatePayment']);
+            });
+        });
+    });
+});
 // API Calls for EndUser
 Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
 

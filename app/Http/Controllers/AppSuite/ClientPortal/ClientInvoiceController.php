@@ -5,6 +5,7 @@ namespace App\Http\Controllers\AppSuite\ClientPortal;
 use App\Http\Controllers\Controller;
 use App\Models\AppInvoice;
 use App\Services\AppInvoiceService;
+use App\Services\ClientAuthService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,23 +15,24 @@ use Illuminate\Support\Facades\Validator;
 class ClientInvoiceController extends Controller
 {
     protected AppInvoiceService $invoiceService;
+    protected ClientAuthService $clientAuthService;
 
-    public function __construct(AppInvoiceService $invoiceService)
-    {
+    public function __construct(
+        AppInvoiceService $invoiceService,
+        ClientAuthService $clientAuthService
+    ) {
         $this->invoiceService = $invoiceService;
+        $this->clientAuthService = $clientAuthService;
     }
 
     public function index(Request $request): JsonResponse
     {
-        $user = auth()->user();
-        if (!$user->is_app_client) {
-            return response()->json(['error' => 'Unauthorized access'], 403);
+        // Validate client access
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
         }
 
-        $client = $user->appClient;
-        if (!$client) {
-            return response()->json(['error' => 'Client profile not found'], 404);
-        }
+        $client = $this->clientAuthService->getAuthenticatedClient();
 
         $query = AppInvoice::with(['serviceRequest.service'])
             ->where('client_id', $client->id);
@@ -73,12 +75,13 @@ class ClientInvoiceController extends Controller
 
     public function show($id): JsonResponse
     {
-        $user = auth()->user();
-        if (!$user->is_app_client) {
-            return response()->json(['error' => 'Unauthorized access'], 403);
+        // Validate client access
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
         }
 
-        $client = $user->appClient;
+        $client = $this->clientAuthService->getAuthenticatedClient();
+
         $invoice = AppInvoice::with(['serviceRequest.service', 'items', 'payments'])
             ->where('client_id', $client->id)
             ->findOrFail($id);
@@ -123,10 +126,12 @@ class ClientInvoiceController extends Controller
 
     public function initiatePayment(Request $request, $id): JsonResponse
     {
-        $user = auth()->user();
-        if (!$user->is_app_client) {
-            return response()->json(['error' => 'Unauthorized access'], 403);
+        // Validate client access
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
         }
+
+        $client = $this->clientAuthService->getAuthenticatedClient();
 
         $validator = Validator::make($request->all(), [
             'payment_method' => 'required|in:card,bank_transfer,cash',
@@ -144,7 +149,6 @@ class ClientInvoiceController extends Controller
         try {
             DB::beginTransaction();
 
-            $client = $user->appClient;
             $invoice = AppInvoice::where('client_id', $client->id)
                 ->whereIn('status', ['pending', 'overdue'])
                 ->findOrFail($id);

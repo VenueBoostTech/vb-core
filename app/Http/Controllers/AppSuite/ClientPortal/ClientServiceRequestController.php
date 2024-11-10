@@ -5,37 +5,36 @@ namespace App\Http\Controllers\AppSuite\ClientPortal;
 use App\Http\Controllers\Controller;
 use App\Models\ServiceRequest;
 use App\Models\Service;
-use App\Models\AppClient;
 use App\Models\ServiceRequestActivity;
-use App\Services\NotificationService;
+use App\Services\ClientAuthService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Str;
 
 class ClientServiceRequestController extends Controller
 {
-    protected NotificationService $notificationService;
+    protected ClientAuthService $clientAuthService;
 
-    public function __construct(NotificationService $notificationService)
-    {
-        $this->notificationService = $notificationService;
+    public function __construct(
+        ClientAuthService $clientAuthService
+    ) {
+        $this->clientAuthService = $clientAuthService;
     }
+
 
     public function requestService(Request $request): JsonResponse
     {
         // Get authenticated user's client profile
         $user = auth()->user();
-        if (!$user->is_app_client) {
-            return response()->json(['error' => 'Unauthorized access'], 403);
+
+        // Validate client access
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
         }
 
-        $client = $user->appClient;
-        if (!$client) {
-            return response()->json(['error' => 'Client profile not found'], 404);
-        }
+        $client = $this->clientAuthService->getAuthenticatedClient();
 
         $validator = Validator::make($request->all(), [
             'service_id' => 'required|exists:services,id',
@@ -103,15 +102,12 @@ class ClientServiceRequestController extends Controller
 
     public function listMyRequests(Request $request): JsonResponse
     {
-        $user = auth()->user();
-        if (!$user->is_app_client) {
-            return response()->json(['error' => 'Unauthorized access'], 403);
+        // Validate client access
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
         }
 
-        $client = $user->appClient;
-        if (!$client) {
-            return response()->json(['error' => 'Client profile not found'], 404);
-        }
+        $client = $this->clientAuthService->getAuthenticatedClient();
 
         // Get pagination and filter parameters
         $perPage = $request->input('per_page', 15);
@@ -141,7 +137,7 @@ class ClientServiceRequestController extends Controller
         // Get paginated results
         $requests = $query->latest()->paginate($perPage);
 
-        // Calculate stats
+        // Calculate stats including canceled requests
         $stats = [
             'pending' => [
                 'count' => $client->serviceRequests()->where('status', 'Pending')->count(),
@@ -157,6 +153,10 @@ class ClientServiceRequestController extends Controller
                     ->whereMonth('completed_at', Carbon::now()->month)
                     ->count(),
                 'label' => 'This month'
+            ],
+            'canceled' => [
+                'count' => $client->serviceRequests()->where('status', 'Cancelled')->count(),
+                'label' => 'Cancelled requests'
             ]
         ];
 
@@ -198,6 +198,7 @@ class ClientServiceRequestController extends Controller
         };
     }
 
+
     private function getPriorityVariant(string $priority): string
     {
         return match ($priority) {
@@ -210,15 +211,12 @@ class ClientServiceRequestController extends Controller
 
     public function getRequestDetails($id): JsonResponse
     {
-        $user = auth()->user();
-        if (!$user->is_app_client) {
-            return response()->json(['error' => 'Unauthorized access'], 403);
+        // Validate client access
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
         }
 
-        $client = $user->appClient;
-        if (!$client) {
-            return response()->json(['error' => 'Client profile not found'], 404);
-        }
+        $client = $this->clientAuthService->getAuthenticatedClient();
 
         $serviceRequest = ServiceRequest::with(['service', 'activities.performer'])
             ->where('client_id', $client->id)
