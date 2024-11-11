@@ -355,11 +355,11 @@ class EndUserController extends Controller
 
         $user = $userOrResponse; // Now we know it's a User object
 
-        // Get the source from the request (default to 'bybestshop_web' if not provided)
-        $source = $request->query('source', 'bybestshop_web');
+        // Get the source from the request (default to 'bybest.shop_web' if not provided)
+        $source = $request->query('source', 'bybest.shop_web');
 
         // Validate source
-        if (!in_array($source, ['metrosuites', 'bybestshop_web'])) {
+        if (!in_array($source, ['metrosuites', 'bybest.shop_web'])) {
             return response()->json(['error' => 'Invalid source provided'], 400);
         }
 
@@ -391,7 +391,7 @@ class EndUserController extends Controller
         // Define subAccountId based on the source
         $subAccountIds = [
             'metrosuites' => '6730cb67d23dc622500cbf0d', // Metrosuites crm id
-            'bybestshop_web' => '66551ae760ba26d93d6d3a32', // ByBest Shop CRM ID
+            'bybest.shop_web' => '66551ae760ba26d93d6d3a32', // ByBest Shop CRM ID
         ];
 
         // Ensure the source has a corresponding subAccountId
@@ -579,9 +579,9 @@ class EndUserController extends Controller
         }
 
         $user = $userOrResponse;
-        $source = $request->query('source', 'bybestshop_web');
+        $source = $request->query('source', 'bybest.shop_web');
 
-        if ($source === 'bybestshop_web') {
+        if ($source === 'bybest.shop_web') {
             // For ByBest Shop, use customer_id and use booking_* fields
             $marketingSettings = GuestMarketingSettings::firstOrCreate(
                 ['customer_id' => $user->customer?->id], // Using customer_id for ByBest Shop
@@ -641,7 +641,7 @@ class EndUserController extends Controller
             return response()->json(['errors' => $validator->errors()], 400);
         }
 
-        if ($source === 'bybestshop_web') {
+        if ($source === 'bybest.shop_web') {
             // For ByBest Shop, use customer_id and use booking_* fields
             $marketingSettings = GuestMarketingSettings::updateOrCreate(
                 ['customer_id' => $user->id], // Using customer_id for ByBest Shop
