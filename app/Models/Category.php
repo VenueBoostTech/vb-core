@@ -48,7 +48,7 @@ class Category extends Model
     }
 
     // A category can have many subcategories.
-    public function children()
+    public function childrenCategory()
     {
         return $this->hasMany(Category::class, 'parent_id');
     }

@@ -31,7 +31,7 @@ class VbStoreProductAttribute extends Model
     }
 
     public function option() {
-        return $this->belongsTo(VbStoreAttributeOption::class, 'atribute_id', 'id');
+        return $this->belongsTo(VbStoreAttributeOption::class, 'attribute_id', 'id');
     }
 
     public function variants(): \Illuminate\Database\Eloquent\Relations\BelongsToMany

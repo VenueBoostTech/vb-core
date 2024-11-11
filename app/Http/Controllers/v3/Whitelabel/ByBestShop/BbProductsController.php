@@ -83,7 +83,7 @@ class BbProductsController extends Controller
 
             $related_products = $related_products->concat($related_products_cros);
 
-            $atributes = DB::table('store_product_atributes')->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_atributes.atribute_id')
+            $atributes = DB::table('store_product_atributes')->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_atributes.attribute_id')
                 ->join('store_attributes', 'store_attributes.id', '=', 'store_attributes_options.attribute_id')
                 ->select(
                     DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
@@ -137,7 +137,7 @@ class BbProductsController extends Controller
                     } catch (\Throwable $th) {
                     }
 
-                    if (intval($variant_attr->atribute_id) != $selected_key) {
+                    if (intval($variant_attr->attribute_id) != $selected_key) {
                         $is_matched = false;
                     }
                 }

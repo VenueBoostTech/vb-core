@@ -107,7 +107,7 @@ class CheckoutController extends Controller
                     ->where('store_products_variants.id', '=', $request->variation_id_cart)->first();
 
                 $attributes = DB::table('store_product_variant_at5ributes')
-                    ->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_variant_atributes.atribute_id')
+                    ->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_variant_atributes.attribute_id')
                     ->join('store_attributes', 'store_attributes.id', '=', 'store_attributes_options.attribute_id')
                     ->select(
                         DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
