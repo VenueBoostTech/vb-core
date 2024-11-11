@@ -112,9 +112,9 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         });
 
         Route::prefix('collections')->group(function () {
+            Route::get('/list', [BbCollectionsController::class, 'showAllCollections']);
             Route::get('/{collection_url}', [BbCollectionsController::class, 'collectionProducts']);
             Route::get('/products/search', [BbCollectionsController::class, 'searchProducts']);
-            Route::get('/list', [BbCollectionsController::class, 'showAllCollections']);
         });
 
         Route::post('/search', [BbSearchController::class, 'searchPage']);

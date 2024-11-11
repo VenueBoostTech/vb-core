@@ -324,7 +324,7 @@ class BbCategoriesController extends Controller
                 });
             }
 
-            $products = $products_query->orderBy('products.created_at', 'DESC')->paginate(15);
+            $products = $products_query->orderBy('products.created_at', 'DESC')->get();
 
             // Example response
             return response()->json([
