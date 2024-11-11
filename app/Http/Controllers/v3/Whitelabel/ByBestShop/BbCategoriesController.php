@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\v3\Whitelabel\ByBestShop;
 
 use App\Http\Controllers\Controller;
+use App\Models\AccountingFinance\Currency;
 use Illuminate\Http\Request;
 use App\Models\Category;
 use App\Models\Product;
@@ -34,7 +35,7 @@ class BbCategoriesController extends Controller
                 ->where(function ($query) use ($category_url) {
                     $category_multiple = Category::where('category_url', '=', $category_url)->get();
                     foreach ($category_multiple as $single_category) {
-                        $hirearkia = Category::with(['children'])
+                        $hirearkia = Category::with(['childrenCategory'])
                             ->where('id', '=', $single_category->id)
                             ->select('categories.*')
                             ->orderBy('categories.category', 'ASC')
@@ -42,9 +43,9 @@ class BbCategoriesController extends Controller
 
                         foreach ($hirearkia as $main_child) {
                             $query->orWhere('product_category.category_id', '=', $main_child->id);
-                            foreach ($main_child->children as $second_child) {
+                            foreach ($main_child->childrenCategory as $second_child) {
                                 $query->orWhere('product_category.category_id', '=', $second_child->id);
-                                foreach ($second_child->children as $thid_child) {
+                                foreach ($second_child->childrenCategory as $thid_child) {
                                     $query->orWhere('product_category.category_id', '=', $thid_child->id);
                                 }
                             }
@@ -64,12 +65,12 @@ class BbCategoriesController extends Controller
                 ->orderBy('products.created_at', 'DESC')
                 ->with('galley')
                 ->distinct();
-                
+
             $totalProducts = $products_query->count();
             $products = $products_query->paginate(30);
 
             $filters_query = VbStoreAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.attribute_id', '=', 'vb_store_attributes.id')
-                ->join('vb_store_product_variant_attributes', 'vb_store_product_variant_attributes.atribute_id', '=', 'vb_store_attributes_options.id')
+                ->join('vb_store_product_variant_attributes', 'vb_store_product_variant_attributes.attribute_id', '=', 'vb_store_attributes_options.id')
                 ->join('vb_store_products_variants', 'vb_store_product_variant_attributes.variant_id', 'vb_store_products_variants.id')
                 ->join('products', 'vb_store_products_variants.product_id', 'products.id')
                 ->join('product_category', 'product_category.product_id', '=', 'products.id')
@@ -103,9 +104,9 @@ class BbCategoriesController extends Controller
 
                         foreach ($hirearkia as $main_child) {
                             $query->orWhere('product_category.category_id', '=', $main_child->id);
-                            foreach ($main_child->children as $second_child) {
+                            foreach ($main_child->childrenCategory as $second_child) {
                                 $query->orWhere('product_category.category_id', '=', $second_child->id);
-                                foreach ($second_child->children as $thid_child) {
+                                foreach ($second_child->childrenCategory as $thid_child) {
                                     $query->orWhere('product_category.category_id', '=', $thid_child->id);
                                 }
                             }
@@ -122,15 +123,13 @@ class BbCategoriesController extends Controller
                 ->groupBy('attr_name')
                 ->sortDesc();
 
-
-            $brands_query = Brand::join('products', 'products.brand_id', '=', 'store_brands.id')
+            $brands_query = Brand::join('products', 'products.brand_id', '=', 'brands.id')
                 ->join('product_category', 'product_category.product_id', '=', 'products.id')
                 ->where('products.product_status', '=', 1)
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha');
 
             if ($request->has('search')) {
-
                 $brands_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -151,29 +150,24 @@ class BbCategoriesController extends Controller
 
                         $query->orWhere('product_category.category_id', '=', $main_child->id);
 
-                        foreach ($main_child->children as $second_child) {
+                        foreach ($main_child->childrenCategory as $second_child) {
 
                             $query->orWhere('product_category.category_id', '=', $second_child->id);
 
-                            foreach ($second_child->children as $thid_child) {
+                            foreach ($second_child->childrenCategory as $thid_child) {
 
                                 $query->orWhere('product_category.category_id', '=', $thid_child->id);
-
                             }
-
                         }
-
                     }
-
                 }
-
             })
                 ->where('products.product_status', '=', 1)
                 ->whereNull('products.deleted_at')
                 ->where('products.product_status', '=', 1)
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha')
-                ->select('store_brands.*')->distinct()->get();
+                ->select('brands.*')->distinct()->get();
 
             $collections_query = Collection::join('product_collections', 'product_collections.collection_id', '=', 'collections.id')
                 ->join('products', 'products.id', '=', 'product_collections.product_id')
@@ -199,9 +193,9 @@ class BbCategoriesController extends Controller
 
                         foreach ($hirearkia as $main_child) {
                             $query->orWhere('product_category.category_id', '=', $main_child->id);
-                            foreach ($main_child->children as $second_child) {
+                            foreach ($main_child->childrenCategory as $second_child) {
                                 $query->orWhere('product_category.category_id', '=', $second_child->id);
-                                foreach ($second_child->children as $thid_child) {
+                                foreach ($second_child->childrenCategory as $thid_child) {
                                     $query->orWhere('product_category.category_id', '=', $thid_child->id);
                                 }
                             }
@@ -227,9 +221,9 @@ class BbCategoriesController extends Controller
                             ->distinct()->get();
                         foreach ($hirearkia as $main_child) {
                             $query->orWhere('product_category.category_id', '=', $main_child->id);
-                            foreach ($main_child->children as $second_child) {
+                            foreach ($main_child->childrenCategory as $second_child) {
                                 $query->orWhere('product_category.category_id', '=', $second_child->id);
-                                foreach ($second_child->children as $thid_child) {
+                                foreach ($second_child->childrenCategory as $thid_child) {
                                     $query->orWhere('product_category.category_id', '=', $thid_child->id);
                                 }
                             }
@@ -250,10 +244,10 @@ class BbCategoriesController extends Controller
                 ->select(
                     DB::raw('IFNULL(Max(products.price), 0) as max_price'),
                     DB::raw('IFNULL(Min(products.price), 0) as min_price')
-                )->first(); 
+                )->first();
 
             $category = Category::where('category_url', '=', $category_url)->first();
- 
+
             // Example response structure
             return response()->json([
                 // 'currency' => $currency, 
@@ -263,7 +257,7 @@ class BbCategoriesController extends Controller
                 'filters' => $filters,
                 'collections' => $collections,
                 'prices' => $prices,
-                'brands' => $brands, 
+                'brands' => $brands,
                 'group_id' => $request->search
             ]);
         } catch (\Throwable $th) {
@@ -277,10 +271,65 @@ class BbCategoriesController extends Controller
             // Implement search logic here
             // Use $request parameters to filter products
 
+            $currency = Currency::where('is_primary', '=', true)->first();
+
+            $products_query = Product::join('product_category', 'product_category.product_id', '=', 'products.id')
+                ->select('products.*')->distinct();
+
+            // Filter by category
+            if ($request->filled('category_id')) {
+                $products_query->where('product_category.category_id', '=', $request->category_id)->orderBy('products.created_at', 'DESC');
+            }
+
+            // Filter by minimum price
+            if ($request->filled('min_price_search')) {
+                $products_query->where('products.price', '>=', $request->min_price_search);
+            }
+
+            // Filter by maximum price
+            if ($request->filled('max_price_search')) {
+                $products_query->where('products.price', '<=', $request->max_price_search);
+            }
+
+            // Filter by product group
+            if ($request->filled('group_id')) {
+                $products_query->join('store_product_groups', 'store_product_groups.product_id', '=', 'products.id')
+                    ->where('store_product_groups.group_id', '=', $request->group_id);
+            }
+
+            // Filter by brands
+            if ($request->filled('brand_id') && is_array($request->brand_id)) {
+                foreach ($request->brand_id as $brand) {
+                    $products_query->where('products.brand_id', '=', $brand);
+                }
+            }
+
+            // Filter by collection
+            if ($request->filled('collection_id') && is_array($request->collection_id)) {
+                $products_query->join('product_collections', 'product_collections.product_id', '=', 'products.id');
+                $products_query->where(function ($query) use ($request) {
+                    foreach ($request->collection_id as $collection) {
+                        $query->orWhere('product_collections.collection_id', '=', $collection);
+                    }
+                });
+            }
+
+            // Filter by atributes
+            if ($request->filled('atributes_id') && is_array($request->atributes_id)) {
+                $products_query->join('vb_store_product_attributes', 'vb_store_product_attributes.product_id', '=', 'products.id');
+                $products_query->where(function ($query) use ($request) {
+                    foreach ($request->atributes_id as $atribute) {
+                        $query->orWhere('vb_store_product_attributes.attribute_id', '=', $atribute);
+                    }
+                });
+            }
+
+            $products = $products_query->orderBy('products.created_at', 'DESC')->get();
+
             // Example response
             return response()->json([
-                // 'products' => $filteredProducts,
-                // 'currency' => $currency,
+                'products' => $products,
+                'currency' => $currency,
                 // Add other necessary data
             ]);
         } catch (\Throwable $th) {

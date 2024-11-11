@@ -1448,7 +1448,7 @@ class InventorySyncController extends Controller
                             error_log("Processing  " . $item['id']);
 
                             $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
-                            $attr = VbStoreAttributeOption::where('bybest_id', $item['atribute_id'])->first();
+                            $attr = VbStoreAttributeOption::where('bybest_id', $item['attribute_id'])->first();
 
                             VbStoreProductAttribute::updateOrCreate(
                                 ['bybest_id' => $item['id']],
@@ -1537,7 +1537,7 @@ class InventorySyncController extends Controller
                             error_log("Processing  " . $item['id']);
 
                             $variant = VbStoreProductVariant::withTrashed()->where('bybest_id', $item['variant_id'])->first();
-                            $attr = VbStoreAttributeOption::where('bybest_id', $item['atribute_id'])->first();
+                            $attr = VbStoreAttributeOption::where('bybest_id', $item['attribute_id'])->first();
 
                             VbStoreProductVariantAttribute::updateOrCreate(
                                 ['bybest_id' => $item['id']],
