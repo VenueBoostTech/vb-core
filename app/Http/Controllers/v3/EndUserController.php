@@ -16,7 +16,9 @@ use App\Models\Guest;
 use App\Models\GuestMarketingSettings;
 use App\Models\LoginActivity;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Promotion;
+use App\Models\Receipt;
 use App\Models\State;
 use App\Models\StoreSetting;
 use App\Models\User;
@@ -269,8 +271,37 @@ class EndUserController extends Controller
         }
 
         $user = $userOrResponse;
-
         $perPage = $request->input('per_page', 15); // Default to 15 items per page
+        $isDemo = $request->input('demo', false); // Check if demo mode is requested
+
+        if ($isDemo) {
+            // Fetch random products in demo mode
+            $randomProducts = Product::inRandomOrder()->take($perPage)->get(['id', 'title', 'brand_id', 'description', 'price', 'image_path']);
+
+            // Format each product for the response
+            $formattedProducts = $randomProducts->map(function ($product) {
+                return [
+                    'id' => $product->id,
+                    'title' => $product->title,
+                    'brand' => $product->brand ? $product->brand->name : null, // Assuming a brand relationship
+                    'description' => $product->description,
+                    'price' => $product->price,
+                    'image' => $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null,
+                ];
+            });
+
+            return response()->json([
+                'wishlist' => [
+                    'data' => $formattedProducts,
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => $formattedProducts->count(),
+                    'total_pages' => 1,
+                ]
+            ], 200);
+        }
+
+        // Fetch the actual wishlist items if not in demo mode
         $wishlistItems = WishlistItem::where('customer_id', $user->customer->id)
             ->with('product')
             ->paginate($perPage);
@@ -285,6 +316,7 @@ class EndUserController extends Controller
 
         return response()->json(['wishlist' => $paginatedData], 200);
     }
+
 
 
     public function addToWishlist(Request $request): JsonResponse
@@ -433,6 +465,74 @@ class EndUserController extends Controller
         return response()->json(['payment_methods' => $staticPaymentMethods], 200);
     }
 
+    public function getGuestPayments(Request $request): \Illuminate\Http\JsonResponse
+    {
+        try {
+
+            // Perform end user authentication check
+            $userOrResponse = $this->endUserService->endUserAuthCheck();
+
+            // If it's a JsonResponse, return it immediately
+            if ($userOrResponse instanceof JsonResponse) {
+                return $userOrResponse;
+            }
+
+            $user = $userOrResponse; // Now we know it's a User object
+
+            // Get the guest ID from the authenticated user
+            $guestId = $user->guest->id;
+
+            $receipts = Receipt::with(['booking', 'rentalUnit', 'rentalUnit.gallery.photo'])
+                ->whereHas('booking', function ($query) use ($guestId) {
+                    $query->where('guest_id', $guestId);
+                })
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $formattedReceipts = $receipts->map(function ($receipt) {
+                // Get the first photo from the rental unit's gallery
+                $firstPhoto = $receipt->rentalUnit->gallery->first();
+                $photoUrl = null;
+
+                if ($firstPhoto && $firstPhoto->photo) {
+                    $photoUrl = Storage::disk('s3')->temporaryUrl($firstPhoto->photo->image_path, '+5 minutes');
+                }
+
+                return [
+                    'receipt_id' => $receipt->receipt_id,
+                    'total_amount' => $receipt->total_amount,
+                    'payment_date' => $receipt->created_at->format('Y-m-d H:i:s'),
+                    'payment_status' => $receipt->status, // 'not_paid', 'partially_paid', 'fully_paid'
+                    'rental_unit' => [
+                        'id' => $receipt->rentalUnit->id,
+                        'name' => $receipt->rentalUnit->name,
+                        'photo_url' => $photoUrl
+                    ],
+                    'booking' => [
+                        'id' => $receipt->booking->id,
+                        'check_in_date' => $receipt->booking->check_in_date,
+                        'check_out_date' => $receipt->booking->check_out_date,
+                        'payment_method' => $receipt->booking->paid_with,
+                        'prepayment_amount' => $receipt->booking->prepayment_amount,
+                        'confirmation_code' => $receipt->booking->confirmation_code
+                    ]
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedReceipts
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Sentry\captureException($e);
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while fetching guest payment details',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
     public function getPromotions(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();

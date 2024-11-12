@@ -400,7 +400,8 @@ class CompanySetupController extends Controller
                 'company_phone',
                 'company_email',
                 'role_id',
-                'department_id'
+                'department_id',
+                'user_id'
             )
             ->get()
             ->map(function ($employee) {
@@ -442,6 +443,7 @@ class CompanySetupController extends Controller
 
                 return [
                     'id' => $employee->id,
+                    'user_id' => $employee->user_id,
                     'name' => $employee->name,
                     'email' => $employee->email,
                     'status' => $employee->status,
