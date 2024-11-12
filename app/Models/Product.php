@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -73,6 +74,11 @@ class Product extends Model
         'updated_at',
         'deleted_at'
     ];
+
+    public function groups(): HasOne
+    {
+        return $this->hasOne(ProductGroup::class);
+    }
 
     public function category()
     {
@@ -148,7 +154,7 @@ class Product extends Model
         return $this->hasMany(VbStoreProductAttribute::class, 'product_id', 'id');
     }
 
-    public function galley()
+    public function productImages()
     {
         return $this->hasMany(ProductGallery::class, 'product_id', 'id');
     }

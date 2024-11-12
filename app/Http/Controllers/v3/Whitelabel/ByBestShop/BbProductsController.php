@@ -30,7 +30,7 @@ class BbProductsController extends Controller
             )
                 ->where('id', '=', $product_id)
                 ->where('product_url', '=', $product_url)
-                ->with(['attribute.option', 'galley', 'postal'])
+                ->with(['attribute.option', 'productImages', 'postal'])
                 ->first();
 
             if (!$product) {
@@ -59,7 +59,7 @@ class BbProductsController extends Controller
                 ->whereNotNull('products.warehouse_alpha')
                 ->whereNotNull('products.currency_alpha')
                 ->where('products.product_status', '=', 1)
-                ->with(['attribute.option', 'galley'])
+                ->with(['attribute.option', 'productImages'])
                 ->limit(4)->get();
 
             $related_products_cros = Product
@@ -78,7 +78,7 @@ class BbProductsController extends Controller
                     DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_regular_price"),
                     DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
                 )
-                ->with(['attribute.option', 'galley'])
+                ->with(['attribute.option', 'productImages'])
                 ->limit(4 - count($related_products))->get();
 
             $related_products = $related_products->concat($related_products_cros);

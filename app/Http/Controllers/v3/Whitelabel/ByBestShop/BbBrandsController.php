@@ -24,8 +24,8 @@ class BbBrandsController extends Controller
             $venue = Restaurant::where('app_key', $apiCallVenueAppKey)->first();
             if (!$venue) {
                 return response()->json(['error' => 'Venue not found or user not eligible'], 404);
-            } 
-            
+            }
+
             $temp = $request->page;
             $request->merge(['page' => 1]);
             $paginate = 30;
@@ -37,13 +37,12 @@ class BbBrandsController extends Controller
             // $exchange_rate = Currency::where('is_primary', '=', true)->first();
 
             $brand = Brand::where('venue_id', $venue->id)->where('url', '=', $brand_url)->first();
-
             if (!$brand) {
                 return response()->json(['error' => 'Brand not found'], 404);
-            } 
+            }
 
             // Products
-            $products_query = Product::with(['attribute.option', 'galley'])
+            $products_query = Product::with(['attribute.option', 'productImages'])
                 ->select(
                     "products.*",
                     DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
@@ -58,11 +57,11 @@ class BbBrandsController extends Controller
                 ->whereNotNull('products.warehouse_alpha')
                 ->whereNotNull('products.currency_alpha')
                 ->where('products.product_status', '=', 1)
-                ->where('products.brand_id', '=', $brand->id)
+                ->where('products.brand_id', $brand->id)
                 ->whereNull('products.deleted_at')
                 ->orderBy('created_at', 'DESC');
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -107,7 +106,7 @@ class BbBrandsController extends Controller
                 ->orderByRaw('LENGTH(vb_store_attributes_options.option_name) asc')
                 ->orderBy('vb_store_attributes_options.option_name', 'ASC')->distinct();
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $filters_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search)->distinct();
             }
@@ -118,9 +117,7 @@ class BbBrandsController extends Controller
             $categorues_query = Category::join('product_category', 'product_category.category_id', '=', 'categories.id')
                 ->select(
                     'categories.*',
-                    DB::raw("(SELECT COUNT(product_category.product_id)
-                         FROM `product_category`
-                         ) as product_count")
+                    DB::raw("(SELECT COUNT(product_category.product_id) FROM `product_category`) as product_count")
                 )
                 ->join('products', 'products.id', '=', 'product_category.product_id')
                 ->where('products.product_status', '=', 1)
@@ -142,19 +139,15 @@ class BbBrandsController extends Controller
                 ->distinct()
                 ->select(
                     'product_category.category_id',
-                    DB::raw("(SELECT COUNT(product_category.product_id)
-                         FROM `product_category`
-                         ) as product_count")
+                    DB::raw("(SELECT COUNT(product_category.product_id) FROM `product_category`) as product_count")
                 )
                 ->get();
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $categorues_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->select(
                         'categories.*',
-                        DB::raw("(SELECT COUNT(product_category.product_id)
-                         FROM `product_category`
-                         ) as product_count")
+                        DB::raw("(SELECT COUNT(product_category.product_id) FROM `product_category`) as product_count")
                     )
                     ->where('products.product_status', '=', 1)
                     ->where('products.stock_quantity', '>', 0)
@@ -163,7 +156,7 @@ class BbBrandsController extends Controller
                     ->whereNull('products.deleted_at')
                     ->where('product_groups.group_id', '=', $request->search)
                     ->orderBy('categories.order_no', 'ASC')
-                    ->orderBy( 'categories.category', 'ASC');
+                    ->orderBy('categories.category', 'ASC');
             }
 
             $categories = $categorues_query
@@ -173,9 +166,7 @@ class BbBrandsController extends Controller
                             ->join('products', 'products.id', '=', 'product_category.product_id')
                             ->select(
                                 'categories.*',
-                                DB::raw("(SELECT COUNT(product_category.product_id)
-                         FROM `product_category`
-                         ) as product_count")
+                                DB::raw("(SELECT COUNT(product_category.product_id) FROM `product_category`) as product_count")
                             )
                             ->where('products.brand_id', '=', $brand->id)
                             ->where('products.stock_quantity', '>', 0)
@@ -183,7 +174,6 @@ class BbBrandsController extends Controller
                             ->whereNotNull('products.warehouse_alpha')
                             ->whereNotNull('products.currency_alpha')
                             ->whereNull('products.deleted_at')
-                            ->whereNull('product_category.deleted_at')
                             ->orderBy('categories.order_no', 'ASC', 'categories.category', 'ASC')
                             ->distinct();
                     }
@@ -198,9 +188,7 @@ class BbBrandsController extends Controller
                 ->whereNull('parent_id')
                 ->select(
                     'categories.*',
-                    DB::raw("(SELECT COUNT(product_category.product_id)
-                         FROM `product_category`
-                         ) as product_count")
+                    DB::raw("(SELECT COUNT(product_category.product_id) FROM `product_category`) as product_count")
                 )
                 ->orderBy('categories.order_no', 'ASC')
                 ->orderBy('categories.category', 'ASC')
@@ -217,7 +205,7 @@ class BbBrandsController extends Controller
                 ->whereNull('products.deleted_at')
                 ->where('products.brand_id', '=', $brand->id);
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $collectons_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -236,7 +224,7 @@ class BbBrandsController extends Controller
                     DB::raw('IFNULL(Min(products.price), 0) as min_price')
                 );
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $prices_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -255,7 +243,6 @@ class BbBrandsController extends Controller
                 'collections' => $collections,
                 'group_id' => $request->search
             ]);
-
         } catch (\Throwable $th) {
             return response()->json(['error' => $th->getMessage()], 500);
         }
@@ -274,7 +261,6 @@ class BbBrandsController extends Controller
                 // 'currency' => $currency,
                 // 'products' => $products
             ]);
-
         } catch (\Throwable $th) {
             return response()->json(['error' => $th->getMessage()], 500);
         }
@@ -292,7 +278,6 @@ class BbBrandsController extends Controller
                 'brands' => $brands_query->get(),
                 'search' => $request->search
             ]);
-
         } catch (\Throwable $th) {
             return response()->json(['error' => $th->getMessage()], 500);
         }
