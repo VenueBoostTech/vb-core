@@ -1536,6 +1536,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     Route::get('/', [StaffChatController::class, 'index']);
                     Route::post('/start', [StaffChatController::class, 'startChat']);
                     Route::get('/{chatId}', [StaffChatController::class, 'getMessages']);
+                    Route::post('/{chatId}/messages', [StaffChatController::class, 'sendMessage']);
                 });
 
                 // Employee routes
