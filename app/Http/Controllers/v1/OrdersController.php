@@ -23,6 +23,7 @@ use App\Models\InventoryAlert;
 use App\Models\InventoryAlertHistory;
 use App\Models\InventoryRetail;
 use App\Models\LoyaltyProgram;
+use App\Models\Member;
 use App\Models\OrderIngredient;
 use App\Models\OrderSplitPayment;
 use App\Models\OrderStatusChange;
@@ -2242,6 +2243,59 @@ class OrdersController extends Controller
         return $invoiceItems;
     }
 
+    public function validateMMCoupon(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $apiCallVenueAppKey = request()->get('venue_app_key');
+        if (!$apiCallVenueAppKey) {
+            return response()->json(['error' => 'Venue app key is required'], 400);
+        }
+
+        $venue = Restaurant::where('app_key', $apiCallVenueAppKey)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'mm_coupon_code' => 'required|string',
+            'subtotal' => 'required|numeric|min:0',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        $member = Member::where('old_platform_member_code', $request->mm_coupon_code)
+            ->whereNull('deleted_at')->first();
+
+        if(!$member) {
+            return response()->json(['error' => 'Member not found'], 404);
+        }
+
+        $coupon = Coupon::where('code', "EXTRA25")->where('venue_id', $venue->id)->first();
+
+        if (!$coupon) {
+            return response()->json(['error' => 'Invalid coupon code'], 404);
+        }
+
+        // Check if the coupon is expired or not started yet
+        $currentDate = now();
+        if ($coupon->start_time > $currentDate || $coupon->expiry_time < $currentDate) {
+            return response()->json(['error' => 'Coupon is not valid for this time period'], 400);
+        }
+
+        // Calculate the discount based on discount_type
+        $discountValue = 0;
+        if ($coupon->discount_type === 'percentage_cart_discount') {
+            $discountValue = ($coupon->discount_amount / 100) * $request->subtotal;
+        } elseif ($coupon->discount_type === 'fixed_cart_discount') {
+            $discountValue = $coupon->discount_amount;
+        }
+
+        // Ensure the discount does not exceed the subtotal
+        $discountValue = min($discountValue, $request->subtotal);
+
+        return response()->json(['discount_value' => $discountValue]);
+    }
 
     public function validateCoupon(Request $request): \Illuminate\Http\JsonResponse
     {

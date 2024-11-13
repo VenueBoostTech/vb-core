@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\v3;
 
+use App\Exceptions\CustomException;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityRetail;
 use App\Models\Brand;
@@ -507,7 +508,7 @@ class InventorySyncController extends Controller
         $processedCount = 0;
 
         ini_set('max_execution_time', 3000000);
-        do {
+        // do {
             try {
 
                 error_log("log page $page");
@@ -526,117 +527,121 @@ class InventorySyncController extends Controller
                 $bybestData = $response->json();
 
                 if (empty($bybestData) || !isset($bybestData['data'])) {
-                    break; // No more data to process
+                    return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 $products = $bybestData['data'];
 
-                foreach (array_chunk($products, $batchSize) as $batch) {
-                    DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($batch as $item) {
-                            \Log::info('Processing product', ['item' => $item]);
+                $brandIds = Brand::withTrashed()->pluck('id')->toArray();
 
-                            // Make sure the required fields are available
-                            if (!isset($item['id'])) {
-                                \Log::error('Product missing id', ['item' => $item]);
-                                $skippedCount++;
-                                continue;
+                // foreach (array_chunk($products, $batchSize) as $batch) {
+                    foreach ($products as $item) {
+                        // DB::transaction(function () use ($item, $venue, &$skippedCount, &$processedCount) {
+                            DB::beginTransaction();
+                            try {
+                                \Log::info('Processing product', ['item' => $item]);
+
+                                // Make sure the required fields are available
+                                if (!isset($item['id'])) {
+                                    \Log::error('Product missing id', ['item' => $item]);
+                                    $skippedCount++;
+                                    continue;
+                                }
+                                error_log("Processing product " . $item['id']);
+
+                                $json_title = json_decode($item['product_name']);
+                                $json_shortdesc = json_decode($item['product_short_description']);
+                                $json_desc = json_decode($item['product_long_description']);
+
+                                $title = (isset($json_title->en) && $json_title->en != null) ? $json_title->en : '';
+                                $title_al = (isset($json_title->sq) && isset($json_title->en) != null) ? $json_title->sq : '';
+                                $shortdesc = (isset($json_shortdesc->en) && isset($json_shortdesc->en) != null) ? $json_shortdesc->en : '';
+                                $shortdesc_al = (isset($json_shortdesc->sq) && isset($json_shortdes->sq) != null) ? $json_shortdesc->sq : '';
+                                $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
+                                $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
+
+                                // $brand = Brand::withTrashed()->where('bybest_id', $item['brand_id'])->first();
+                                $synced_product = Product::updateOrCreate(
+                                    ['bybest_id' => $item['id']],
+                                    [
+                                        'title' => $title,
+                                        'title_al' => $title_al,
+                                        'description' => $desc,
+                                        'description_al' => $desc_al,
+                                        'short_description' => $shortdesc,
+                                        'short_description_al' => $shortdesc_al,
+                                        //'image_path' => 'https://admin.bybest.shop/storage/products/' . $item['product_image'],
+                                        'image_thumbnail_path' => null,
+                                        'price' => $item['regular_price'],
+                                        'order_method' => null,
+                                        'available' => $item['product_status'] == 1 ? 1 : 0,
+                                        'is_for_retail' => 0,
+                                        'article_no' => $item['article_no'],
+                                        'additional_code' => null,
+                                        'sale_price' => $item['sale_price'],
+                                        'date_sale_start' => $item['date_sale_start'],
+                                        'date_sale_end' => $item['date_sale_end'],
+                                        'product_url' => $item['product_url'],
+                                        'product_type' => $item['product_type'] == 1 ? 'single' : 'variable',
+                                        'weight' => $item['weight'],
+                                        'length' => $item['length'],
+                                        'width' => $item['width'],
+                                        'height' => $item['height'],
+                                        'unit_measure' => null,
+                                        'scan_time' => null,
+                                        'featured' => $item['featured'],
+                                        'is_best_seller' => $item['is_best_seller'],
+                                        'product_tags' => $item['product_tags'],
+                                        'product_sku' => $item['product_sku'],
+                                        'sku_alpha' => $item['sku_alpha'],
+                                        'currency_alpha' => $item['currency_alpha'],
+                                        'tax_code_alpha' => $item['tax_code_alpha'],
+                                        'price_without_tax_alpha' => $item['price_without_tax_alpha'],
+                                        'unit_code_alpha' => $item['unit_code_alpha'],
+                                        'warehouse_alpha' => $item['warehouse_alpha'],
+                                        'bb_points' => $item['bb_points'],
+                                        'product_status' => $item['product_status'],
+                                        'enable_stock' => $item['enable_stock'],
+                                        'product_stock_status' => $item['product_stock_status'],
+                                        'sold_invidually' => $item['sold_invidually'],
+                                        'stock_quantity' => $item['stock_quantity'],
+                                        'low_quantity' => $item['low_quantity'],
+                                        'shipping_class' => $item['shipping_class'],
+                                        'purchase_note' => $item['purchase_note'],
+                                        'menu_order' => $item['menu_order'],
+                                        'allow_back_order' => $item['allow_back_order'],
+                                        'allow_customer_review' => $item['allow_customer_review'],
+                                        'syncronize_at' => $item['syncronize_at'],
+                                        'brand_id' => in_array($item['brand_id'], $brandIds) ? $item['brand_id'] : null,
+                                        'restaurant_id' => $venue->id,
+                                        'bybest_id' => $item['id'],
+                                        'third_party_product_id' => null,
+                                        'created_at' => $item['created_at'],
+                                        'updated_at' => $item['updated_at'],
+                                        'deleted_at' => $item['deleted_at']
+                                    ]
+                                );
+
+                                // Dispatch job for photo upload
+                                if ($item['product_image']) {
+                                    \Log::info('Dispatching UploadPhotoJob', [
+                                        'product_id' => $synced_product->id,
+                                        'photo_url' => $item['product_image'],
+                                    ]);
+                                    UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
+                                }
+                                $processedCount++;
+                                DB::commit();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
                             }
-                            error_log("Processing product " . $item['id']);
-
-                            $json_title = json_decode($item['product_name']);
-                            $json_shortdesc = json_decode($item['product_short_description']);
-                            $json_desc = json_decode($item['product_long_description']);
-
-                            $title = (isset($json_title->en) && $json_title->en != null) ? $json_title->en : '';
-                            $title_al = (isset($json_title->sq) && isset($json_title->en) != null) ? $json_title->sq : '';
-                            $shortdesc = (isset($json_shortdesc->en) && isset($json_shortdesc->en) != null) ? $json_shortdesc->en : '';
-                            $shortdesc_al = (isset($json_shortdesc->sq) && isset($json_shortdes->sq) != null) ? $json_shortdesc->sq : '';
-                            $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
-                            $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
-
-                            $brand = Brand::withTrashed()->where('bybest_id', $item['brand_id'])->first();
-                            $synced_product = Product::updateOrCreate(
-                                ['bybest_id' => $item['id']],
-                                [
-                                    'title' => $title,
-                                    'title_al' => $title_al,
-                                    'description' => $desc,
-                                    'description_al' => $desc_al,
-                                    'short_description' => $shortdesc,
-                                    'short_description_al' => $shortdesc_al,
-                                    //'image_path' => 'https://admin.bybest.shop/storage/products/' . $item['product_image'],
-                                    'image_thumbnail_path' => null,
-                                    'price' => $item['regular_price'],
-                                    'order_method' => null,
-                                    'available' => $item['product_status'] == 1 ? 1 : 0,
-                                    'is_for_retail' => 0,
-                                    'article_no' => $item['article_no'],
-                                    'additional_code' => null,
-                                    'sale_price' => $item['sale_price'],
-                                    'date_sale_start' => $item['date_sale_start'],
-                                    'date_sale_end' => $item['date_sale_end'],
-                                    'product_url' => $item['product_url'],
-                                    'product_type' => $item['product_type'] == 1 ? 'single' : 'variable',
-                                    'weight' => $item['weight'],
-                                    'length' => $item['length'],
-                                    'width' => $item['width'],
-                                    'height' => $item['height'],
-                                    'unit_measure' => null,
-                                    'scan_time' => null,
-                                    'featured' => $item['featured'],
-                                    'is_best_seller' => $item['is_best_seller'],
-                                    'product_tags' => $item['product_tags'],
-                                    'product_sku' => $item['product_sku'],
-                                    'sku_alpha' => $item['sku_alpha'],
-                                    'currency_alpha' => $item['currency_alpha'],
-                                    'tax_code_alpha' => $item['tax_code_alpha'],
-                                    'price_without_tax_alpha' => $item['price_without_tax_alpha'],
-                                    'unit_code_alpha' => $item['unit_code_alpha'],
-                                    'warehouse_alpha' => $item['warehouse_alpha'],
-                                    'bb_points' => $item['bb_points'],
-                                    'product_status' => $item['product_status'],
-                                    'enable_stock' => $item['enable_stock'],
-                                    'product_stock_status' => $item['product_stock_status'],
-                                    'sold_invidually' => $item['sold_invidually'],
-                                    'stock_quantity' => $item['stock_quantity'],
-                                    'low_quantity' => $item['low_quantity'],
-                                    'shipping_class' => $item['shipping_class'],
-                                    'purchase_note' => $item['purchase_note'],
-                                    'menu_order' => $item['menu_order'],
-                                    'allow_back_order' => $item['allow_back_order'],
-                                    'allow_customer_review' => $item['allow_customer_review'],
-                                    'syncronize_at' => $item['syncronize_at'],
-
-                                    'brand_id' => $brand != null ? $brand->id : null,
-                                    'restaurant_id' => $venue->id,
-                                    'bybest_id' => $item['id'],
-                                    'third_party_product_id' => null,
-
-                                    'created_at' => $item['created_at'],
-                                    'updated_at' => $item['updated_at'],
-                                    'deleted_at' => $item['deleted_at']
-                                ]
-                            );
-
-                             // Dispatch job for photo upload
-                             if ($item['product_image']) {
-
-                                 \Log::info('Dispatching UploadPhotoJob', [
-                                     'product_id' => $synced_product->id,
-                                     'photo_url' => $item['product_image'],
-                                 ]);
-
-                                 UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
-                             }
-                            $processedCount++;
-                        }
-                    });
-                }
+                        // });
+                    }
+                // }
 
                 \Log::info("Processed {$processedCount} products so far.");
 
-                $page++;
+                // $page++;
             } catch (\Throwable $th) {
                 \Log::error('Error in product sync', [
                     'error' => $th->getMessage(),
@@ -644,17 +649,19 @@ class InventorySyncController extends Controller
                 ]);
 
                 error_log('Error in product sync' . $th->getMessage());
-                 return response()->json([
-                     "message" => "Error in products sync",
-                     "error" => $th->getMessage()
-                 ], 503);
+                return response()->json([
+                    "message" => "Error in products sync",
+                    "error" => $th->getMessage()
+                ], 503);
             }
-        } while (count($products) == $perPage);
+        // } while (count($products) == $perPage);
 
         return response()->json([
             'message' => 'Products sync completed successfully',
             'processed_count' => $processedCount,
-            'skipped_count' => $skippedCount
+            'skipped_count' => $skippedCount,
+            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
+            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
         ], 200);
     }
 
@@ -1274,7 +1281,7 @@ class InventorySyncController extends Controller
         $processedCount = 0;
         ini_set('max_execution_time', 3000000);
 
-        do {
+        // do {
             try {
 
                 $response = Http::withHeaders([
@@ -1291,19 +1298,20 @@ class InventorySyncController extends Controller
                 $bybestData = $response->json();
 
                 if (empty($bybestData) || !isset($bybestData['data'])) {
-                    break; // No more data to process
+                    // break; // No more data to process
+                    return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 error_log("page $page");
 
                 $variations = $bybestData['data'];
 
+                $productIds = Product::withTrashed()->pluck('id')->toArray();
 
-
-
-                foreach (array_chunk($variations, $batchSize) as $batch) {
-                    DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($batch as $item) {
+                // foreach (array_chunk($variations, $batchSize) as $batch) {
+                    foreach ($variations as $item) {
+                        DB::beginTransaction();
+                        try {
                             \Log::info('Processing variations', ['item' => $item]);
 
                             // Make sure the required fields are available
@@ -1313,19 +1321,19 @@ class InventorySyncController extends Controller
                                 continue;
                             }
 
-                            error_log("processed ".$item['id']);
+                            error_log("processed " . $item['id']);
 
                             $json_desc = json_decode($item['product_long_description']);
 
                             $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
                             $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
-                            $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
+                            // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
 
                             $attrOption = VbStoreProductVariant::updateOrCreate(
                                 ['bybest_id' => $item['id']],
                                 [
-                                    'product_id' => $product->id,
+                                    'product_id' => in_array($item['product_id'], $productIds) ? $item['product_id'] : null,
                                     'venue_id' => $venue->id,
                                     'name' =>  $item['varation_name'],
                                     // 'variation_image' => 'https://admin.bybest.shop/storage/products/' . $item['variation_image'],
@@ -1363,41 +1371,44 @@ class InventorySyncController extends Controller
                                 ]
                             );
 
+                            // Dispatch job for photo upload
+                            if ($item['variation_image']) {
+                                \Log::info('Dispatching UploadPhotoJob', [
+                                    'cat_id' => $attrOption->id,
+                                    'photo_url' => $item['variation_image'],
+                                ]);
 
-                             // Dispatch job for photo upload
-                             if ($item['variation_image']) {
-                                 \Log::info('Dispatching UploadPhotoJob', [
-                                     'cat_id' => $attrOption->id,
-                                     'photo_url' => $item['variation_image'],
-                                 ]);
-
-                                 UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/products/' . $item['variation_image'], 'variation_image', $venue);
-                             }
+                                UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/products/' . $item['variation_image'], 'variation_image', $venue);
+                            }
                             $processedCount++;
+                        } catch (\Exception $e) {
+                            DB::rollBack();
                         }
-                    });
-                }
+                    }
+                // }
 
                 \Log::info("Processed {$processedCount} variations so far.");
 
-                $page++;
+                // $page++;
             } catch (\Throwable $th) {
                 \Log::error('Error in variations sync', [
                     'error' => $th->getMessage(),
                     'trace' => $th->getTraceAsString()
                 ]);
                 error_log('Error in variations sync ' . $th->getMessage());
-                 return response()->json([
-                     "message" => "Error in variations sync",
-                     "error" => $th->getMessage()
-                 ], 503);
+                return response()->json([
+                    "message" => "Error in variations sync",
+                    "error" => $th->getMessage()
+                ], 503);
             }
-        } while (count($variations) == $perPage);
+        // } while (count($variations) == $perPage);
 
         return response()->json([
             'message' => 'variations sync completed successfully',
             'processed_count' => $processedCount,
-            'skipped_count' => $skippedCount
+            'skipped_count' => $skippedCount,
+            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
+            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
         ], 200);
     }
 
