@@ -4,6 +4,8 @@ namespace App\Http\Controllers\v3\Whitelabel\ByBestShop;
 
 use App\Models\AccountingFinance\Currency;
 use App\Models\VbStoreProductAttribute;
+use App\Models\VbStoreProductVariant;
+use App\Models\VbStoreProductVariantAttribute;
 use App\Services\BktPaymentService;
 use DateTime;
 use Illuminate\Http\Request;
@@ -91,37 +93,31 @@ class CheckoutController extends Controller
 
             if ($request->variation_id_cart != null) {
 
-                $product_details = DB::table('store_products_variants')
-                    ->rightJoin('store_products', 'store_products.id', '=', 'store_products_variants.product_id')
-                    ->select(
-                        'store_products_variants.sale_price',
-                        'store_products_variants.price',
-                        'store_products_variants.stock_quantity',
-                        'store_products_variants.currency_alpha',
-                        'store_products_variants.bb_points',
-                        'store_products_variants.date_sale_start',
-                        'store_products_variants.date_sale_end',
-                        'store_products.product_image',
-                        'store_products.product_url',
-                        'store_products.product_url',
-                        'store_products.product_short_description',
-                    )
-                    ->where('store_products_variants.id', '=', $request->variation_id_cart)->first();
+                $product_details = VbStoreProductVariant::with('product')
+                ->select(
+                    'sale_price',
+                    'price',
+                    'stock_quantity',
+                    'currency_alpha',
+                    'bb_points',
+                    'date_sale_start',
+                    'date_sale_end',
+                )
+                ->where('id', $request->variation_id_cart)
+                ->first();
 
-                $attributes = DB::table('store_product_variant_at5ributes')
-                    ->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_variant_atributes.atribute_id')
-                    ->join('store_attributes', 'store_attributes.id', '=', 'store_attributes_options.attribute_id')
-                    ->select(
-                        DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
-                        DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes_options.option_name, '$." . App::getLocale() . "')) AS option_name"),
-                    )
-                    ->where('store_product_variant_attributes.variant_id', '=', $request->variation_id_cart)
-                    ->get();
+                $attributes = VbStoreProductVariantAttribute::with(['attributeOption.attribute'])
+                ->where('variant_id', $request->variation_id_cart)
+                ->get()
+                ->map(function ($attribute) use ($locale) {
+                    return [
+                        'attr_name' => DB::raw("JSON_UNQUOTE(JSON_EXTRACT({$attribute->attributeOption->attribute->attr_name}, '$.{$locale}'))"),
+                        'option_name' => DB::raw("JSON_UNQUOTE(JSON_EXTRACT({$attribute->attributeOption->option_name}, '$.{$locale}'))"),
+                    ];
+                });
             } else {
 
-                $product_details = DB::table('products')
-                    ->select('products.*')
-                    ->where('products.id', '=', $product->id)->first();
+                $product_details = Product::where('id', $product->id)->first();
 
                 $attributes = VbStoreProductAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.id', '=', 'vb_store_product_attributes.attribute_id')
                     ->join('vb_store_attributes', 'vb_store_attributes.id', '=', 'vb_store_attributes_options.attribute_id')
@@ -135,7 +131,7 @@ class CheckoutController extends Controller
 
             Cart::clear();
 
-            Cart::add([
+            Cart::create([
                 'id' => $request->product_id,
                 'name' => $product->product_name,
                 'price' => $product_details->regular_price,
@@ -370,7 +366,7 @@ class CheckoutController extends Controller
                 if($request->email) {
                     $customer = User::where('email', $request->email)->first();
                     if(!$customer) {
-                        $new_user = DB::table('users')->insert([
+                        $new_user = User::create([
                             'name' => $request->first_name . $request->last_name,
                             'email' => $request->email,
                             'password' => random_int(0, 899990000),
@@ -382,7 +378,7 @@ class CheckoutController extends Controller
                         $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
 
                         if(!$new_customer) {
-                            $newCustomer = DB::table('customers')->insert([
+                            $newCustomer = Customer::create([
                                 'name' => $request->first_name . $request->last_name,
                                 'email' => $request->email,
                                 'phone' => $request->phone_number,
@@ -412,7 +408,7 @@ class CheckoutController extends Controller
                 } else {
                     $temp_email = $this->unique_code(10).'@temp.com';
 
-                    $new_user = DB::table('users')->insert([
+                    $new_user = User::create([
                         'username' => $request->first_name . $request->last_name,
                         'email' => $temp_email,
                         'password' => random_int(0, 899990000),
@@ -423,7 +419,7 @@ class CheckoutController extends Controller
 
                     $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
                     if(!$new_customer) {
-                        $newCustomer = DB::table('customers')->insert([
+                        $newCustomer = Customer::create([
                             'name' => $request->first_name . $request->last_name,
                             'email' => $request->email,
                             'phone' => $request->phone_number,
@@ -455,7 +451,7 @@ class CheckoutController extends Controller
                     ->join('postals', 'postals.id', '=', 'postal_pricing.postal_id')
                     ->where('postal_id', '2')->first();
                 
-                $order_id = DB::table('orders')->insertGetId([
+                $orders = Order::create([
                     'customer_id' => $customer->id,
                     'shipping_id' => 2,
                     'tracking_number' => $order_tracking_code,
@@ -493,23 +489,23 @@ class CheckoutController extends Controller
                     'coupon_id' => $coupon ? $coupon->id : '',
                 ]);
 
-                foreach (Cart::getContent() as $product) {
-                    $temp_date_start = new DateTime($product->attributes->date_sale_start);
-                    $temp_date_end = new DateTime($product->attributes->date_sale_end);
-                    $temp_date_now = new DateTime();
-                    $is_higher = $temp_date_now > $temp_date_start;
-                    $is_lower = $temp_date_now < $temp_date_end;
-                    $sale_valid = $is_higher && $is_lower;
-    
-                    DB::table('order_products')->insert([
-                        'order_id' => $order_id,
-                        'product_id' => $product->id,
-                        'variation_id' => $product->attributes->variation,
-                        'product_quantity' => $product->quantity,
-                        'product_total_price' => $sale_valid ? $product->attributes->regular_price - ($product->attributes->regular_price * ((float)$product->attributes->sale_price / 100)) * $product->quantity : $product->attributes->regular_price * $product->quantity,
-                        'product_discount_price' => $sale_valid ? $product->attributes->sale_price : 0,
-                    ]);
-                }
+                $order_id = $orders->id;
+
+                $temp_date_start = new DateTime($product->attributes->date_sale_start);
+                $temp_date_end = new DateTime($product->attributes->date_sale_end);
+                $temp_date_now = new DateTime();
+                $is_higher = $temp_date_now > $temp_date_start;
+                $is_lower = $temp_date_now < $temp_date_end;
+                $sale_valid = $is_higher && $is_lower;
+
+                OrderProduct::create([
+                    'order_id' => $order_id,
+                    'product_id' => $product->id,
+                    'variation_id' => $product->attributes->variation,
+                    'product_quantity' => $product->quantity,
+                    'product_total_price' => $sale_valid ? $product->attributes->regular_price - ($product->attributes->regular_price * ((float)$product->attributes->sale_price / 100)) * $product->quantity : $product->attributes->regular_price * $product->quantity,
+                    'product_discount_price' => $sale_valid ? $product->attributes->sale_price : 0,
+                ]);
             } else {
                 // Handle other payment methods like cash
                 $result = $this->finalizeOrder($venue, $customer, $order_products, $total_price, null);
@@ -778,7 +774,7 @@ class CheckoutController extends Controller
                 if($request->email) {
                     $customer = User::where('email', $request->email)->first();
                     if(!$customer) {
-                        $new_user = DB::table('users')->insert([
+                        $new_user = User::create([
                             'name' => $request->first_name . $request->last_name,
                             'email' => $request->email,
                             'password' => random_int(0, 899990000),
@@ -790,7 +786,7 @@ class CheckoutController extends Controller
                         $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
 
                         if(!$new_customer) {
-                            $newCustomer = DB::table('customers')->insert([
+                            $newCustomer = Customer::create([
                                 'name' => $request->first_name . $request->last_name,
                                 'email' => $request->email,
                                 'phone' => $request->phone_number,
@@ -820,7 +816,7 @@ class CheckoutController extends Controller
                 } else {
                     $temp_email = $this->unique_code(10).'@temp.com';
 
-                    $new_user = DB::table('users')->insert([
+                    $new_user = User::create([
                         'username' => $request->first_name . $request->last_name,
                         'email' => $temp_email,
                         'password' => random_int(0, 899990000),
@@ -831,7 +827,7 @@ class CheckoutController extends Controller
 
                     $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
                     if(!$new_customer) {
-                        $newCustomer = DB::table('customers')->insert([
+                        $newCustomer = Customer::create([
                             'name' => $request->first_name . $request->last_name,
                             'email' => $request->email,
                             'phone' => $request->phone_number,
@@ -863,7 +859,7 @@ class CheckoutController extends Controller
                     ->join('postals', 'postals.id', '=', 'postal_pricing.postal_id')
                     ->where('postal_id', '2')->first();
                 
-                $order_id = DB::table('orders')->insertGetId([
+                $orders = Order::create([
                     'customer_id' => $customer->id,
                     'shipping_id' => 2,
                     'tracking_number' => $order_tracking_code,
@@ -901,7 +897,11 @@ class CheckoutController extends Controller
                     'coupon_id' => $coupon ? $coupon->id : '',
                 ]);
 
-                foreach (Cart::getContent() as $product) {
+                $order_id = $orders->id;
+
+                foreach ($order_products as $productData) {
+                    $product = Product::find($productData['id']);
+
                     $temp_date_start = new DateTime($product->attributes->date_sale_start);
                     $temp_date_end = new DateTime($product->attributes->date_sale_end);
                     $temp_date_now = new DateTime();
@@ -909,7 +909,7 @@ class CheckoutController extends Controller
                     $is_lower = $temp_date_now < $temp_date_end;
                     $sale_valid = $is_higher && $is_lower;
     
-                    DB::table('order_products')->insert([
+                    OrderProduct::create([
                         'order_id' => $order_id,
                         'product_id' => $product->id,
                         'variation_id' => $product->attributes->variation,
