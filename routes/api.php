@@ -1533,8 +1533,16 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
 
                 Route::prefix('internal-chat')->group(function () {
+                    // List/Index routes should come first
                     Route::get('/', [StaffChatController::class, 'index']);
+                    Route::get('/search', [StaffChatController::class, 'searchChats']);
+                    Route::get('/employees', [StaffChatController::class, 'listEmployees']);
+                    Route::get('/clients', [StaffChatController::class, 'listClients']);
+
+                    // Start chat route
                     Route::post('/start', [StaffChatController::class, 'startChat']);
+
+                    // Dynamic parameter routes should come last
                     Route::get('/{chatId}', [StaffChatController::class, 'getMessages']);
                     Route::post('/{chatId}/messages', [StaffChatController::class, 'sendMessage']);
                 });

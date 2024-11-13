@@ -293,8 +293,8 @@ class BbCategoriesController extends Controller
 
             // Filter by product group
             if ($request->filled('group_id')) {
-                $products_query->join('store_product_groups', 'store_product_groups.product_id', '=', 'products.id')
-                    ->where('store_product_groups.group_id', '=', $request->group_id);
+                $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+                    ->where('product_groups.group_id', '=', $request->group_id);
             }
 
             // Filter by brands

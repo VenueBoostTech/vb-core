@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\AppSuite\Staff;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppClient;
 use App\Models\Chat;
+use App\Models\Employee;
 use App\Models\Message;
 use App\Models\User;
 use App\Events\MessageSent;
@@ -304,5 +306,164 @@ class StaffChatController extends Controller
         return $user->loginActivities()
             ->where('created_at', '>', now()->subMinutes(5))
             ->exists();
+    }
+
+
+    public function searchChats(Request $request): JsonResponse
+    {
+        $user = auth()->user()->load('employee.role');
+        $search = $request->input('search');
+        $selectedTab = $request->input('tab', 'staff');
+
+        $query = Chat::with(['sender', 'receiver', 'messages' => function($query) {
+            $query->orderBy('created_at', 'desc');
+        }])
+            ->where('status', '!=', 'deleted');
+
+        // Filter by user's role and chat type
+        if ($selectedTab === 'customers') {
+            if ($user->employee?->role?->name !== 'Operations Manager') {
+                return response()->json(['error' => 'Unauthorized'], 403);
+            }
+            $query->where('type', 'client');
+        } else {
+            $query->where('type', 'staff');
+        }
+
+        // Show chats where user is participant
+        $query->where(function($q) use ($user) {
+            $q->where('sender_id', $user->id)
+                ->orWhere('receiver_id', $user->id);
+        });
+
+        // Apply search
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->whereHas('sender', function($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%");
+                })->orWhereHas('receiver', function($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%");
+                })->orWhereHas('messages', function($q) use ($search) {
+                    $q->where('content', 'like', "%{$search}%")
+                        ->where('type', 'text');
+                });
+            });
+        }
+
+        $chats = $query->orderBy('updated_at', 'desc')->paginate(10);
+
+        $chats->getCollection()->transform(function ($chat) use ($user) {
+            $lastMessage = $chat->messages->first();
+            $otherUser = $chat->sender_id === $user->id ?
+                User::with('employee.role')->find($chat->receiver_id) :
+                User::with('employee.role')->find($chat->sender_id);
+
+            return [
+                'id' => $chat->id,
+                'name' => $otherUser->name,
+                'role' => $otherUser->employee?->role?->name ?? 'Client',
+                'message' => $lastMessage?->content ?? '',
+                'time' => $this->formatDateTime($lastMessage?->created_at ?? $chat->created_at),
+                'unread' => $chat->messages()
+                    ->where('receiver_id', $user->id)
+                    ->where('is_read', 0)
+                    ->count(),
+                'isOnline' => $this->isUserOnline($otherUser),
+                'avatar' => $otherUser->profile_picture ?
+                    Storage::disk('s3')->temporaryUrl($otherUser->profile_picture, '+5 minutes') :
+                    null
+            ];
+        });
+
+        return response()->json($chats);
+    }
+
+    public function listEmployees(): JsonResponse
+    {
+        $user = auth()->user()->load('employee.role');
+
+        // Get IDs of users that current user already has chats with
+        $existingChatUserIds = Chat::where('type', 'staff')
+            ->where(function($q) use ($user) {
+                $q->where('sender_id', $user->id)
+                    ->orWhere('receiver_id', $user->id);
+            })
+            ->where('status', '!=', 'deleted')
+            ->get()
+            ->map(function ($chat) use ($user) {
+                return $chat->sender_id === $user->id ? $chat->receiver_id : $chat->sender_id;
+            });
+
+        $employees = Employee::with(['user', 'role'])
+            ->whereHas('user')
+            ->whereNotIn('user_id', $existingChatUserIds) // Exclude users with existing chats
+            ->where('user_id', '!=', $user->id) // Exclude current user
+            ->get()
+            ->map(function ($employee) {
+                return [
+                    'id' => $employee->id,
+                    'user_id' => $employee->user_id,
+                    'name' => $employee->user->name,
+                    'avatar' => $employee->profile_picture ?
+                        Storage::disk('s3')->temporaryUrl($employee->profile_picture, '+5 minutes')
+                        : $this->getInitials($employee->user->name),
+                    'role' => $employee->role?->name
+                ];
+            });
+
+        return response()->json($employees);
+    }
+
+    public function listClients(): JsonResponse
+    {
+        $user = auth()->user()->load('employee.role');
+
+        // Check if user is Operations Manager
+        if ($user->employee?->role?->name !== 'Operations Manager') {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        // Get IDs of clients that already have chats
+        $existingChatUserIds = Chat::where('type', 'client')
+            ->where(function($q) use ($user) {
+                $q->where('sender_id', $user->id)
+                    ->orWhere('receiver_id', $user->id);
+            })
+            ->where('status', '!=', 'deleted')
+            ->get()
+            ->map(function ($chat) use ($user) {
+                return $chat->sender_id === $user->id ? $chat->receiver_id : $chat->sender_id;
+            });
+
+        $clients = AppClient::with('user')
+            ->whereHas('user')
+            ->whereNotIn('user_id', $existingChatUserIds) // Exclude clients with existing chats
+            ->get()
+            ->map(function ($client) {
+                return [
+                    'id' => $client->id,
+                    'user_id' => $client->user_id,
+                    'name' => $client->user->name,
+                    'avatar' => $client->user->profile_picture ?
+                        Storage::disk('s3')->temporaryUrl($client->user->profile_picture, '+5 minutes') :
+                        $this->getInitials($client->user->name),
+                    'type' => 'Client'
+                ];
+            });
+
+        return response()->json($clients);
+    }
+
+    /**
+     * Helper function to generate initials from name
+     */
+    private function getInitials($name): string
+    {
+        $words = explode(' ', $name);
+        $initials = '';
+        foreach ($words as $word) {
+            $initials .= strtoupper(substr($word, 0, 1));
+        }
+        return substr($initials, 0, 2);
     }
 }
