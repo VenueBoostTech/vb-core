@@ -312,6 +312,16 @@ class StaffChatController extends Controller
     public function searchChats(Request $request): JsonResponse
     {
         $user = auth()->user()->load('employee.role');
+        $validator = Validator::make($request->all(), [
+            'search' => 'required|string|min:1',
+            'tab' => 'required|in:staff,customers',
+            'page' => 'nullable|integer|min:1'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
         $search = $request->input('search');
         $selectedTab = $request->input('tab', 'staff');
 
@@ -320,38 +330,43 @@ class StaffChatController extends Controller
         }])
             ->where('status', '!=', 'deleted');
 
-        // Filter by user's role and chat type
+        // Apply tab filter
         if ($selectedTab === 'customers') {
+            // Validate Operations Manager role for customer chats
             if ($user->employee?->role?->name !== 'Operations Manager') {
-                return response()->json(['error' => 'Unauthorized'], 403);
+                return response()->json([
+                    'error' => 'Unauthorized. Only Operations Manager can search customer chats'
+                ], 403);
             }
             $query->where('type', 'client');
         } else {
             $query->where('type', 'staff');
         }
 
-        // Show chats where user is participant
+        // Show only user's chats
         $query->where(function($q) use ($user) {
             $q->where('sender_id', $user->id)
                 ->orWhere('receiver_id', $user->id);
         });
 
-        // Apply search
-        if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->whereHas('sender', function($q) use ($search) {
+        // Apply search filters
+        $query->where(function($q) use ($search) {
+            $q->whereHas('sender', function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%");
+            })
+                ->orWhereHas('receiver', function($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%");
-                })->orWhereHas('receiver', function($q) use ($search) {
-                    $q->where('name', 'like', "%{$search}%");
-                })->orWhereHas('messages', function($q) use ($search) {
+                })
+                ->orWhereHas('messages', function($q) use ($search) {
                     $q->where('content', 'like', "%{$search}%")
                         ->where('type', 'text');
                 });
-            });
-        }
+        });
 
+        // Get paginated results
         $chats = $query->orderBy('updated_at', 'desc')->paginate(10);
 
+        // Transform the results
         $chats->getCollection()->transform(function ($chat) use ($user) {
             $lastMessage = $chat->messages->first();
             $otherUser = $chat->sender_id === $user->id ?
@@ -371,11 +386,26 @@ class StaffChatController extends Controller
                 'isOnline' => $this->isUserOnline($otherUser),
                 'avatar' => $otherUser->profile_picture ?
                     Storage::disk('s3')->temporaryUrl($otherUser->profile_picture, '+5 minutes') :
-                    null
+                    $this->getInitials($otherUser->name),
+                'type' => $chat->type,  // Added to show if it's a staff or client chat
+                'last_activity' => $chat->updated_at
             ];
         });
 
-        return response()->json($chats);
+        return response()->json([
+            'data' => $chats->items(),
+            'pagination' => [
+                'current_page' => $chats->currentPage(),
+                'per_page' => $chats->perPage(),
+                'total' => $chats->total(),
+                'total_pages' => $chats->lastPage(),
+            ],
+            'search_info' => [
+                'tab' => $selectedTab,
+                'query' => $search,
+                'total_results' => $chats->total()
+            ]
+        ]);
     }
 
     public function listEmployees(): JsonResponse

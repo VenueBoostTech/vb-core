@@ -18,6 +18,8 @@ use App\Models\OrderProduct;
 use App\Models\InventoryActivity;
 use App\Models\Product;
 use App\Models\Customer;
+use App\Models\Cart;
+use App\Models\PostalPricing;
 use App\Enums\OrderStatus;
 use App\Enums\PaymentMethod;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController;
@@ -107,7 +109,7 @@ class CheckoutController extends Controller
                     ->where('store_products_variants.id', '=', $request->variation_id_cart)->first();
 
                 $attributes = DB::table('store_product_variant_at5ributes')
-                    ->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_variant_atributes.attribute_id')
+                    ->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_variant_atributes.atribute_id')
                     ->join('store_attributes', 'store_attributes.id', '=', 'store_attributes_options.attribute_id')
                     ->select(
                         DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
@@ -129,6 +131,187 @@ class CheckoutController extends Controller
                     )
                     ->where('vb_store_product_attributes.product_id', '=', $product->id)
                     ->get();
+            }
+
+            Cart::clear();
+
+            Cart::add([
+                'id' => $request->product_id,
+                'name' => $product->product_name,
+                'price' => $product_details->regular_price,
+                'quantity' => 1,
+                'attributes' => array(
+                    'image' => $product_details->product_image,
+                    'url' => $product_details->product_url,
+                    'description' => $product->product_short_description,
+                    'variation' => $request->variation_id_cart,
+                    'product_no' => $request->product_no,
+                    'total_stock' => $product_details->stock_quantity,
+                    'currency_alpha' => $product_details->currency_alpha,
+                    'bb_points' => $product_details->bb_points,
+                    'exchange_rate' => $exchange_rate,
+                    'date_sale_start' => $product_details->date_sale_start,
+                    'date_sale_end' => $product_details->date_sale_end,
+                    'sale_price' => $product_details->sale_price,
+                    'regular_price' => $product_details->regular_price,
+                    'brand_id' => $product->brand_id,
+                    'attributes' => $attributes
+                )
+            ]);
+            
+            $product_discounted_subtotal = 0;
+            $product_subtotal = 0;
+            $product_price = 0;
+            $product_discount = 0;
+
+            $product_discounted_subtotal_eur = 0;
+            $product_subtotal_eur = 0;
+            $product_price_eur = 0;
+            $product_discount_eur = 0;
+
+            $sale_valid = $this->checkIfSaleValidForProduct($product->attributes->date_sale_start, $product->attributes->date_sale_end);
+            $offer_valid = false;
+            $coupon = $coupon = session()->get('coupon');
+            if($coupon) {
+                $offer_valid = $this->checkIfOfferValidForProduct($coupon->id, $product->attributes->brand_id, $product->id);
+            }
+
+            if ($product->attributes->currency_alpha === 'EUR') {
+                if ($coupon && !$has_applied_offer && $offer_valid) {
+                    if (!$sale_valid) {
+                        if ($coupon->type_id == 1) {
+                            $product_discount = ((float)$coupon->coupon_amount) / 100;
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                            $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                            $discount_amount += $product_subtotal - $product_discounted_subtotal;
+                            $total_order += $product_subtotal;
+                        } else if ($coupon->type_id == 3) {
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                            $product_discounted_subtotal = $product_subtotal;
+                            $discount_amount += $product_subtotal - $product_discounted_subtotal;
+                            $total_order += $product_subtotal;
+                        }
+                    } else {
+                        $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                        $product_discount = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                        $total_order += $product_discounted_subtotal;
+                    }
+                } else {
+                    if (!$sale_valid) {
+                        $total_order += ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                    } else {
+                        $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                        $product_discount = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                        $total_order += $product_discounted_subtotal;
+                    }
+                }
+            } else {
+                if ($coupon && !$has_applied_offer && $offer_valid) {
+                    if (!$sale_valid) {
+
+                        if ($coupon->type_id == 1) {
+                            $product_discount = ((float)$coupon->coupon_amount) / 100;
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                            $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                            $discount_amount += $product_subtotal - $product_discounted_subtotal;
+                            $total_order += $product_subtotal;
+                        } else if ($coupon->type_id == 3) {
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                            $product_discounted_subtotal = $product_subtotal;
+                            $discount_amount += (float)$coupon->coupon_amount;
+                            $total_order += $product_subtotal;
+                        }
+
+
+                    } else {
+                        $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                        $product_discount = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                        $total_order += $product_discounted_subtotal;
+                    }
+                } else {
+                    if (!$sale_valid) {
+                        $total_order += $product->attributes->regular_price * $product->quantity;
+                    } else {
+                        $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                        $product_discount = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                        $total_order += $product_discounted_subtotal;
+                    }
+                }
+            }
+
+            if ($product->attributes->currency_alpha === 'LEK') {
+                if ($coupon && !$has_applied_offer && $offer_valid) {
+                    if (!$sale_valid) {
+                        if ($coupon->type_id == 1) {
+                            $product_discount_eur = ((float)$coupon->coupon_amount) / 100;
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                            $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                            $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                            $total_order_eur += $product_subtotal_eur;
+                        } else if ($coupon->type_id == 3) {
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                            $product_discounted_subtotal_eur = $product_subtotal_eur;
+                            $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                            $total_order_eur += $product_subtotal_eur;
+                        }
+
+                    } else {
+                        $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                        $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                        $total_order_eur += $product_discounted_subtotal_eur;
+                    }
+                } else {
+                    if (!$sale_valid) {
+                        $total_order_eur += ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                    } else {
+                        $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                        $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                        $total_order_eur += $product_discounted_subtotal_eur;
+                    }
+                }
+            } else {
+                if ($coupon && !$has_applied_offer && $offer_valid) {
+                    if (!$sale_valid) {
+                        if ($coupon->type_id == 1) {
+                            $product_discount_eur = ((float)$coupon->coupon_amount) / 100;
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                            $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                            $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                            $total_order_eur += $product_subtotal_eur;
+                        } else if ($coupon->type_id == 3) {
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                            $product_discounted_subtotal_eur = $product_subtotal_eur;
+                            $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                            $total_order_eur += $product_subtotal_eur;
+                        }
+
+                    } else {
+                        $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                        $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                        $total_order_eur += $product_discounted_subtotal_eur;
+                    }
+                } else {
+                    if (!$sale_valid) {
+                        $total_order_eur += $product->attributes->regular_price * $product->quantity;
+                    } else {
+                        $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                        $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                        $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                        $total_order_eur += $product_discounted_subtotal_eur;
+                    }
+                }
+            }
+
+            if ($coupon && $coupon->type_id == 3) {
+                $discount_amount_eur = $coupon->coupon_amount;
+                $discount_amount = $coupon->coupon_amount * $currency_all->exchange;
             }
 
             // Calculate total order and discounts
@@ -184,7 +367,149 @@ class CheckoutController extends Controller
             $result_order = null;
             // Handle payment via paysera
             if ($payment_method == 'cash') {
-              //
+                if($request->email) {
+                    $customer = User::where('email', $request->email)->first();
+                    if(!$customer) {
+                        $new_user = DB::table('users')->insert([
+                            'name' => $request->first_name . $request->last_name,
+                            'email' => $request->email,
+                            'password' => random_int(0, 899990000),
+                            'first_name' => $request->first_name,
+                            'last_name' => $request->last_name,
+                            'status' => 1,
+                        ]);
+                        
+                        $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
+
+                        if(!$new_customer) {
+                            $newCustomer = DB::table('customers')->insert([
+                                'name' => $request->first_name . $request->last_name,
+                                'email' => $request->email,
+                                'phone' => $request->phone_number,
+                                'address' => $request->address_details,
+                            ]);
+
+                            $newCustomer->assignRole('client');
+
+                            try {
+                                $data_string = [
+                                    "crm_client_customer_id" => $new_user->id,
+                                    "source" => "bybest.shop_web",
+                                    "firstName" => $new_user->first_name,
+                                    "lastName" => $new_user->last_name,
+                                    "email" => $new_user->email,
+                                    "phone" => $newCustomer->phone,
+                                    "email_type" => "welcome"
+                                ];
+                                $response = Http::withHeaders([
+                                    "Content-Type" => "application/json",
+                                ])->post('https://crmapi.pixelbreeze.xyz/api/create-crm-cart-session', $data_string);
+                            } catch (\Exception $e) {
+                                \Sentry\captureException($e);
+                            }
+                        }
+                    }
+                } else {
+                    $temp_email = $this->unique_code(10).'@temp.com';
+
+                    $new_user = DB::table('users')->insert([
+                        'username' => $request->first_name . $request->last_name,
+                        'email' => $temp_email,
+                        'password' => random_int(0, 899990000),
+                        'first_name' => $request->first_name,
+                        'last_name' => $request->last_name,
+                        'status' => 1,
+                    ]);
+
+                    $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
+                    if(!$new_customer) {
+                        $newCustomer = DB::table('customers')->insert([
+                            'name' => $request->first_name . $request->last_name,
+                            'email' => $request->email,
+                            'phone' => $request->phone_number,
+                            'address' => $request->address_details,
+                        ]);
+
+                        $newCustomer->assignRole('client');
+
+                        try {
+                            $data_string = [
+                                "crm_client_customer_id" => $new_user->id,
+                                "source" => "bybest.shop_web",
+                                "firstName" => $new_user->first_name,
+                                "lastName" => $new_user->last_name,
+                                "email" => $new_user->email,
+                                "phone" => $newCustomer->phone,
+                                "email_type" => "welcome"
+                            ];
+                            $response = Http::withHeaders([
+                                "Content-Type" => "application/json",
+                            ])->post('https://crmapi.pixelbreeze.xyz/api/create-crm-cart-session', $data_string);
+                        } catch (\Exception $e) {
+                            \Sentry\captureException($e);
+                        }
+                    }
+                }
+
+                $postal_price = PostalPricing::where('city_id', $request->order_city)
+                    ->join('postals', 'postals.id', '=', 'postal_pricing.postal_id')
+                    ->where('postal_id', '2')->first();
+                
+                $order_id = DB::table('orders')->insertGetId([
+                    'customer_id' => $customer->id,
+                    'shipping_id' => 2,
+                    'tracking_number' => $order_tracking_code,
+                    'status' => 1,
+                    'payment_method_id' => 5,
+                    'ip' => $location ? $location->ip : 'undefined',
+                    'tracking_latitude' => $location ? $location->latitude : 0,
+                    'tracking_longtitude' => $location ? $location->longitude : 0,
+                    'tracking_countryCode' => $location ? $location->countryCode : 'undefined',
+                    'tracking_cityName' => $location ? $location->cityName : 'undefined',
+                    'source_id' => 3,
+                    'subtotal' => $total_order,
+                    'discount' => abs($discount_amount),
+                    'postal' => $postal_price->price,
+                    'total' => (abs($total_order) - abs($discount_amount)) + $postal_price->price,
+                    'total_eur' => (abs($total_order_eur) - abs($discount_amount_eur)) + ($postal_price->price * $currency_eur->exchange),
+                    'exchange_rate_eur' => (float)$currency_eur->exchange,
+                    'exchange_rate_all' => (float)$currency_all->exchange,
+                    'shipping_name' => $request->first_name ? $request->first_name : $customer->name,
+                    'shipping_surname' => $request->last_name ? $request->last_name : $customer->surname,
+                    'shipping_state' => $request->country,
+                    'shipping_city' => $request->order_city ? $request->order_city : 140,
+                    'shipping_phone_no' => $request->phone_number ? $request->phone_number : $customer->phone_number,
+                    'shipping_email' => $request->email_address ? $request->email_address : $customer->email,
+                    'shipping_address' => $request->address_details,
+                    'shipping_postal_code' => $request->order_zip ? $request->order_zip : '0000',
+                    'billing_name' => $request->first_name ? $request->first_name : $customer->name,
+                    'billing_surname' => $request->last_name ? $request->last_name : $customer->surname,
+                    'billing_state' => $request->country ? $request->country : 5,
+                    'billing_city' => $request->order_city ? $request->order_city : 140,
+                    'billing_phone_no' => $request->phone_number ? $request->phone_number : $customer->phone_number,
+                    'billing_email' => $request->email_address ? $request->email_address : $customer->email,
+                    'billing_address' => $request->address_details,
+                    'billing_postal_code' => $request->order_zip ? $request->order_zip : '0000',
+                    'coupon_id' => $coupon ? $coupon->id : '',
+                ]);
+
+                foreach (Cart::getContent() as $product) {
+                    $temp_date_start = new DateTime($product->attributes->date_sale_start);
+                    $temp_date_end = new DateTime($product->attributes->date_sale_end);
+                    $temp_date_now = new DateTime();
+                    $is_higher = $temp_date_now > $temp_date_start;
+                    $is_lower = $temp_date_now < $temp_date_end;
+                    $sale_valid = $is_higher && $is_lower;
+    
+                    DB::table('order_products')->insert([
+                        'order_id' => $order_id,
+                        'product_id' => $product->id,
+                        'variation_id' => $product->attributes->variation,
+                        'product_quantity' => $product->quantity,
+                        'product_total_price' => $sale_valid ? $product->attributes->regular_price - ($product->attributes->regular_price * ((float)$product->attributes->sale_price / 100)) * $product->quantity : $product->attributes->regular_price * $product->quantity,
+                        'product_discount_price' => $sale_valid ? $product->attributes->sale_price : 0,
+                    ]);
+                }
             } else {
                 // Handle other payment methods like cash
                 $result = $this->finalizeOrder($venue, $customer, $order_products, $total_price, null);
@@ -289,9 +614,310 @@ class CheckoutController extends Controller
             $total_price = $total['value'];
 
             $result_order = null;
+
+            foreach($order_products as $productData) {
+                $product = Product::find($productData['id']);
+
+                $product_discounted_subtotal = 0;
+                $product_subtotal = 0;
+                $product_price = 0;
+                $product_discount = 0;
+
+                $product_discounted_subtotal_eur = 0;
+                $product_subtotal_eur = 0;
+                $product_price_eur = 0;
+                $product_discount_eur = 0;
+
+                $sale_valid = $this->checkIfSaleValidForProduct($product->attributes->date_sale_start, $product->attributes->date_sale_end);
+                $offer_valid = false;
+                $coupon = $coupon = session()->get('coupon');
+                if($coupon) {
+                    $offer_valid = $this->checkIfOfferValidForProduct($coupon->id, $product->attributes->brand_id, $product->id);
+                }
+
+                if ($product->attributes->currency_alpha === 'EUR') {
+                    if ($coupon && !$has_applied_offer && $offer_valid) {
+                        if (!$sale_valid) {
+                            if ($coupon->type_id == 1) {
+                                $product_discount = ((float)$coupon->coupon_amount) / 100;
+                                $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                                $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                                $discount_amount += $product_subtotal - $product_discounted_subtotal;
+                                $total_order += $product_subtotal;
+                            } else if ($coupon->type_id == 3) {
+                                $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                                $product_discounted_subtotal = $product_subtotal;
+                                $discount_amount += $product_subtotal - $product_discounted_subtotal;
+                                $total_order += $product_subtotal;
+                            }
+                        } else {
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                            $product_discount = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                            $total_order += $product_discounted_subtotal;
+                        }
+                    } else {
+                        if (!$sale_valid) {
+                            $total_order += ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                        } else {
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity) * $currency_all->exchange;
+                            $product_discount = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                            $total_order += $product_discounted_subtotal;
+                        }
+                    }
+                } else {
+                    if ($coupon && !$has_applied_offer && $offer_valid) {
+                        if (!$sale_valid) {
+
+                            if ($coupon->type_id == 1) {
+                                $product_discount = ((float)$coupon->coupon_amount) / 100;
+                                $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                                $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                                $discount_amount += $product_subtotal - $product_discounted_subtotal;
+                                $total_order += $product_subtotal;
+                            } else if ($coupon->type_id == 3) {
+                                $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                                $product_discounted_subtotal = $product_subtotal;
+                                $discount_amount += (float)$coupon->coupon_amount;
+                                $total_order += $product_subtotal;
+                            }
+
+
+                        } else {
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                            $product_discount = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                            $total_order += $product_discounted_subtotal;
+                        }
+                    } else {
+                        if (!$sale_valid) {
+                            $total_order += $product->attributes->regular_price * $product->quantity;
+                        } else {
+                            $product_subtotal = ($product->attributes->regular_price * $product->quantity);
+                            $product_discount = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal = $product_subtotal - ($product_subtotal * $product_discount);
+                            $total_order += $product_discounted_subtotal;
+                        }
+                    }
+                }
+
+                if ($product->attributes->currency_alpha === 'LEK') {
+                    if ($coupon && !$has_applied_offer && $offer_valid) {
+                        if (!$sale_valid) {
+                            if ($coupon->type_id == 1) {
+                                $product_discount_eur = ((float)$coupon->coupon_amount) / 100;
+                                $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                                $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                                $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                                $total_order_eur += $product_subtotal_eur;
+                            } else if ($coupon->type_id == 3) {
+                                $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                                $product_discounted_subtotal_eur = $product_subtotal_eur;
+                                $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                                $total_order_eur += $product_subtotal_eur;
+                            }
+
+                        } else {
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                            $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                            $total_order_eur += $product_discounted_subtotal_eur;
+                        }
+                    } else {
+                        if (!$sale_valid) {
+                            $total_order_eur += ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                        } else {
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity) * $currency_eur->exchange;
+                            $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                            $total_order_eur += $product_discounted_subtotal_eur;
+                        }
+                    }
+                } else {
+                    if ($coupon && !$has_applied_offer && $offer_valid) {
+                        if (!$sale_valid) {
+                            if ($coupon->type_id == 1) {
+                                $product_discount_eur = ((float)$coupon->coupon_amount) / 100;
+                                $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                                $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                                $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                                $total_order_eur += $product_subtotal_eur;
+                            } else if ($coupon->type_id == 3) {
+                                $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                                $product_discounted_subtotal_eur = $product_subtotal_eur;
+                                $discount_amount_eur += $product_subtotal_eur - $product_discounted_subtotal_eur;
+                                $total_order_eur += $product_subtotal_eur;
+                            }
+
+                        } else {
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                            $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                            $total_order_eur += $product_discounted_subtotal_eur;
+                        }
+                    } else {
+                        if (!$sale_valid) {
+                            $total_order_eur += $product->attributes->regular_price * $product->quantity;
+                        } else {
+                            $product_subtotal_eur = ($product->attributes->regular_price * $product->quantity);
+                            $product_discount_eur = (float)$product->attributes->sale_price / 100;
+                            $product_discounted_subtotal_eur = $product_subtotal_eur - ($product_subtotal_eur * $product_discount_eur);
+                            $total_order_eur += $product_discounted_subtotal_eur;
+                        }
+                    }
+                }
+
+                if ($coupon && $coupon->type_id == 3) {
+                    $discount_amount_eur = $coupon->coupon_amount;
+                    $discount_amount = $coupon->coupon_amount * $currency_all->exchange;
+                }
+            }
             // Handle payment via paysera
             if ($payment_method == 'cash') {
-                //
+                if($request->email) {
+                    $customer = User::where('email', $request->email)->first();
+                    if(!$customer) {
+                        $new_user = DB::table('users')->insert([
+                            'name' => $request->first_name . $request->last_name,
+                            'email' => $request->email,
+                            'password' => random_int(0, 899990000),
+                            'first_name' => $request->first_name,
+                            'last_name' => $request->last_name,
+                            'status' => 1,
+                        ]);
+                        
+                        $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
+
+                        if(!$new_customer) {
+                            $newCustomer = DB::table('customers')->insert([
+                                'name' => $request->first_name . $request->last_name,
+                                'email' => $request->email,
+                                'phone' => $request->phone_number,
+                                'address' => $request->address_details,
+                            ]);
+
+                            $newCustomer->assignRole('client');
+
+                            try {
+                                $data_string = [
+                                    "crm_client_customer_id" => $new_user->id,
+                                    "source" => "bybest.shop_web",
+                                    "firstName" => $new_user->first_name,
+                                    "lastName" => $new_user->last_name,
+                                    "email" => $new_user->email,
+                                    "phone" => $newCustomer->phone,
+                                    "email_type" => "welcome"
+                                ];
+                                $response = Http::withHeaders([
+                                    "Content-Type" => "application/json",
+                                ])->post('https://crmapi.pixelbreeze.xyz/api/create-crm-cart-session', $data_string);
+                            } catch (\Exception $e) {
+                                \Sentry\captureException($e);
+                            }
+                        }
+                    }
+                } else {
+                    $temp_email = $this->unique_code(10).'@temp.com';
+
+                    $new_user = DB::table('users')->insert([
+                        'username' => $request->first_name . $request->last_name,
+                        'email' => $temp_email,
+                        'password' => random_int(0, 899990000),
+                        'first_name' => $request->first_name,
+                        'last_name' => $request->last_name,
+                        'status' => 1,
+                    ]);
+
+                    $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
+                    if(!$new_customer) {
+                        $newCustomer = DB::table('customers')->insert([
+                            'name' => $request->first_name . $request->last_name,
+                            'email' => $request->email,
+                            'phone' => $request->phone_number,
+                            'address' => $request->address_details,
+                        ]);
+
+                        $newCustomer->assignRole('client');
+
+                        try {
+                            $data_string = [
+                                "crm_client_customer_id" => $new_user->id,
+                                "source" => "bybest.shop_web",
+                                "firstName" => $new_user->first_name,
+                                "lastName" => $new_user->last_name,
+                                "email" => $new_user->email,
+                                "phone" => $newCustomer->phone,
+                                "email_type" => "welcome"
+                            ];
+                            $response = Http::withHeaders([
+                                "Content-Type" => "application/json",
+                            ])->post('https://crmapi.pixelbreeze.xyz/api/create-crm-cart-session', $data_string);
+                        } catch (\Exception $e) {
+                            \Sentry\captureException($e);
+                        }
+                    }
+                }
+
+                $postal_price = PostalPricing::where('city_id', $request->order_city)
+                    ->join('postals', 'postals.id', '=', 'postal_pricing.postal_id')
+                    ->where('postal_id', '2')->first();
+                
+                $order_id = DB::table('orders')->insertGetId([
+                    'customer_id' => $customer->id,
+                    'shipping_id' => 2,
+                    'tracking_number' => $order_tracking_code,
+                    'status' => 1,
+                    'payment_method_id' => 5,
+                    'ip' => $location ? $location->ip : 'undefined',
+                    'tracking_latitude' => $location ? $location->latitude : 0,
+                    'tracking_longtitude' => $location ? $location->longitude : 0,
+                    'tracking_countryCode' => $location ? $location->countryCode : 'undefined',
+                    'tracking_cityName' => $location ? $location->cityName : 'undefined',
+                    'source_id' => 3,
+                    'subtotal' => $total_order,
+                    'discount' => abs($discount_amount),
+                    'postal' => $postal_price->price,
+                    'total' => (abs($total_order) - abs($discount_amount)) + $postal_price->price,
+                    'total_eur' => (abs($total_order_eur) - abs($discount_amount_eur)) + ($postal_price->price * $currency_eur->exchange),
+                    'exchange_rate_eur' => (float)$currency_eur->exchange,
+                    'exchange_rate_all' => (float)$currency_all->exchange,
+                    'shipping_name' => $request->first_name ? $request->first_name : $customer->name,
+                    'shipping_surname' => $request->last_name ? $request->last_name : $customer->surname,
+                    'shipping_state' => $request->country,
+                    'shipping_city' => $request->order_city ? $request->order_city : 140,
+                    'shipping_phone_no' => $request->phone_number ? $request->phone_number : $customer->phone_number,
+                    'shipping_email' => $request->email_address ? $request->email_address : $customer->email,
+                    'shipping_address' => $request->address_details,
+                    'shipping_postal_code' => $request->order_zip ? $request->order_zip : '0000',
+                    'billing_name' => $request->first_name ? $request->first_name : $customer->name,
+                    'billing_surname' => $request->last_name ? $request->last_name : $customer->surname,
+                    'billing_state' => $request->country ? $request->country : 5,
+                    'billing_city' => $request->order_city ? $request->order_city : 140,
+                    'billing_phone_no' => $request->phone_number ? $request->phone_number : $customer->phone_number,
+                    'billing_email' => $request->email_address ? $request->email_address : $customer->email,
+                    'billing_address' => $request->address_details,
+                    'billing_postal_code' => $request->order_zip ? $request->order_zip : '0000',
+                    'coupon_id' => $coupon ? $coupon->id : '',
+                ]);
+
+                foreach (Cart::getContent() as $product) {
+                    $temp_date_start = new DateTime($product->attributes->date_sale_start);
+                    $temp_date_end = new DateTime($product->attributes->date_sale_end);
+                    $temp_date_now = new DateTime();
+                    $is_higher = $temp_date_now > $temp_date_start;
+                    $is_lower = $temp_date_now < $temp_date_end;
+                    $sale_valid = $is_higher && $is_lower;
+    
+                    DB::table('order_products')->insert([
+                        'order_id' => $order_id,
+                        'product_id' => $product->id,
+                        'variation_id' => $product->attributes->variation,
+                        'product_quantity' => $product->quantity,
+                        'product_total_price' => $sale_valid ? $product->attributes->regular_price - ($product->attributes->regular_price * ((float)$product->attributes->sale_price / 100)) * $product->quantity : $product->attributes->regular_price * $product->quantity,
+                        'product_discount_price' => $sale_valid ? $product->attributes->sale_price : 0,
+                    ]);
+                }    
             } else {
                 // Handle other payment methods like cash
                 $result = $this->finalizeOrder($venue, $customer, $order_products, $total_price, null);
