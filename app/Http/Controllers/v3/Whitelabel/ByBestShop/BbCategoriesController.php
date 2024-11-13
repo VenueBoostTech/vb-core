@@ -274,11 +274,43 @@ class BbCategoriesController extends Controller
             $currency = Currency::where('is_primary', '=', true)->first();
 
             $products_query = Product::join('product_category', 'product_category.product_id', '=', 'products.id')
-                ->select('products.*')->distinct();
+                ->select(
+                    "products.*",
+                    DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
+                    DB::raw("(SELECT MIN(vb_store_products_variants.date_sale_start) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_start"),
+                    DB::raw("(SELECT MAX(vb_store_products_variants.date_sale_end) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_end"),
+                    DB::raw("(SELECT MAX(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as max_regular_price"),
+                    DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_regular_price"),
+                    DB::raw("(SELECT COUNT(vb_store_products_variants.stock_quantity) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as total_stock_quantity"),
+                    DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
+                )
+                ->where('products.product_status', '=', 1)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.currency_alpha');
 
             // Filter by category
-            if ($request->filled('category_id')) {
-                $products_query->where('product_category.category_id', '=', $request->category_id)->orderBy('products.created_at', 'DESC');
+            if ($request->filled('category_url')) {
+                $products_query->where(function ($query) use ($request) {
+                    $category_multiple = Category::where('category_url', '=', $request->category_url)->get();
+                    $totalCategories = [];
+                    foreach ($category_multiple as $single_category) {
+                        $hirearkia = Category::with(['childrenCategory'])
+                            ->where('id', '=', $single_category->id)
+                            ->select('categories.*')
+                            ->orderBy('categories.category', 'ASC')
+                            ->distinct()->get();
+
+                        foreach ($hirearkia as $main_child) {
+                            $query->orWhere('product_category.category_id', '=', $main_child->id);
+                            foreach ($main_child->childrenCategory as $second_child) {
+                                $query->orWhere('product_category.category_id', '=', $second_child->id);
+                                foreach ($second_child->childrenCategory as $thid_child) {
+                                    $query->orWhere('product_category.category_id', '=', $thid_child->id);
+                                }
+                            }
+                        }
+                    }
+                });
             }
 
             // Filter by minimum price
@@ -324,11 +356,18 @@ class BbCategoriesController extends Controller
                 });
             }
 
-            $products = $products_query->orderBy('products.created_at', 'DESC')->get();
+            $products_query = $products_query
+                ->orderBy('products.created_at', 'DESC')
+                ->with('productImages')
+                ->distinct();
+
+            $totalProducts = $products_query->count();
+            $products = $products_query->paginate(30);
 
             // Example response
             return response()->json([
                 'products' => $products,
+                'total_products' => $totalProducts,
                 'currency' => $currency,
                 // Add other necessary data
             ]);

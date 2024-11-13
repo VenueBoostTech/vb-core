@@ -235,6 +235,7 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::get('/shipping-methods', 'App\Http\Controllers\v1\OrdersController@shippingMethods');
         Route::post('/checkout', 'App\Http\Controllers\v1\OrdersController@retailOrder');
         Route::post('/validate-coupon', 'App\Http\Controllers\v1\OrdersController@validateCoupon');
+        Route::post('/validate-mm-coupon', 'App\Http\Controllers\v1\OrdersController@validateMMCoupon');
     });
 
     Route::prefix('web-stripe-connected')->group(function () {
