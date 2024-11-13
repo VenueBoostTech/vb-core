@@ -56,14 +56,14 @@ class BbCategoriesController extends Controller
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha');
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
 
             $products_query = $products_query
                 ->orderBy('products.created_at', 'DESC')
-                ->with('galley')
+                ->with('productImages')
                 ->distinct();
 
             $totalProducts = $products_query->count();
@@ -80,7 +80,7 @@ class BbCategoriesController extends Controller
                 ->orderByRaw('LENGTH(vb_store_attributes_options.option_name) asc')
                 ->orderBy('vb_store_attributes_options.option_name', 'ASC');
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $filters_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -129,7 +129,7 @@ class BbCategoriesController extends Controller
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha');
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $brands_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -176,7 +176,7 @@ class BbCategoriesController extends Controller
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha');
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $collections_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -231,7 +231,7 @@ class BbCategoriesController extends Controller
                     }
                 });
 
-            if ($request->has('search')) {
+            if ($request->filled('search')) {
                 $prices_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->where('product_groups.group_id', '=', $request->search);
             }
@@ -293,8 +293,8 @@ class BbCategoriesController extends Controller
 
             // Filter by product group
             if ($request->filled('group_id')) {
-                $products_query->join('store_product_groups', 'store_product_groups.product_id', '=', 'products.id')
-                    ->where('store_product_groups.group_id', '=', $request->group_id);
+                $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+                    ->where('product_groups.group_id', '=', $request->group_id);
             }
 
             // Filter by brands

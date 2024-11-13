@@ -47,7 +47,7 @@ class WebController extends Controller
 
     private function getHeaderData()
     {
-        $products = Product::with(['attribute.option', 'galley'])
+        $products = Product::with(['attribute.option', 'productImages'])
             ->join('product_groups', 'products.id', '=', 'product_groups.product_id')
             ->select("products.*",
                 DB::raw("(SELECT MAX(vb_store_products_variants.regular_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as max_regular_price"),

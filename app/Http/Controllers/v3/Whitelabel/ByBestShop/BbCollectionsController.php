@@ -24,7 +24,7 @@ class BbCollectionsController extends Controller
                 return response()->json(['error' => 'Collections not found'], 404);
             }
 
-            $products_query = Product::with(['attribute.option', 'galley'])
+            $products_query = Product::with(['attribute.option', 'productImages'])
                 ->select(
                     "products.*",
                     // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_products.product_name, '$.en')) AS product_name_en"),
@@ -61,7 +61,7 @@ class BbCollectionsController extends Controller
                     DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_price"),
                     DB::raw("(SELECT COUNT(vb_store_products_variants.stock_quantity) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as total_stock_quantity"),
                     DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
-                )->with('galley')->distinct()->get();
+                )->with('productImages')->distinct()->get();
 
             // Replace the view rendering with a JSON response
             return response()->json([

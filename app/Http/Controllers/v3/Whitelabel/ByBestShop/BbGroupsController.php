@@ -14,7 +14,7 @@ class BbGroupsController extends Controller
     {
         try {
             $group = Group::findOrFail($group_id);
-            $products = Product::whereHas('groups', function($query) use ($group_id) {
+            $products = Product::with('productImages')->whereHas('groups', function($query) use ($group_id) {
                 $query->where('group_id', $group_id);
             })->paginate(20);
 

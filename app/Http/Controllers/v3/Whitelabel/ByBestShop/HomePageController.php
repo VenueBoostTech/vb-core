@@ -47,7 +47,7 @@ class HomePageController extends Controller
                 ->orderBy('brand_order_no', 'ASC')->get();
 
         foreach ($homepage_brands as $home_brand) {
-            $data = Product::with(['attribute.option', 'galley'])
+            $data = Product::with(['attribute.option', 'productImages'])
                             ->select("products.*",
                                 DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
                                 DB::raw("(SELECT MIN(vb_store_products_variants.date_sale_start) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_start"),
@@ -82,7 +82,7 @@ class HomePageController extends Controller
             return response()->json(['error' => 'Venue not found or user not eligible'], 404);
         }
 
-        $products = Product::with(['attribute.option', 'galley'])
+        $products = Product::with(['attribute.option', 'productImages'])
             ->join('product_groups', 'products.id', '=', 'product_groups.product_id')
             ->select("products.*",
                 DB::raw("(SELECT MAX(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as max_regular_price"),

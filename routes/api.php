@@ -32,6 +32,7 @@ use App\Http\Controllers\AppSuite\Staff\TimeEntryController;
 use App\Http\Controllers\AppSuite\VBAppCustomersController;
 use App\Http\Controllers\TrackMaster\OnboardingAnalyticsController;
 use App\Http\Controllers\v1\ProductsController;
+use App\Http\Controllers\AppSuite\Staff\StaffChatController;
 use App\Http\Controllers\v2\InventoryConfigurationController;
 use App\Http\Controllers\v3\Accommodation\BookingsController;
 use App\Http\Controllers\v3\Accommodation\CalendarConnectionController;
@@ -1473,6 +1474,9 @@ Route::middleware(['enduser_api_key'])->prefix('v1')->group(function () {
             Route::delete('/wishlist/{productId}', [EndUserController::class, 'removeFromWishlist']);
             Route::get('/{id}', 'App\Http\Controllers\v3\EndUserController@getOne');
 
+            Route::get('guest/payments', [EndUserController::class, 'getGuestPayments']);
+
+
             Route::group(['prefix' => 'chat'], function () {
                 Route::get('/', 'App\Http\Controllers\v1\EndUserChatController@index');
                 Route::post('/start-conversation', 'App\Http\Controllers\v1\EndUserChatController@startConversation');
@@ -1517,6 +1521,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
             Route::prefix('staff')->group(function () {
 
+
                 Route::group(['prefix' => 'reports'], function () {
                     Route::get('/data', [EmployeeReportController::class, 'getReportData']);
                 });
@@ -1524,6 +1529,22 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                 Route::group(['prefix' => 'dashboard'], function () {
                     Route::get('/', [\App\Http\Controllers\AppSuite\Staff\EmployeeDashboardController::class, 'getDashboardData']);
                     Route::get('/export', [\App\Http\Controllers\AppSuite\Staff\EmployeeDashboardController::class, 'exportData']);
+                });
+
+
+                Route::prefix('internal-chat')->group(function () {
+                    // List/Index routes should come first
+                    Route::get('/', [StaffChatController::class, 'index']);
+                    Route::get('/search', [StaffChatController::class, 'searchChats']);
+                    Route::get('/employees', [StaffChatController::class, 'listEmployees']);
+                    Route::get('/clients', [StaffChatController::class, 'listClients']);
+
+                    // Start chat route
+                    Route::post('/start', [StaffChatController::class, 'startChat']);
+
+                    // Dynamic parameter routes should come last
+                    Route::get('/{chatId}', [StaffChatController::class, 'getMessages']);
+                    Route::post('/{chatId}/messages', [StaffChatController::class, 'sendMessage']);
                 });
 
                 // Employee routes
@@ -1556,6 +1577,8 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     Route::post('/update-location', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'update_location']);
                     Route::get('/tracking-status', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'get_tracking_status']);
                     Route::get('/profile', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'get_profile']);
+                    Route::post('/reset-password', [\App\Http\Controllers\v1\EmployeeProfileController::class, 'reset_password']);
+
 
                     Route::prefix('projects')->group(function () {
                         Route::get('/{id}/app-galleries', [App\Http\Controllers\AppSuite\Staff\StaffController::class, 'getAppGalleriesByProjectId']);
@@ -1620,10 +1643,6 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     Route::post('/check-out', [AttendanceController::class, 'checkOut']);
                 });
             });
-
-
-
-
 
             Route::group(['prefix' => 'notifications'], function () {
                 Route::get('/', [NotificationsController::class, 'index']);

@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use App\Models\EmployeeLocation;
 use App\Models\EmployeePreference;
@@ -270,6 +271,71 @@ class EmployeeProfileController extends Controller
                 'allow_clockinout' => true
             ]
         ]);
+    }
+
+
+    /**
+     * @OA\Post(
+     *     path="/reset-password",
+     *     summary="Reset password for authenticated user",
+     *     tags={"Authentication"},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         @OA\JsonContent(
+     *             required={"current_password", "new_password", "new_password_confirmation"},
+     *             @OA\Property(property="current_password", type="string"),
+     *             @OA\Property(property="new_password", type="string"),
+     *             @OA\Property(property="new_password_confirmation", type="string"),
+     *         )
+     *     ),
+     *     @OA\Response(response="200", description="Password reset successfully"),
+     *     @OA\Response(response="400", description="Invalid input"),
+     *     @OA\Response(response="401", description="Unauthorized")
+     * )
+     */
+    public function reset_password(Request $request): JsonResponse
+    {
+        // Get authenticated user
+        $user = auth()->user();
+        if (!$user) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'current_password' => 'required|string',
+            'new_password' => 'required|string|min:8|confirmed|different:current_password',
+            'new_password_confirmation' => 'required|string'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        try {
+            // Verify current password
+            if (!Hash::check($request->current_password, $user->password)) {
+                return response()->json([
+                    'error' => 'Current password is incorrect'
+                ], 400);
+            }
+
+            // Update password
+            $user->update([
+                'password' => Hash::make($request->new_password)
+            ]);
+
+
+
+            return response()->json([
+                'message' => 'Password has been reset successfully.'
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Password reset error: ' . $e->getMessage());
+            return response()->json([
+                'error' => 'Unable to reset password'
+            ], 500);
+        }
     }
 
     public function update_profile_picture(Request $request): JsonResponse
