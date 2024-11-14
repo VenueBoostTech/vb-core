@@ -39,14 +39,14 @@ class BbWebSyncController extends Controller
         $skippedCount = 0;
         $processedCount = 0;
         // ini_set('max_execution_time', 3000000);
-        do {
+        // do {
             try {
                 $response = Http::withHeaders([
                     'X-App-Key' => $this->bybestApiKey
                 ])->get($this->bybestApiUrl . 'siders-sync', [
-                            'page' => $page,
-                            'per_page' => $perPage
-                        ]);
+                    'page' => $page,
+                    'per_page' => $perPage
+                ]);
 
                 if (!$response->successful()) {
                     return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
@@ -56,54 +56,60 @@ class BbWebSyncController extends Controller
 
 
                 if (empty($bybestData) || !isset($bybestData['data'])) {
-                    break; // No more sliders to process
+                    // break; // No more sliders to process
+                    return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 $sliders = $bybestData['data']; // Assuming 'data' contains the actual sliders
 
 
-                foreach (array_chunk($sliders, $batchSize) as $batch) {
-                    DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($batch as $item) {
+                // foreach (array_chunk($sliders, $batchSize) as $batch) {
+                    // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
+                        foreach ($sliders as $item) {
+                            DB::beginTransaction();
+                            try {
+                                $slider = BbSlider::withTrashed()->updateOrCreate(
+                                    ['bybest_id' => $item['id']],
+                                    [
+                                        'title' => $item['title'],
+                                        'url' => $item['url'],
+                                        'description' => $item['description'],
+                                        'button' => $item['button'],
+                                        'text_button' => $item['text_button'],
+                                        'slider_order' => $item['slider_order'],
+                                        'status' => $item['status'],
+                                        // 'photo' => 'https://admin.bybest.shop/storage/sliders/' . $item['photo'],
+                                        'venue_id' => $venue->id,
+                                        'bybest_id' => $item['id'],
+                                        'created_at' => $item['created_at'],
+                                        'updated_at' => $item['updated_at'],
+                                        'deleted_at' => $item['deleted_at'] ? Carbon::parse($item['deleted_at']) : null
+                                    ]
+                                );
 
-                            $slider = BbSlider::withTrashed()->updateOrCreate(
-                                ['bybest_id' => $item['id']],
-                                [
-                                    'title' => $item['title'],
-                                    'url' => $item['url'],
-                                    'description' => $item['description'],
-                                    'button' => $item['button'],
-                                    'text_button' => $item['text_button'],
-                                    'slider_order' => $item['slider_order'],
-                                    'status' => $item['status'],
-                                    // 'photo' => 'https://admin.bybest.shop/storage/sliders/' . $item['photo'],
-                                    'venue_id' => $venue->id,
-                                    'bybest_id' => $item['id'],
-                                    'created_at' => $item['created_at'],
-                                    'updated_at' => $item['updated_at'],
-                                    'deleted_at' => $item['deleted_at'] ? Carbon::parse($item['deleted_at']) : null
-                                ]
-                            );
+                                // Dispatch job for photo upload
+                                if ($item['photo']) {
+                                    \Log::info('Dispatching UploadCollectionPhotoJob', [
+                                        'collection_id' => $slider->id,
+                                        'photo_url' => $item['photo'],
+                                    ]);
+                                    error_log("UploadPhotoJob $slider->id => " . $item['photo']);
+                                    dispatch(new UploadPhotoJob($slider, 'https://admin.bybest.shop/storage/sliders/' . $item['photo'], 'photo', $venue));
+                                }
 
-                            // Dispatch job for photo upload
-                            if ($item['photo']) {
-                                \Log::info('Dispatching UploadCollectionPhotoJob', [
-                                    'collection_id' => $slider->id,
-                                    'photo_url' => $item['photo'],
-                                ]);
-                                error_log("UploadPhotoJob $slider->id => " . $item['photo']);
-                                dispatch(new UploadPhotoJob($slider, 'https://admin.bybest.shop/storage/sliders/' . $item['photo'], 'photo', $venue));
+                                $processedCount++;
+                                DB::commit();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
                             }
-
-                            $processedCount++;
                         }
-                    });
-                }
+                    // });
+                // }
 
                 error_log("Processed {$processedCount} sliders so far.");
                 \Log::info("Processed {$processedCount} sliders so far.");
 
-                $page++;
+                // $page++;
             } catch (\Throwable $th) {
                 \Log::error('Error in sliders sync', [
                     'error' => $th->getMessage(),
@@ -115,12 +121,14 @@ class BbWebSyncController extends Controller
                     "error" => $th->getMessage()
                 ], 503);
             }
-        } while (count($sliders) == $perPage); //
+        // } while (count($sliders) == $perPage); //
 
         return response()->json([
             'message' => 'sliders sync completed successfully',
             'processed_count' => $processedCount,
-            'skipped_count' => $skippedCount
+            'skipped_count' => $skippedCount,
+            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
+            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
         ], 200);
     }
 
@@ -133,15 +141,15 @@ class BbWebSyncController extends Controller
         $skippedCount = 0;
         $processedCount = 0;
 
-        do {
+        // do {
             try {
 
                 $response = Http::withHeaders([
                     'X-App-Key' => $this->bybestApiKey
                 ])->get($this->bybestApiUrl . 'mainmenu-sync', [
-                            'page' => $page,
-                            'per_page' => $perPage
-                        ]);
+                    'page' => $page,
+                    'per_page' => $perPage
+                ]);
 
                 if (!$response->successful()) {
                     return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
@@ -150,51 +158,58 @@ class BbWebSyncController extends Controller
                 $bybestData = $response->json();
 
                 if (empty($bybestData) || !isset($bybestData['data'])) {
-                    break; // No more data to process
+                    // break; // No more data to process
+                    return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 $groups = $bybestData['data'];
 
-                foreach (array_chunk($groups, $batchSize) as $batch) {
-                    DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($batch as $item) {
-                            // Make sure the required fields are available
-                            if (!isset($item['id'])) {
-                                \Log::error('Product missing id', ['item' => $item]);
-                                $skippedCount++;
-                                continue;
+                // foreach (array_chunk($groups, $batchSize) as $batch) {
+                    // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
+                        foreach ($groups as $item) {
+                            DB::beginTransaction();
+                            try {
+                                // Make sure the required fields are available
+                                if (!isset($item['id'])) {
+                                    \Log::error('Product missing id', ['item' => $item]);
+                                    $skippedCount++;
+                                    continue;
+                                }
+
+                                $groupId = $item['group_id'] ? DB::table('groups')->where('bybest_id', $item['group_id'])->value('id') : null;
+                                $typeId = $item['type_id'] ? DB::table('bb_menu_type')->where('bybest_id', $item['type_id'])->value('id') : null;
+
+                                $title = json_decode($item['title']);
+                                BbMainMenu::updateOrCreate(
+                                    ['bybest_id' => $item['id']],
+                                    [
+                                        'venue_id' => $venue->id,
+                                        'bybest_id' => $item['id'],
+                                        'type_id' => $typeId,
+                                        'group_id' => $groupId,
+                                        'title' => $title,
+                                        'photo' => 'https://admin.bybest.shop/storage/menues/' . $item['photo'],
+                                        'order' => $item['order'],
+                                        'link' => $item['link'],
+                                        'focused' => $item['focused'],
+                                        'created_at' => $item['created_at'],
+                                        'updated_at' => $item['updated_at'],
+                                        'deleted_at' => $item['deleted_at'],
+                                    ]
+                                );
+
+                                $processedCount++;
+                                DB::commit();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
                             }
-
-                            $groupId = $item['group_id'] ? DB::table('groups')->where('bybest_id', $item['group_id'])->value('id') : null;
-                            $typeId = $item['type_id'] ? DB::table('bb_menu_type')->where('bybest_id', $item['type_id'])->value('id') : null;
-
-                            $title = json_decode($item['title']);
-                            BbMainMenu::updateOrCreate(
-                                ['bybest_id' => $item['id']],
-                                [
-                                    'venue_id' => $venue->id,
-                                    'bybest_id' => $item['id'],
-                                    'type_id' => $typeId,
-                                    'group_id' => $groupId,
-                                    'title' => $title,
-                                    'photo' => 'https://admin.bybest.shop/storage/menues/' . $item['photo'],
-                                    'order' => $item['order'],
-                                    'link' => $item['link'],
-                                    'focused' => $item['focused'],
-                                    'created_at' => $item['created_at'],
-                                    'updated_at' => $item['updated_at'],
-                                    'deleted_at' => $item['deleted_at'],
-                                ]
-                            );
-
-                            $processedCount++;
                         }
-                    });
-                }
+                    // });
+                // }
 
                 error_log("Processed {$processedCount} groups so far.");
 
-                $page++;
+                // $page++;
             } catch (\Throwable $th) {
                 error_log("Error in groups sync " . $th->getMessage());
                 // return response()->json([
@@ -202,12 +217,14 @@ class BbWebSyncController extends Controller
                 //     "error" => $th->getMessage()
                 // ], 503);
             }
-        } while (count($groups) == $perPage);
+        // } while (count($groups) == $perPage);
 
         return response()->json([
             'message' => 'groups sync completed successfully',
             'processed_count' => $processedCount,
-            'skipped_count' => $skippedCount
+            'skipped_count' => $skippedCount,
+            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
+            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
         ], 200);
     }
 }

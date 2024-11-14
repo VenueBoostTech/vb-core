@@ -42,11 +42,11 @@ class OrdersSyncController extends Controller
         $venue = $this->venueService->adminAuthCheck();
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        $batchSize = $request->input('batch_size', 50);
+        // $batchSize = $request->input('batch_size', 50);
         $skippedCount = 0;
         $processedCount = 0;
 
-        do {
+        // do {
             try {
                 $start = microtime(true);
                 $response = Http::withHeaders([
@@ -63,15 +63,15 @@ class OrdersSyncController extends Controller
                 $bybestData = $response->json();
 
                 if (empty($bybestData) || !isset($bybestData['data'])) {
-                    break; // No more data to process
+                    // break; // No more data to process
+                    return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 $coupons = $bybestData['data'];
 
-
-                foreach (array_chunk($coupons, $batchSize) as $batch) {
-                    DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($batch as $item) {
+                // foreach (array_chunk($coupons, $batchSize) as $batch) {
+                    // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
+                        foreach ($coupons as $item) {
                             \Log::info('Processing coupons', ['item' => $item]);
 
                             // Make sure the required fields are available
@@ -80,8 +80,6 @@ class OrdersSyncController extends Controller
                                 $skippedCount++;
                                 continue;
                             }
-
-
 
                             BBLegacyCoupon::updateOrCreate(
                                 ['bybest_id' => $item['id']],
@@ -95,29 +93,31 @@ class OrdersSyncController extends Controller
 
                             $processedCount++;
                         }
-                    });
-                }
+                    // });
+                // }
 
                 \Log::info("Processed {$processedCount} coupons so far.");
 
-                $page++;
+                // $page++;
             } catch (\Throwable $th) {
 
                 \Log::error('Error in coupons sync', [
                     'error' => $th->getMessage(),
                     'trace' => $th->getTraceAsString()
                 ]);
-                 return response()->json([
-                     "message" => "Error in coupons sync",
-                     "error" => $th->getMessage()
-                 ], 503);
+                return response()->json([
+                    "message" => "Error in coupons sync",
+                    "error" => $th->getMessage()
+                ], 503);
             }
-        } while (count($coupons) == $perPage);
+        // } while (count($coupons) == $perPage);
 
         return response()->json([
             'message' => 'coupons sync completed successfully',
             'processed_count' => $processedCount,
-            'skipped_count' => $skippedCount
+            'skipped_count' => $skippedCount,
+            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
+            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
         ], 200);
     }
 
@@ -173,7 +173,7 @@ class OrdersSyncController extends Controller
         }
 
 
-        do {
+        // do {
             try {
                 $start = microtime(true);
                 $response = Http::withHeaders([
@@ -190,127 +190,130 @@ class OrdersSyncController extends Controller
                 $bybestData = $response->json();
 
                 if (empty($bybestData) || !isset($bybestData['data'])) {
-                    break; // No more data to process
+                    // break; // No more data to process
+                    return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 $orders = $bybestData['data'];
 
-                foreach (array_chunk($orders, $batchSize) as $batch) {
-                    DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($batch as $item) {
-                            \Log::info('Processing orders', ['item' => $item]);
+                // foreach (array_chunk($orders, $batchSize) as $batch) {
+                    // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
+                        foreach ($orders as $item) {
+                            DB::beginTransaction();
+                            try {
+                                \Log::info('Processing orders', ['item' => $item]);
 
-                            // Make sure the required fields are available
-                            if (!isset($item['id'])) {
-                                \Log::error('orders missing id', ['item' => $item]);
-                                $skippedCount++;
-                                continue;
-                            }
+                                // Make sure the required fields are available
+                                if (!isset($item['id'])) {
+                                    \Log::error('orders missing id', ['item' => $item]);
+                                    $skippedCount++;
+                                    continue;
+                                }
 
 
-                            $status = OrderStatus::NEW_ORDER;
-                            if ($item['status_id'] == 1) {
                                 $status = OrderStatus::NEW_ORDER;
-                            }
-                            else if ($item['status_id'] == 2) {
-                                $status = OrderStatus::ON_HOLD;
-                            }
-                            else if ($item['status_id'] == 3) {
-                                $status = OrderStatus::ORDER_CONFIRMED;
-                            }
-                            else if ($item['status_id'] == 4) {
-                                $status = OrderStatus::PROCESSING;
-                            }
-                            else if ($item['status_id'] == 5) {
-                                $status = OrderStatus::ORDER_ON_DELIVERY;
-                            }
-                            else if ($item['status_id'] == 6) {
-                                $status = OrderStatus::ORDER_COMPLETED;
-                            }
-                            else if ($item['status_id'] == 8) {
-                                $status = OrderStatus::ORDER_CANCELLED;
-                            }
+                                if ($item['status_id'] == 1) {
+                                    $status = OrderStatus::NEW_ORDER;
+                                } else if ($item['status_id'] == 2) {
+                                    $status = OrderStatus::ON_HOLD;
+                                } else if ($item['status_id'] == 3) {
+                                    $status = OrderStatus::ORDER_CONFIRMED;
+                                } else if ($item['status_id'] == 4) {
+                                    $status = OrderStatus::PROCESSING;
+                                } else if ($item['status_id'] == 5) {
+                                    $status = OrderStatus::ORDER_ON_DELIVERY;
+                                } else if ($item['status_id'] == 6) {
+                                    $status = OrderStatus::ORDER_COMPLETED;
+                                } else if ($item['status_id'] == 8) {
+                                    $status = OrderStatus::ORDER_CANCELLED;
+                                }
 
-                            // find customer based on bybest_id =  item['customer_id']
-                            $userId = User::where('old_platform_user_id', $item['customer_id'])->first();
-                            $customer = Customer::where('user_id', $userId?->id)->first();
-                           Order::updateOrCreate(
-                                ['bybest_id' => $item['id']],
-                                [
-                                    'total_amount' => $item['total'],
-                                    'total_amount_eur' => $item['total_eur'],
-                                    'customer_id' => $customer?->id,
-                                    'restaurant_id' => $venue->id,
-                                    'status' => $status,
-                                    'discount_total' => $item['discount'],
-                                    'discount_total_eur' => 0,
-                                    'payment_method_id' => $item['payment_id'],
-                                    'payment_status' => $item['payment_id'] ? 'paid' : 'unpaid',
-                                    'subtotal' => $item['subtotal'],
-                                    'subtotal_eur' => 0,
-                                    'notes' => $item['meta'],
-                                    'order_number' => $item['tracking_number'] ? $item['tracking_number'] : null,
-                                    'delivery_fee' => $item['postal'],
-                                    'delivery_fee_eur' => 0,
-                                    'source_id' => $item['source_id'],
-                                    'postal' => $item['postal'],
-                                    'ip' => $item['ip'],
-                                    'shipping_id' => $item['shipping_id'],
-                                    'shipping_name' => $item['shipping_name'],
-                                    'shipping_surname' => $item['shipping_surname'],
-                                    'bb_shipping_state' => $item['shipping_state'] ? $item['shipping_state'] : null,
-                                    'bb_shipping_city' => $item['shipping_city'] ? $item['shipping_city'] : null,
-                                    'shipping_phone_no' => $item['shipping_phone_no'] ? $item['shipping_phone_no'] : null,
-                                    'shipping_email' => $item['shipping_email'] ? $item['shipping_email'] : null,
-                                    'shipping_address' => $item['shipping_address'] ? $item['shipping_address'] : null,
-                                    'shipping_postal_code' => $item['shipping_postal_code'] ? $item['shipping_postal_code'] : null,
-                                    'billing_name' => $item['billing_name'] ? $item['billing_name'] : null,
-                                    'billing_surname' => $item['billing_surname'] ? $item['billing_surname'] : null,
-                                    'bb_billing_state' => $item['billing_state'] ? $item['billing_state'] : null,
-                                    'bb_billing_city' => $item['billing_city'] ? $item['billing_city'] : null,
-                                    'billing_phone_no' => $item['billing_phone_no'] ? $item['billing_phone_no'] : null,
-                                    'billing_email' => $item['billing_email'] ? $item['billing_email'] : null,
-                                    'billing_address' => $item['billing_address'] ? $item['billing_address'] : null,
-                                    'billing_postal_code' => $item['billing_postal_code'] ? $item['billing_postal_code'] : null,
-                                    'exchange_rate_eur' => $item['exchange_rate_eur'],
-                                    'exchange_rate_all' => $item['exchange_rate_all'],
-                                    'has_postal_invoice' => $item['has_postal_invoice'],
-                                    'tracking_latitude' => $item['tracking_latitude'],
-                                    'tracking_longtitude' => $item['tracking_longtitude'],
-                                    'tracking_countryCode' => $item['tracking_countryCode'],
-                                    'tracking_cityName' => $item['tracking_cityName'],
-                                    'internal_note' => $item['internal_note'],
-                                    'bb_coupon_id' => $item['coupon_id'] ? $item['coupon_id'] : null,
-                                    'bybest_id' => $item['id'],
-                                    'created_at' => $item['created_at'],
-                                    'updated_at' => $item['updated_at'],
-                                ]
-                            );
+                                // find customer based on bybest_id =  item['customer_id']
+                                $userId = User::where('old_platform_user_id', $item['customer_id'])->first();
+                                $customer = Customer::where('user_id', $userId?->id)->first();
+                                Order::updateOrCreate(
+                                    ['bybest_id' => $item['id']],
+                                    [
+                                        'total_amount' => $item['total'],
+                                        'total_amount_eur' => $item['total_eur'],
+                                        'customer_id' => $customer?->id,
+                                        'restaurant_id' => $venue->id,
+                                        'status' => $status,
+                                        'discount_total' => $item['discount'],
+                                        'discount_total_eur' => 0,
+                                        'payment_method_id' => $item['payment_id'],
+                                        'payment_status' => $item['payment_id'] ? 'paid' : 'unpaid',
+                                        'subtotal' => $item['subtotal'],
+                                        'subtotal_eur' => 0,
+                                        'notes' => $item['meta'],
+                                        'order_number' => $item['tracking_number'] ? $item['tracking_number'] : null,
+                                        'delivery_fee' => $item['postal'],
+                                        'delivery_fee_eur' => 0,
+                                        'source_id' => $item['source_id'],
+                                        'postal' => $item['postal'],
+                                        'ip' => $item['ip'],
+                                        'shipping_id' => $item['shipping_id'],
+                                        'shipping_name' => $item['shipping_name'],
+                                        'shipping_surname' => $item['shipping_surname'],
+                                        'bb_shipping_state' => $item['shipping_state'] ? $item['shipping_state'] : null,
+                                        'bb_shipping_city' => $item['shipping_city'] ? $item['shipping_city'] : null,
+                                        'shipping_phone_no' => $item['shipping_phone_no'] ? $item['shipping_phone_no'] : null,
+                                        'shipping_email' => $item['shipping_email'] ? $item['shipping_email'] : null,
+                                        'shipping_address' => $item['shipping_address'] ? $item['shipping_address'] : null,
+                                        'shipping_postal_code' => $item['shipping_postal_code'] ? $item['shipping_postal_code'] : null,
+                                        'billing_name' => $item['billing_name'] ? $item['billing_name'] : null,
+                                        'billing_surname' => $item['billing_surname'] ? $item['billing_surname'] : null,
+                                        'bb_billing_state' => $item['billing_state'] ? $item['billing_state'] : null,
+                                        'bb_billing_city' => $item['billing_city'] ? $item['billing_city'] : null,
+                                        'billing_phone_no' => $item['billing_phone_no'] ? $item['billing_phone_no'] : null,
+                                        'billing_email' => $item['billing_email'] ? $item['billing_email'] : null,
+                                        'billing_address' => $item['billing_address'] ? $item['billing_address'] : null,
+                                        'billing_postal_code' => $item['billing_postal_code'] ? $item['billing_postal_code'] : null,
+                                        'exchange_rate_eur' => $item['exchange_rate_eur'],
+                                        'exchange_rate_all' => $item['exchange_rate_all'],
+                                        'has_postal_invoice' => $item['has_postal_invoice'],
+                                        'tracking_latitude' => $item['tracking_latitude'],
+                                        'tracking_longtitude' => $item['tracking_longtitude'],
+                                        'tracking_countryCode' => $item['tracking_countryCode'],
+                                        'tracking_cityName' => $item['tracking_cityName'],
+                                        'internal_note' => $item['internal_note'],
+                                        'bb_coupon_id' => $item['coupon_id'] ? $item['coupon_id'] : null,
+                                        'bybest_id' => $item['id'],
+                                        'created_at' => $item['created_at'],
+                                        'updated_at' => $item['updated_at'],
+                                    ]
+                                );
 
-                            $processedCount++;
+                                $processedCount++;
+                                DB::commit();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
+                            }
                         }
-                    });
-                }
+                    // });
+                // }
 
                 \Log::info("Processed {$processedCount} orders so far.");
 
-                $page++;
+                // $page++;
             } catch (\Throwable $th) {
                 \Log::error('Error in orders sync', [
                     'error' => $th->getMessage(),
                     'trace' => $th->getTraceAsString()
                 ]);
-                 return response()->json([
-                     "message" => "Error in orders sync",
-                     "error" => $th->getMessage()
-                 ], 503);
+                return response()->json([
+                    "message" => "Error in orders sync",
+                    "error" => $th->getMessage()
+                ], 503);
             }
-        } while (count($orders) == $perPage);
+        // } while (count($orders) == $perPage);
 
         return response()->json([
             'message' => 'orders sync completed successfully',
             'processed_count' => $processedCount,
-            'skipped_count' => $skippedCount
+            'skipped_count' => $skippedCount,
+            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
+            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
         ], 200);
     }
 
@@ -323,7 +326,7 @@ class OrdersSyncController extends Controller
         $skippedCount = 0;
         $processedCount = 0;
 
-        do {
+        // do {
             try {
                 $start = microtime(true);
                 $response = Http::withHeaders([
@@ -340,81 +343,90 @@ class OrdersSyncController extends Controller
                 $bybestData = $response->json();
 
                 if (empty($bybestData) || !isset($bybestData['data'])) {
-                    break; // No more data to process
+                    // break; // No more data to process
+                    return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 $orderProducts = $bybestData['data'];
 
-                foreach (array_chunk($orderProducts, $batchSize) as $batch) {
-                    DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($batch as $item) {
-                            \Log::info('Processing orderProducts', ['item' => $item]);
+                // foreach (array_chunk($orderProducts, $batchSize) as $batch) {
+                    // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
+                        foreach ($orderProducts as $item) {
+                            DB::beginTransaction();
+                            try {
+                                \Log::info('Processing orderProducts', ['item' => $item]);
 
-                            // Make sure the required fields are available
-                            if (!isset($item['id'])) {
-                                \Log::error('orderProducts missing id', ['item' => $item]);
-                                $skippedCount++;
-                                continue;
-                            }
-
-                            $order = Order::where('bybest_id', $item['order_id'])->first();
-                            $product = Product::where('bybest_id', $item['product_id'])->first();
-
-                            if (!$product) {
-                                \Log::error('products beeing null', ['item' => $item]);
-                                $skippedCount++;
-                                continue;
-                            }
-
-                            $variation_id = null;
-                            if ($item['variation_id']) {
-                                $productVariant = VbStoreProductVariant::where('bybest_id', $item['variation_id'])->first();
-                                if ($productVariant) {
-                                    $variation_id = $productVariant->id;
+                                // Make sure the required fields are available
+                                if (!isset($item['id'])) {
+                                    \Log::error('orderProducts missing id', ['item' => $item]);
+                                    $skippedCount++;
+                                    continue;
                                 }
+
+                                $order = Order::where('bybest_id', $item['order_id'])->first();
+                                $product = Product::where('bybest_id', $item['product_id'])->first();
+
+                                if (!$product) {
+                                    \Log::error('products beeing null', ['item' => $item]);
+                                    $skippedCount++;
+                                    continue;
+                                }
+
+                                $variation_id = null;
+                                if ($item['variation_id']) {
+                                    $productVariant = VbStoreProductVariant::where('bybest_id', $item['variation_id'])->first();
+                                    if ($productVariant) {
+                                        $variation_id = $productVariant->id;
+                                    }
+                                }
+
+                                OrderProduct::updateOrCreate(
+                                    ['bybest_id' => $item['id']],
+                                    [
+                                        'order_id' => $order?->id,
+                                        'product_id' => $product->id,
+                                        'variation_id' => $variation_id,
+                                        'product_quantity' => $item['quantity'],
+                                        'product_total_price' => $item['total'],
+                                        'product_total_price_eur' => 0,
+                                        'product_discount_price' => $item['discount'],
+                                        'product_discount_price_eur' => 0,
+                                        'bybest_id' => $item['id'],
+                                        'created_at' => $item['created_at'],
+                                        'updated_at' => $item['updated_at']
+                                    ]
+                                );
+
+                                $processedCount++;
+                                DB::commit();
+                            } catch (\Exception $e) {
+                                DB::rollBack();
                             }
-
-                            OrderProduct::updateOrCreate(
-                                ['bybest_id' => $item['id']],
-                                [
-                                    'order_id' => $order?->id,
-                                    'product_id' => $product->id,
-                                    'variation_id' => $variation_id,
-                                    'product_quantity' => $item['quantity'],
-                                    'product_total_price' => $item['total'],
-                                    'product_total_price_eur' => 0,
-                                    'product_discount_price' => $item['discount'],
-                                    'product_discount_price_eur' => 0,
-                                    'bybest_id' => $item['id'],
-                                    'created_at' => $item['created_at'],
-                                    'updated_at' => $item['updated_at']
-                                ]
-                            );
-
-                            $processedCount++;
                         }
-                    });
-                }
+                    // });
+                // }
 
                 \Log::info("Processed {$processedCount} orderProducts so far.");
 
-                $page++;
+                // $page++;
             } catch (\Throwable $th) {
                 \Log::error('Error in orderProducts sync', [
                     'error' => $th->getMessage(),
                     'trace' => $th->getTraceAsString()
                 ]);
-                 return response()->json([
-                     "message" => "Error in orderProducts sync",
-                     "error" => $th->getMessage()
-                 ], 503);
+                return response()->json([
+                    "message" => "Error in orderProducts sync",
+                    "error" => $th->getMessage()
+                ], 503);
             }
-        } while (count($orderProducts) == $perPage);
+        // } while (count($orderProducts) == $perPage);
 
         return response()->json([
             'message' => 'orderProducts sync completed successfully',
             'processed_count' => $processedCount,
-            'skipped_count' => $skippedCount
+            'skipped_count' => $skippedCount,
+            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
+            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
         ], 200);
     }
 }
