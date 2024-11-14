@@ -26,12 +26,12 @@ class BbBrandsController extends Controller
                 return response()->json(['error' => 'Venue not found or user not eligible'], 404);
             }
 
-            $temp = $request->page;
-            $request->merge(['page' => 1]);
-            $paginate = 30;
-            if ((int) $temp) {
-                $paginate = 30 * (int) $temp;
-            }
+            // $temp = $request->page;
+            // $request->merge(['page' => 1]);
+            // $paginate = 30;
+            // if ((int) $temp) {
+            //     $paginate = 30 * (int) $temp;
+            // }
 
             // $currency = Currency::where('is_primary', '=', true)->first();
             // $exchange_rate = Currency::where('is_primary', '=', true)->first();
@@ -73,18 +73,10 @@ class BbBrandsController extends Controller
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha')
                 ->whereNotNull('products.warehouse_alpha')
-                ->distinct()
-                ->paginate($paginate);
+                ->distinct('products.id')
+                ->paginate(30);
 
-            $totalProducts = $products_query
-                ->orderBy('products.created_at', 'DESC')
-                ->where('products.product_status', '=', 1)
-                ->whereNull('products.deleted_at')
-                ->where('products.stock_quantity', '>', 0)
-                ->whereNotNull('products.currency_alpha')
-                ->whereNotNull('products.warehouse_alpha')
-                ->distinct()
-                ->count();
+            $totalProducts = $products->total();
 
             // Filters
             $filters_query = VbStoreAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.attribute_id', '=', 'vb_store_attributes.id')

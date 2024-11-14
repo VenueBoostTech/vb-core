@@ -7,6 +7,8 @@ use App\Models\AccountingFinance\Currency;
 use App\Models\Product;
 use App\Models\VbStoreProductVariant;
 use App\Models\Brand;
+use App\Models\City;
+use App\Models\Country;
 use App\Models\Member;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,7 +40,7 @@ class BbProductsController extends Controller
             }
 
 
-            // $currency = Currency::where('is_primary', '=', true)->first();
+            $currency = Currency::where('is_primary', '=', true)->first();
             $brand = Brand::where('id', '=', $product->brand_id)->first();
             $bb_memebers = Member::first();
 
@@ -52,8 +54,13 @@ class BbProductsController extends Controller
                     DB::raw("(SELECT MAX(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as max_regular_price"),
                     DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_regular_price"),
                     DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
-                )
-                ->where('products.brand_id', '=', $brand->id)
+                );
+
+            if (@$brand) {
+                $related_products = $related_products->where('products.brand_id', '=', $brand->id);
+            }
+
+            $related_products = $related_products
                 ->where('products.id', '<>', $product->id)
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.warehouse_alpha')
@@ -62,10 +69,13 @@ class BbProductsController extends Controller
                 ->with(['attribute.option', 'productImages'])
                 ->limit(4)->get();
 
-            $related_products_cros = Product
-                ::where('products.id', '<>', $product->id)
-                ->where('products.brand_id', '=', $brand->id)
-                ->where('products.product_status', '=', 1)
+            $related_products_cros = Product::where('products.id', '<>', $product->id);
+
+            if (@$brand) {
+                $related_products_cros = $related_products_cros->where('products.brand_id', '=', $brand->id);
+            }
+
+            $related_products_cros = $related_products_cros->where('products.product_status', '=', 1)
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.warehouse_alpha')
                 ->whereNotNull('products.currency_alpha')
@@ -83,19 +93,19 @@ class BbProductsController extends Controller
 
             $related_products = $related_products->concat($related_products_cros);
 
-            $atributes = DB::table('store_product_atributes')->join('store_attributes_options', 'store_attributes_options.id', '=', 'store_product_atributes.attribute_id')
-                ->join('store_attributes', 'store_attributes.id', '=', 'store_attributes_options.attribute_id')
-                ->select(
-                    DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
-                    DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_attributes_options.option_name, '$." . App::getLocale() . "')) AS option_name"),
-                    'store_attributes_options.order_id'
-                )
-                ->orderBy('store_attributes_options.order_id', 'asc')
-                ->where('store_product_atributes.product_id', '=', $product->id)
+            $atributes = DB::table('vb_store_product_attributes')->join('vb_store_attributes_options', 'vb_store_attributes_options.id', '=', 'vb_store_product_attributes.attribute_id')
+            ->join('vb_store_attributes', 'vb_store_attributes.id', '=', 'vb_store_attributes_options.attribute_id')
+            ->select(
+                // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(vb_store_attributes.attr_name, '$." . App::getLocale() . "')) AS attr_name"),
+                // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(vb_store_attributes_options.option_name, '$." . App::getLocale() . "')) AS option_name"),
+                'vb_store_attributes_options.order_id'
+            )
+                ->orderBy('vb_store_attributes_options.order_id', 'asc')
+                ->where('vb_store_product_attributes.product_id', '=', $product->id)
                 ->get();
 
-            $wish_list_products = app('wishlist')->getContent();
-            $payment_methods = PaymentMothod::where('status_id', '=', 1)->orderBy('id', 'ASC')->get();
+            // $wish_list_products = app('wishlist')->getContent();
+            // $payment_methods = PaymentMothod::where('status_id', '=', 1)->orderBy('id', 'ASC')->get();
             $countries = Country::all();
             $cities = City::all();
 
@@ -104,12 +114,14 @@ class BbProductsController extends Controller
                 'currency' => $currency,
                 'product' => $product,
                 'brand' => $brand,
-                'bb_members' => $bb_members,
+                'bb_members' => $bb_memebers,
+                'countries' => $countries,
+                'cities' => $cities,
+                'atributes' => $atributes
                 // Add other necessary data
             ];
 
             return response()->json($response_data);
-
         } catch (\Throwable $th) {
             return response()->json(['error' => 'An error occurred'], 500);
         }

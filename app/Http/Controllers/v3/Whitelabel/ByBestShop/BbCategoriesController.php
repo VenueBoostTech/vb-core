@@ -16,7 +16,7 @@ class BbCategoriesController extends Controller
 {
     public function categoryProducts(Request $request, string $category_url): \Illuminate\Http\JsonResponse
     {
-        try {
+        // try {
             // $category_url = $request->input('category_url');
             // Assuming you have similar logic as in the original controller
             // Retrieve category, products, filters, etc.
@@ -64,9 +64,9 @@ class BbCategoriesController extends Controller
             $products_query = $products_query
                 ->orderBy('products.created_at', 'DESC')
                 ->with('productImages')
-                ->distinct();
+                ->distinct('products.id');
 
-            $totalProducts = $products_query->count();
+            $totalProducts = $products_query->count('products.id');
             $products = $products_query->paginate(30);
 
             $filters_query = VbStoreAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.attribute_id', '=', 'vb_store_attributes.id')
@@ -260,9 +260,9 @@ class BbCategoriesController extends Controller
                 'brands' => $brands,
                 'group_id' => $request->search
             ]);
-        } catch (\Throwable $th) {
-            return response()->json(['error' => 'Category not found'], 404);
-        }
+        // } catch (\Throwable $th) {
+        //     return response()->json(['error' => 'Category not found'], 404);
+        // }
     }
 
     public function searchProducts(Request $request): \Illuminate\Http\JsonResponse

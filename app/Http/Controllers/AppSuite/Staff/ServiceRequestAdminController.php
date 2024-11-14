@@ -93,8 +93,8 @@ class ServiceRequestAdminController extends Controller
                     return [
                         'id' => $request->id,
                         'reference' => $request->reference,
-                        'client' => $request->client->name,
-                        'service' => $request->service->name,
+                        'client' => $request->client?->name ?? '-',
+                        'service' => $request->service?->name ?? '-',
                         'requested_date' => $request->requested_date->format('Y-m-d'),
                         'scheduled_date' => optional($request->scheduled_date)->format('Y-m-d'),
                         'status' => $request->status,

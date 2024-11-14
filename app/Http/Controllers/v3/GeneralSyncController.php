@@ -61,7 +61,7 @@ class GeneralSyncController extends Controller
                         $this->syncAddress($customer, $oldUser);
 
                         // Sync Member
-                        if ($oldUser['bb_member_code']) {
+                        if (isset($oldUser['bb_member_code']) && $oldUser['bb_member_code'] != null && $oldUser['bb_member_code'] != '') {
                             $this->syncMember($user, $oldUser);
                         }
                     });
