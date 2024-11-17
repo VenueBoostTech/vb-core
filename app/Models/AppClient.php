@@ -76,4 +76,9 @@ class AppClient extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+
+    public function feedbacks()
+    {
+        return $this->hasMany(AppFeedback::class, 'client_id');
+    }
 }

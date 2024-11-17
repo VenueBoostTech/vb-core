@@ -34,25 +34,23 @@ class ClientInvoiceController extends Controller
 
         $client = $this->clientAuthService->getAuthenticatedClient();
 
-        $query = AppInvoice::with(['serviceRequest.service'])
-            ->where('client_id', $client->id);
+        $invoices = AppInvoice::where('status', 'pending')->get();
+//        // Get stats
+//        $stats = [
+//            'due_now' => $query->whereIn('status', ['pending', 'overdue'])
+//                ->sum('total_amount'),
+//            'last_payment' => $query->where('status', 'paid')
+//                    ->latest()
+//                    ->first()?->total_amount ?? 0,
+//            'total_count' => $query->count()
+//        ];
 
-        // Get stats
-        $stats = [
-            'due_now' => $query->whereIn('status', ['pending', 'overdue'])
-                ->sum('total_amount'),
-            'last_payment' => $query->where('status', 'paid')
-                    ->latest()
-                    ->first()?->total_amount ?? 0,
-            'total_count' => $query->count()
-        ];
-
-        // Get paginated invoices
-        $invoices = $query->latest()
-            ->paginate($request->input('per_page', 15));
+//        // Get paginated invoices
+//        $invoices = $query->latest()
+//            ->paginate($request->input('per_page', 15));
 
         return response()->json([
-            'stats' => $stats,
+//            'stats' => $stats,
             'invoices' => [
                 'data' => $invoices->map(function($invoice) {
                     return [
@@ -65,10 +63,10 @@ class ClientInvoiceController extends Controller
                         'status' => $invoice->status
                     ];
                 }),
-                'current_page' => $invoices->currentPage(),
-                'per_page' => $invoices->perPage(),
-                'total' => $invoices->total(),
-                'total_pages' => $invoices->lastPage(),
+                'current_page' => 1,
+                'per_page' => 1,
+                'total' => 10,
+                'total_pages' =>4,
             ]
         ]);
     }

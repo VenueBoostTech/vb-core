@@ -13,6 +13,7 @@ use App\Models\State;
 use App\Models\Team;
 use App\Services\AppNotificationService;
 use App\Services\VenueService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -376,7 +377,20 @@ class AdminProjectController extends Controller
         if ($venue instanceof JsonResponse) return $venue;
 
         $project = AppProject::where('venue_id', $venue->id)
-            ->with(['department', 'team', 'assignedEmployees', 'projectManager', 'timeEntries', 'tasks'])
+            ->with([
+                'department',
+                'team',
+                'assignedEmployees',
+                'projectManager',
+                'timeEntries',
+                'tasks',
+                'client',
+                'address',
+                'service',
+                'serviceRequest',
+                'teamLeaders',
+                'operationsManagers'
+            ])
             ->find($id);
 
         if (!$project) {
@@ -384,7 +398,7 @@ class AdminProjectController extends Controller
         }
 
         $totalEstimatedHours = $project->estimated_hours ?? 0;
-        $totalWorkedHours = $project->timeEntries->sum('duration') / 3600; // Convert seconds to hours
+        $totalWorkedHours = $project->timeEntries->sum('duration') / 3600;
         $progress = $totalEstimatedHours > 0 ? min(100, ($totalWorkedHours / $totalEstimatedHours) * 100) : 0;
 
         $formattedProject = [
@@ -397,6 +411,32 @@ class AdminProjectController extends Controller
             'progress' => round($progress, 2),
             'estimated_hours' => $totalEstimatedHours,
             'worked_hours' => round($totalWorkedHours, 2),
+            'estimated_budget' => $project->estimated_budget,
+            'project_type' => $project->project_type,
+            'project_category' => $project->project_category,
+            'project_source' => $project->project_source,
+            'client' => $project->client ? [
+                'id' => $project->client->id,
+                'name' => $project->client->name,
+                'type' => $project->client->type,
+                'contact_person' => $project->client->contact_person,
+                'email' => $project->client->email,
+                'phone' => $project->client->phone,
+            ] : null,
+            'address' => $project->address ? [
+                'address_line1' => $project->address->address_line1,
+                'city' => $project->address->city,
+                'state' => $project->address->state,
+                'country' => $project->address->country,
+                'postcode' => $project->address->postcode,
+            ] : null,
+            'service' => $project->service ? [
+                'id' => $project->service->id,
+                'name' => $project->service->name,
+                'quoted_price' => $project->quoted_price,
+                'final_price' => $project->final_price,
+                'service_details' => $project->service_details,
+            ] : null,
             'department' => $project->department ? [
                 'id' => $project->department->id,
                 'name' => $project->department->name,
@@ -410,6 +450,20 @@ class AdminProjectController extends Controller
                 'name' => $project->projectManager->name,
                 'avatar' => $this->getAvatarUrl($project->projectManager)
             ] : null,
+            'team_leaders' => $project->teamLeaders->map(function ($leader) {
+                return [
+                    'id' => $leader->id,
+                    'name' => $leader->name,
+                    'avatar' => $this->getAvatarUrl($leader)
+                ];
+            }),
+            'operations_managers' => $project->operationsManagers->map(function ($manager) {
+                return [
+                    'id' => $manager->id,
+                    'name' => $manager->name,
+                    'avatar' => $this->getAvatarUrl($manager)
+                ];
+            }),
             'assigned_employees' => $project->assignedEmployees->map(function ($employee) use ($project) {
                 return [
                     'id' => $employee->id,
@@ -613,7 +667,7 @@ class AdminProjectController extends Controller
         });
 
         return response()->json([
-            'galleries' => $formattedGalleries,
+            'data' => $formattedGalleries,
             'current_page' => $galleries->currentPage(),
             'per_page' => $galleries->perPage(),
             'total' => $galleries->total(),
@@ -717,6 +771,144 @@ class AdminProjectController extends Controller
         $gallery->delete();
 
         return response()->json(['message' => 'Gallery item removed successfully']);
+    }
+
+    public function getProjectTeam($id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        try {
+            $project = AppProject::where('venue_id', $venue->id)
+                ->with([
+                    'assignedEmployees.role',
+                    'projectManager.role',
+                    'teamLeaders.role',
+                    'operationsManagers.role',
+                    'team'
+                ])
+                ->findOrFail($id);
+
+            $teamData = [
+                'project_manager' => $project->projectManager ? [
+                    'id' => $project->projectManager->id,
+                    'name' => $project->projectManager->name,
+                    'email' => $project->projectManager->email,
+                    'phone' => $project->projectManager->company_phone,
+                    'profile_picture' => $project->projectManager->profile_picture
+                        ? Storage::disk('s3')->temporaryUrl($project->projectManager->profile_picture, now()->addMinutes(5))
+                        : $this->getInitials($project->projectManager->name),
+                    'role' => $project->projectManager->role?->name,
+                    'status' => $project->projectManager->status,
+                ] : null,
+                'team_leaders' => $project->teamLeaders->map(function ($leader) {
+                    return [
+                        'id' => $leader->id,
+                        'name' => $leader->name,
+                        'email' => $leader->email,
+                        'phone' => $leader->company_phone,
+                        'profile_picture' => $leader->profile_picture
+                            ? Storage::disk('s3')->temporaryUrl($leader->profile_picture, now()->addMinutes(5))
+                            : $this->getInitials($leader->name),
+                        'role' => $leader->role?->name,
+                        'status' => $leader->status,
+                    ];
+                }),
+                'operations_managers' => $project->operationsManagers->map(function ($manager) {
+                    return [
+                        'id' => $manager->id,
+                        'name' => $manager->name,
+                        'email' => $manager->email,
+                        'phone' => $manager->company_phone,
+                        'profile_picture' => $manager->profile_picture
+                            ? Storage::disk('s3')->temporaryUrl($manager->profile_picture, now()->addMinutes(5))
+                            : $this->getInitials($manager->name),
+                        'role' => $manager->role?->name,
+                        'status' => $manager->status,
+                    ];
+                }),
+                'team_members' => $project->assignedEmployees->map(function ($employee) {
+                    return [
+                        'id' => $employee->id,
+                        'name' => $employee->name,
+                        'email' => $employee->email,
+                        'phone' => $employee->company_phone,
+                        'profile_picture' => $employee->profile_picture
+                            ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5))
+                            : $this->getInitials($employee->name),
+                        'role' => $employee->role?->name,
+                        'status' => $employee->status,
+                        'assigned_at' => $employee->pivot->created_at?->format('Y-m-d'),
+                    ];
+                }),
+                'assigned_team' => $project->team ? [
+                    'id' => $project->team->id,
+                    'name' => $project->team->name,
+                    'department' => $project->team->department ? [
+                        'id' => $project->team->department->id,
+                        'name' => $project->team->department->name,
+                    ] : null,
+                ] : null,
+            ];
+
+            return response()->json($teamData);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+    }
+
+
+    // storeTimeEntry
+
+    public function storeTimeEntry(Request $request, $id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $project = AppProject::where('venue_id', $venue->id)->find($id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'employee_id' => 'required|exists:employees,id',
+            'start_time' => 'required|date',
+            'end_time' => 'required|date|after:start_time',
+            'description' => 'nullable|string',
+            'task_id' => 'nullable|exists:tasks,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $employee = Employee::where('restaurant_id', $venue->id)->find($request->employee_id);
+        if (!$employee) {
+            return response()->json(['error' => 'Employee not found'], 404);
+        }
+
+        // Get validated data and add is_manually_entered
+        $timeEntryData = array_merge($validator->validated(), [
+            'is_manually_entered' => true,
+            'duration' => $this->calculateDuration($request->start_time, $request->end_time),
+        ]);
+
+        $timeEntry = $project->timeEntries()->create($timeEntryData);
+
+        return response()->json(['message' => 'Time entry created successfully', 'data' => $timeEntry]);
+    }
+
+    private function calculateDuration($startTime, $endTime): int
+    {
+        $start = new \DateTime($startTime);
+        $end = new \DateTime($endTime);
+        $interval = $end->diff($start);
+
+        // Convert to seconds
+        return ($interval->days * 24 * 60 * 60) +
+            ($interval->h * 60 * 60) +
+            ($interval->i * 60) +
+            $interval->s;
     }
 
 

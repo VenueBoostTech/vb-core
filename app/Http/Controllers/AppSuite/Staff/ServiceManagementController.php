@@ -271,4 +271,55 @@ class ServiceManagementController extends Controller
             ->first()
             ?->name;
     }
+
+    public function show($id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $service = Service::where('venue_id', $venue->id)
+            ->with([
+                'category',
+                'serviceRequests' => function($query) {
+                    $query->latest()->take(5)->with(['client', 'assignedStaff']);
+                }
+            ])
+            ->find($id);
+
+        if (!$service) {
+            return response()->json(['error' => 'Service not found'], 404);
+        }
+
+        $formattedService = [
+            'id' => $service->id,
+            'name' => $service->name,
+            'price_type' => $service->price_type,
+            'base_price' => number_format($service->base_price, 2),
+            'duration' => $service->duration,
+            'description' => $service->description,
+            'status' => $service->status,
+            'category' => [
+                'id' => $service->category->id,
+                'name' => $service->category->name
+            ],
+            'service_requests' => $service->serviceRequests->map(function($request) {
+                return [
+                    'id' => $request->id,
+                    'reference' => $request->reference,
+                    'status' => $request->status,
+                    'requested_date' => $request->requested_date,
+                    'client' => [
+                        'id' => $request->client->id,
+                        'name' => $request->client->name
+                    ],
+                    'assigned_to' => $request->assignedStaff ? [
+                        'id' => $request->assignedStaff->id,
+                        'name' => $request->assignedStaff->name
+                    ] : null
+                ];
+            })
+        ];
+
+        return response()->json($formattedService);
+    }
 }

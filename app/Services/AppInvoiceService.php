@@ -62,7 +62,7 @@ class AppInvoiceService
     protected function processStripePayment(AppInvoice $invoice, array $paymentData)
     {
         // Initialize Stripe payment intent
-        $stripe = new \Stripe\StripeClient (config('services.stripe.key'));
+        $stripe = new \Stripe\StripeClient ('sk_test_51NfR0wK9QDeYHZl0Ni35wgVXokm41feShMTuyDuibohCocPVycCnWgaQqS0LqhHPwFTyPaeEnAkytIKSbWNtVIah00d4JlNcwc');
 
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => $invoice->total_amount * 100, // Stripe uses cents

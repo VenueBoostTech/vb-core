@@ -139,6 +139,7 @@ class AuthController extends Controller
             ]);
         }
 
+
         return $this->respondWithToken($token, $sourceApp, $visionTrack, $allow_clockinout);
     }
 
@@ -377,6 +378,15 @@ class AuthController extends Controller
                     'inactive_message' => 'Oops! It seems you don\'t have an active subscription. Please contact us at contact@venueboost.io if you want to have a subscription or if you think this is a mistake.',
                 ]);
             }
+
+            // Save Login Activity
+            LoginActivity::create([
+                'user_id' => $user->id,
+                'app_source' => 'none',
+                'venue_id' => $restaurants[0]->id,
+            ]);
+
+            UserActivityLogger::log($user->id, 'Login');
 
             return response()->json([
                 'user' => [

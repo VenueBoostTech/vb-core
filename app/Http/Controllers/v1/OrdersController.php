@@ -2573,7 +2573,7 @@ class OrdersController extends Controller
             $options = DB::table('product_options')->where('product_id', $product->id)->where('type', 'option')->get();
             $additions = DB::table('product_options')->where('product_id', $product->id)->where('type', 'addition')->get();
 
-            $product->image_path = $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null;
+            // $product->image_path = $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null;
 
             // check if it has category
             $productCategoryRelationship = DB::table('product_category')->where('product_id', $product->id)->first();

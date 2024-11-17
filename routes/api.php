@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AppSuite\AppConfigurationController;
 use App\Http\Controllers\AppSuite\AppWhitelabelController;
+use App\Http\Controllers\AppSuite\ClientPortal\ClientDashboardController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientInvoiceController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientServiceRequestController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientServicesController;
@@ -14,8 +15,10 @@ use App\Http\Controllers\AppSuite\Staff\AdminStaffController;
 use App\Http\Controllers\AppSuite\Staff\AdminTaskController;
 use App\Http\Controllers\AppSuite\Staff\AdminTimesheetController;
 use App\Http\Controllers\AppSuite\Staff\AppClientController;
+use App\Http\Controllers\AppSuite\Staff\AppFeedbackController;
 use App\Http\Controllers\AppSuite\Staff\AttendanceController;
 use App\Http\Controllers\AppSuite\Staff\BusinessController;
+use App\Http\Controllers\AppSuite\Staff\ClientProjectsController;
 use App\Http\Controllers\AppSuite\Staff\CommentController;
 use App\Http\Controllers\AppSuite\Staff\CompanySetupController;
 use App\Http\Controllers\AppSuite\Staff\EmployeeProjectController;
@@ -1126,9 +1129,16 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
                 });
 
+                Route::prefix('logs')->group(function () {
+                    Route::get('/audit', [\App\Http\Controllers\AppSuite\ClientPortal\AuditLogsController::class, 'index']);
+                    Route::get('/audit/export', [\App\Http\Controllers\AppSuite\ClientPortal\AuditLogsController::class, 'index']);
+
+                });
+
                 // Project Management
                 Route::prefix('projects')->group(function () {
                     Route::get('/', [AdminProjectController::class, 'index']);
+                    Route::get('{id}/team', [AdminProjectController::class, 'getProjectTeam']);
                     Route::post('/', [AdminProjectController::class, 'store']);
                     Route::put('{id}', [AdminProjectController::class, 'update']);
                     Route::delete('{id}', [AdminProjectController::class, 'destroy']);
@@ -1140,6 +1150,8 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::get('{id}', [AdminProjectController::class, 'show']); // New route for project details
                     Route::post('/{id}/assign-team-leaders', [AdminProjectController::class, 'assignTeamLeaders']);
                     Route::post('/{id}/assign-operations-managers', [AdminProjectController::class, 'assignOperationsManagers']);
+                    Route::post('{id}/time-entries', [AdminProjectController::class, 'storeTimeEntry']);
+
 
                     // todo: add comment section at project
                     // Note: also admin
@@ -1151,6 +1163,10 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
                 });
 
+                Route::prefix('client-projects')->group(function () {
+                    Route::get('/', [ClientProjectsController::class, 'getClientProjects']);
+                });
+
                 Route::prefix('app-clients')->group(function () {
                     Route::get('/', [AppClientController::class, 'listClients']);
                     Route::get('/{id}', [AppClientController::class, 'getClient']);
@@ -1159,6 +1175,13 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::delete('/{id}', [AppClientController::class, 'deleteClient']);
                     Route::post('create-user', [AppClientController::class, 'createClientUser']);
                     Route::post('connect-user', [AppClientController::class, 'connectExistingUser']);
+                });
+
+
+                Route::prefix('feedback')->group(function () {
+                    Route::get('/stats', [AppFeedbackController::class, 'getFeedbackStats']);
+                    Route::get('/', [AppFeedbackController::class, 'getFeedbackList']);
+                    Route::post('/{id}/respond', [AppFeedbackController::class, 'respond']);
                 });
 
 
@@ -1184,6 +1207,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
                 Route::prefix('services')->group(function () {
                     Route::get('/', [ServiceManagementController::class, 'listServices']);
+                    Route::get('/{id}', [ServiceManagementController::class, 'show']);
                     Route::post('/', [ServiceManagementController::class, 'createService']);
                     Route::put('/{id}', [ServiceManagementController::class, 'updateService']);
                     Route::delete('/{id}', [ServiceManagementController::class, 'deleteService']);
@@ -1191,8 +1215,11 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
                 Route::prefix('service-requests')->group(function () {
                     Route::get('/', [ServiceRequestAdminController::class, 'index']);
+                    Route::get('{id}', [ServiceRequestAdminController::class, 'show']);
                     Route::post('{id}/approve', [ServiceRequestAdminController::class, 'approve']);
                     Route::post('{id}/decline', [ServiceRequestAdminController::class, 'decline']);
+                    Route::post('{id}/connect-project', [ServiceRequestAdminController::class, 'connectWithProject']);
+
                 });
 
                 Route::get('countries', [CompanySetupController::class, 'listCountries']);
@@ -1216,7 +1243,10 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
 
 
-
+                Route::group(['prefix' => 'shifts'], function () {
+                    Route::get('/calendar', [ShiftController::class, 'getCalendarEvents']);
+                    Route::post('/schedule', [ShiftController::class, 'createSchedule']);
+                });
 
             });
         });
@@ -1431,11 +1461,15 @@ Route::middleware(['client_portal_api_key'])->prefix('v1')->group(function () {
                 Route::get('my-requests/{id}', [ClientServiceRequestController::class, 'getRequestDetails']);
             });
 
+            Route::get('/cp-dashboard', [ClientDashboardController::class, 'getDashboardData']);
+
             // Service Requests
             Route::prefix('cp-services')->group(function () {
                 Route::get('/', [ClientServicesController::class, 'index']);
                 Route::get('/available', [ClientServicesController::class, 'available']);
                 Route::get('/{id}', [ClientServicesController::class, 'show']);
+                Route::post('/{id}/feedback', [ClientServiceRequestController::class, 'submitFeedback']);
+                Route::get('/{id}/feedback', [ClientServiceRequestController::class, 'getFeedback']);
             });
 
             // Invoices

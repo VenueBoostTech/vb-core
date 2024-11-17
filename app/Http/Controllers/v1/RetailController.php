@@ -1440,11 +1440,11 @@ class RetailController extends Controller
         $collections = Collection::where('venue_id', $venue->id)->paginate($perPage);
 
         $updatedCollections = $collections->map(function ($collection) {
-            if ($collection->logo_path !== null) {
-                // Generate the new path and update the image_path attribute
-                $newPath = Storage::disk('s3')->temporaryUrl($collection->logo_path, '+5 minutes');
-                $collection->logo_path = $newPath;
-            }
+            // if ($collection->logo_path !== null) {
+            //     // Generate the new path and update the image_path attribute
+            //     $newPath = Storage::disk('s3')->temporaryUrl($collection->logo_path, '+5 minutes');
+            //     $collection->logo_path = $newPath;
+            // }
 
             // Decode JSON strings
             $nameArray = json_decode($collection->name, true);

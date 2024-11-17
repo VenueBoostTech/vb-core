@@ -182,11 +182,11 @@ class ProductsController extends Controller
 
 
             $updatedProducts = $products->map(function ($product) use ($currency) {
-                if ($product->image_path !== null) {
-                    // Generate the new path and update the image_path attribute
-                    $newPath = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
-                    $product->image_path = $newPath;
-                }
+                // if ($product->image_path !== null) {
+                //     // Generate the new path and update the image_path attribute
+                //     $newPath = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
+                //     $product->image_path = $newPath;
+                // }
                 $product->currency = $currency ?? 'USD';
                 $product->try_at_home = $product?->takeHome ?? null;
                 return $product;
@@ -322,7 +322,7 @@ class ProductsController extends Controller
         }
 
         try {
-            $product = Product::where('restaurant_id', $venue->id)->with(['variations.attribute', 'variations.value'])->find($id);
+            $product = Product::where('restaurant_id', $venue->id)->with(['variants.attribute', 'variants.value'])->find($id);
             if (!$product) {
                 return response()->json(['message' => 'Not found product'], 404);
             }
@@ -330,7 +330,7 @@ class ProductsController extends Controller
             $options = DB::table('product_options')->where('product_id', $product->id)->where('type', 'option')->get();
             $additions = DB::table('product_options')->where('product_id', $product->id)->where('type', 'addition')->get();
 
-            $product->image_path = $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null;
+            // $product->image_path = $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null;
 
             // check if it has parent category
             $productParentCategoryRelationship = DB::table('product_category')->where('product_id', $product->id)->where('is_parent', true)->first();
@@ -364,7 +364,8 @@ class ProductsController extends Controller
             $product->gallery = $managedGallery;
             $product->inventory_retail = $product->inventoryRetail ?: null;
 
-            $variationsOutput = $product->variations->map(function ($variation) {
+            // $variationsOutput = $product->variations->map(function ($variation) {
+            $variationsOutput = $product->variants->map(function ($variation) {
                 return [
                     'id' => $variation->id,
                     'attribute' => [
@@ -383,13 +384,13 @@ class ProductsController extends Controller
             $productArray = $product->toArray();
 
             $attributes = DB::table('product_attribute_value')
-                ->join('attribute_values', 'product_attribute_value.attribute_value_id', '=', 'attribute_values.id')
-                ->join('product_attributes', 'attribute_values.attribute_id', '=', 'product_attributes.id')
+                // ->join('attribute_values', 'product_attribute_value.attribute_value_id', '=', 'attribute_values.id')
+                // ->join('product_attributes', 'attribute_values.attribute_id', '=', 'product_attributes.id')
                 ->where('product_attribute_value.product_id', $product->id)
                 ->select(
-                    'product_attributes.name as attribute_name',
-                    'attribute_values.value as attribute_value',
-                    'product_attributes.id as attribute_id',
+                    // 'product_attributes.name as attribute_name',
+                    // 'attribute_values.value as attribute_value',
+                    // 'product_attributes.id as attribute_id',
                     'product_attribute_value.visible_on_product_page as visible_on_product_page',
                     'product_attribute_value.used_for_variations as used_for_variations'
                 )
@@ -454,7 +455,7 @@ class ProductsController extends Controller
             $options = DB::table('product_options')->where('product_id', $product->id)->where('type', 'option')->get();
             $additions = DB::table('product_options')->where('product_id', $product->id)->where('type', 'addition')->get();
 
-            $product->image_path = $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null;
+            // $product->image_path = $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null;
 
             // check if it has parent category
             $productParentCategoryRelationship = DB::table('product_category')->where('product_id', $product->id)->where('is_parent', true)->first();

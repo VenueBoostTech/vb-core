@@ -227,4 +227,130 @@ class ServiceRequestAdminController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    // Add this to your ServiceRequestAdminController.php
+
+    public function connectWithProject(Request $request, $id)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $validator = Validator::make($request->all(), [
+            'project_id' => 'required|exists:app_projects,id'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $serviceRequest = ServiceRequest::where('venue_id', $venue->id)->find($id);
+        if (!$serviceRequest) {
+            return response()->json(['error' => 'Service request not found'], 404);
+        }
+
+        $project = AppProject::where('venue_id', $venue->id)->find($request->project_id);
+        if (!$project) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+
+        DB::beginTransaction();
+        try {
+            // Update service request with project id
+            $serviceRequest->app_project_id = $project->id;
+            $serviceRequest->save();
+
+            // Update project with service id from service request
+            $project->service_id = $serviceRequest->service_id;
+            $project->save();
+
+            // Create activity log
+            $serviceRequest->activities()->create([
+                'activity_type' => 'Project Connected',
+                'description' => "Connected with project: {$project->name}",
+                'user_id' => auth()->id()
+            ]);
+
+            DB::commit();
+            return response()->json(['message' => 'Service request connected with project successfully']);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json(['error' => 'Failed to connect service request with project'], 500);
+        }
+    }
+
+    public function show($id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $request = ServiceRequest::where('venue_id', $venue->id)
+            ->with([
+                'client',
+                'service',
+                'assignedStaff',
+                'appProject',
+                'activities' => function($query) {
+                    $query->orderBy('created_at', 'desc');
+                }
+            ])
+            ->find($id);
+
+        if (!$request) {
+            return response()->json(['error' => 'Service request not found'], 404);
+        }
+
+        $formattedRequest = [
+            'id' => $request->id,
+            'reference' => $request->reference,
+            'status' => $request->status,
+            'priority' => $request->priority,
+            'description' => $request->description,
+            'notes' => $request->notes,
+            'requested_date' => $request->requested_date,
+            'preferred_date' => $request->preferred_date,
+            'scheduled_date' => $request->scheduled_date,
+            'completed_at' => $request->completed_at,
+            'cancelled_at' => $request->cancelled_at,
+            'cancellation_reason' => $request->cancellation_reason,
+            'client' => [
+                'id' => $request->client->id,
+                'name' => $request->client->name,
+                'type' => $request->client->type,
+                'contact_person' => $request->client->contact_person,
+                'email' => $request->client->email,
+                'phone' => $request->client->phone,
+            ],
+            'service' => [
+                'id' => $request->service?->id,
+                'name' => $request->service?->name,
+                'base_price' => $request->service ? number_format($request->service->base_price, 2) : null,
+                'duration' => $request->service?->duration ? $request->service->duration . ' minutes' : null,
+            ],
+            'assigned_to' => $request->assignedStaff ? [
+                'id' => $request->assignedStaff->id,
+                'name' => $request->assignedStaff->name,
+                'role' => $request->assignedStaff->role,
+                'email' => $request->assignedStaff->email,
+            ] : null,
+            'app_project' => $request->appProject ? [
+                'id' => $request->appProject->id,
+                'name' => $request->appProject->name,
+                'status' => $request->appProject->status,
+            ] : null,
+            'activities' => $request->activities->map(function($activity) {
+                return [
+                    'id' => $activity->id,
+                    'activity_type' => $activity->activity_type,
+                    'description' => $activity->description,
+                    'created_at' => $activity->created_at,
+                    'user' => $activity->user ? [
+                        'id' => $activity->user->id,
+                        'name' => $activity->user->name
+                    ] : null
+                ];
+            })
+        ];
+
+        return response()->json($formattedRequest);
+    }
 }

@@ -103,7 +103,7 @@ class AdminTaskController extends Controller
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date|after_or_equal:start_date',
             'priority' => 'required|in:low,medium,high',
-            'status' => 'required|in:todo,in_progress,done,on_hold',
+            'status' => 'required|in:todo,in_progress,done,on_hold,draft',
             'project_id' => 'nullable|exists:app_projects,id',
             'assigned_employee_ids' => 'nullable|array',
             'assigned_employee_ids.*' => 'exists:employees,id',

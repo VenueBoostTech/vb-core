@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\AppSuite\ClientPortal;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppFeedback;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Services\ClientAuthService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ClientServicesController extends Controller
 {
@@ -213,17 +215,13 @@ class ClientServicesController extends Controller
                         'performed_by' => $activity->performer?->name ?? 'System'
                     ];
                 }),
-            ] : null,
-//            'feedback' => [
-//                'can_submit' => $latestRequest &&
-//                    $latestRequest->status === 'Completed' &&
-//                    !$latestRequest->feedback,
-//                'has_previous' => ServiceRequest::where('client_id', $client->id)
-//                    ->where('service_id', $id)
-//                    ->where('status', 'Completed')
-//                    ->whereNotNull('feedback')
-//                    ->exists()
-//            ]
+                'has_feedback' => $latestRequest->feedback !== null,
+                'feedback_details' => $latestRequest->feedback ? [
+                    'rating' => $latestRequest->feedback->rating,
+                    'comment' => $latestRequest->feedback->comment,
+                    'admin_response' => $latestRequest->feedback->admin_response,
+                ] : null
+            ] : null
         ]);
     }
 
@@ -240,6 +238,59 @@ class ClientServicesController extends Controller
             'created_at' => $service->created_at,
             'updated_at' => $service->updated_at
         ];
+    }
+
+
+    public function submitFeedback(Request $request, $id): JsonResponse
+    {
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
+        }
+
+        $client = $this->clientAuthService->getAuthenticatedClient();
+        $serviceRequest = ServiceRequest::where('client_id', $client->id)->findOrFail($id);
+
+        // Validate request can receive feedback
+        if ($serviceRequest->status !== 'Completed') {
+            return response()->json(['error' => 'Can only submit feedback for completed requests'], 422);
+        }
+
+        if ($serviceRequest->feedback) {
+            return response()->json(['error' => 'Feedback already submitted'], 422);
+        }
+
+        $validated = $request->validate([
+            'rating' => 'required|integer|between:1,5',
+            'comment' => 'required|string|min:10|max:500',
+        ]);
+
+        $feedback = AppFeedback::create([
+            'venue_id' => $client->venue_id,
+            'client_id' => $client->id,
+            'project_id' => $serviceRequest->project_id,
+            'rating' => $validated['rating'],
+            'comment' => $validated['comment'],
+            'type' => 'equipment_service',
+        ]);
+
+        $serviceRequest->feedback()->associate($feedback);
+        $serviceRequest->save();
+
+        return response()->json($feedback);
+    }
+
+    public function getFeedback($id): JsonResponse
+    {
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
+        }
+
+        $client = $this->clientAuthService->getAuthenticatedClient();
+        $serviceRequest = ServiceRequest::where('client_id', $client->id)
+            ->with('feedback')
+            ->findOrFail($id);
+
+        return response()->json($serviceRequest->feedback);
     }
 
 }
