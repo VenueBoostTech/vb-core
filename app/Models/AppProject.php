@@ -195,4 +195,10 @@ class AppProject extends Model
     {
         return $this->hasMany(AppFeedback::class, 'client_id');
     }
+
+    // Add support tickets relationship
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(AppSupportTicket::class, 'app_project_id');
+    }
 }

@@ -6,13 +6,16 @@ use App\Http\Controllers\AppSuite\ClientPortal\ClientDashboardController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientInvoiceController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientServiceRequestController;
 use App\Http\Controllers\AppSuite\ClientPortal\ClientServicesController;
+use App\Http\Controllers\AppSuite\ClientPortal\ClientTicketController;
 use App\Http\Controllers\AppSuite\ClientPortal\WebhookController;
 use App\Http\Controllers\AppSuite\Inventory\VBAppProductsController;
 use App\Http\Controllers\AppSuite\NotificationsController;
+use App\Http\Controllers\AppSuite\Staff\AdminAnalyticsController;
 use App\Http\Controllers\AppSuite\Staff\AdminInvoiceController;
 use App\Http\Controllers\AppSuite\Staff\AdminProjectController;
 use App\Http\Controllers\AppSuite\Staff\AdminStaffController;
 use App\Http\Controllers\AppSuite\Staff\AdminTaskController;
+use App\Http\Controllers\AppSuite\Staff\AdminTicketController;
 use App\Http\Controllers\AppSuite\Staff\AdminTimesheetController;
 use App\Http\Controllers\AppSuite\Staff\AppClientController;
 use App\Http\Controllers\AppSuite\Staff\AppFeedbackController;
@@ -40,6 +43,7 @@ use App\Http\Controllers\v2\InventoryConfigurationController;
 use App\Http\Controllers\v3\Accommodation\BookingsController;
 use App\Http\Controllers\v3\Accommodation\CalendarConnectionController;
 use App\Http\Controllers\v3\EndUserController;
+use App\Http\Controllers\v3\GeneralSyncController;
 use App\Http\Controllers\v3\Synchronization\AlphaSyncController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbBrandsController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCategoriesController;
@@ -178,6 +182,11 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::prefix('payments')->group(function () {
             Route::post('/', 'App\Http\Controllers\v1\Stripe\WhiteLabel\PaymentsController@createPaymentIntent');
             Route::post('/destination-charge', 'App\Http\Controllers\v1\Stripe\WhiteLabel\PaymentsController@createDestinationCharge');
+        });
+
+        Route::group(['prefix' => 'postals'], function () {
+            Route::get('/', 'App\Http\Controllers\v3\WhiteLabel\ByBestShop\CheckoutController@index');
+            Route::get('/pricing', 'App\Http\Controllers\v3\WhiteLabel\ByBestShop\CheckoutController@pricing');
         });
 
         // Route::post('/checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\TwoCheckoutController@quickCheckout');
@@ -392,7 +401,8 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::post('/bybest-inventory/', 'App\Http\Controllers\v3\InventorySyncController@startSync');
             // inventory-master
             Route::get('/history', 'App\Http\Controllers\v3\InventorySyncController@syncHistory');
-
+            Route::get('/queue/check', [GeneralSyncController::class, 'countJobs']);
+            Route::get('/list-groups', [GeneralSyncController::class, 'listGroups']);
             Route::post('/bybest-collections/', 'App\Http\Controllers\v3\InventorySyncController@collectionSync'); // ok
             Route::post('/bybest-brands/', 'App\Http\Controllers\v3\InventorySyncController@brandSync'); // ok
             Route::post('/bybest-groups/', 'App\Http\Controllers\v3\InventorySyncController@groupsSync'); // ok
@@ -455,6 +465,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::get('/daily-invoices', 'App\Http\Controllers\v2\InvoiceController@dailyInvoiceSummary');
             Route::post('/create', 'App\Http\Controllers\v2\InvoiceController@store');
         });
+
 
         Route::group(['prefix' => 'business-configuration'], function () {
             Route::get('/', 'App\Http\Controllers\v2\InvoiceController@get');
@@ -1189,6 +1200,8 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::get('/', [AdminInvoiceController::class, 'index']);
                     Route::post('/generate', [AdminInvoiceController::class, 'generateInvoice']);
                     Route::get('/{id}', [AdminInvoiceController::class, 'show']);
+                    Route::post('/{id}/mark-as-paid', [AdminInvoiceController::class, 'markAsPaid']);
+                    Route::get('/{id}/download', [AdminInvoiceController::class, 'downloadPdf']);
                 });
 
                 // Webhook Routes (no auth middleware)
@@ -1203,6 +1216,24 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::post('/', [ServiceManagementController::class, 'createCategory']);
                     Route::put('/{id}', [ServiceManagementController::class, 'updateCategory']);
                     Route::delete('/{id}', [ServiceManagementController::class, 'deleteCategory']);
+                });
+
+                Route::group(['prefix' => 'analytics'], function () {
+                    Route::get('services', [AdminAnalyticsController::class, 'services']);
+                    Route::get('clients', [AdminAnalyticsController::class, 'clients']);
+                    Route::get('revenue', [AdminAnalyticsController::class, 'revenue']);
+                    Route::get('services/export', [AdminAnalyticsController::class, 'exportServices']);
+                    Route::get('clients/export', [AdminAnalyticsController::class, 'exportClients']);
+                    Route::get('revenue/export', [AdminAnalyticsController::class, 'exportRevenue']);
+                });
+
+                Route::prefix('tickets')->group(function () {
+                    Route::get('/', [AdminTicketController::class, 'index']);
+                    Route::get('/{id}', [AdminTicketController::class, 'show']);
+                    Route::post('/{id}/reply', [AdminTicketController::class, 'reply']);
+                    Route::post('/{id}/assign', [AdminTicketController::class, 'assign']);
+                    Route::post('/{id}/status', [AdminTicketController::class, 'updateStatus']);
+                    Route::post('/{id}/priority', [AdminTicketController::class, 'updatePriority']);
                 });
 
                 Route::prefix('services')->group(function () {
@@ -1461,6 +1492,13 @@ Route::middleware(['client_portal_api_key'])->prefix('v1')->group(function () {
                 Route::get('my-requests/{id}', [ClientServiceRequestController::class, 'getRequestDetails']);
             });
 
+            Route::prefix('cp-tickets')->group(function () {
+                Route::get('/', [ClientTicketController::class, 'index']);
+                Route::post('/', [ClientTicketController::class, 'store']);
+                Route::get('/{id}', [ClientTicketController::class, 'show']);
+                Route::post('/{id}/reply', [ClientTicketController::class, 'reply']);
+            });
+
             Route::get('/cp-dashboard', [ClientDashboardController::class, 'getDashboardData']);
 
             // Service Requests
@@ -1477,6 +1515,7 @@ Route::middleware(['client_portal_api_key'])->prefix('v1')->group(function () {
                 Route::get('/', [ClientInvoiceController::class, 'index']);
                 Route::get('/{id}', [ClientInvoiceController::class, 'show']);
                 Route::post('/{id}/pay', [ClientInvoiceController::class, 'initiatePayment']);
+                Route::get('/{id}/download', [ClientInvoiceController::class, 'downloadPdf']);
             });
         });
     });
@@ -1761,6 +1800,8 @@ Route::post('api/v1/white-label/bb/bkt-webhook', 'App\Http\Controllers\v3\Whitel
 
 Route::get('api/v1/calendar/{obfuscatedId}/{token}.ics', [CalendarConnectionController::class, 'generateIcs'])
     ->name('rental-unit.ics');
+
+
 
 
 Route::get('api/v1/end-user/messages/{chatId}', 'App\Http\Controllers\v1\EndUserChatController@getMessages');

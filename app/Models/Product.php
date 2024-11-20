@@ -75,6 +75,13 @@ class Product extends Model
         'deleted_at'
     ];
 
+    /**
+     * Append custom columns to the model
+     * 
+     * @var array
+     */
+    protected $appends = ['bb_members_description', 'bb_members_description_al'];
+
     public function groups(): HasOne
     {
         return $this->hasOne(ProductGroup::class);
@@ -246,6 +253,54 @@ class Product extends Model
     {
         return Attribute::make(
             get: fn($value) => $value != null ? Storage::disk('s3')->temporaryUrl($value, '+5 minutes') : null,
+        );
+    }
+
+    // Add static column for bb members description
+    protected function bbMembersDescription(): Attribute
+    {
+        return Attribute::make(
+            get: fn($value) => '"BY BEST GROUP" CLIENT CARD
+
+                What is the "By Best Group" card
+                It is a program that allows you to earn points with your purchases in our 4 stores and spend them in each of them through a single card. The "By Best Group" card is used only in the chain of stores of the company "By Best Duty Free". Through the "By Best Group" card you get discounts, gifts, promotions and activities dedicated only to you in the stores: SWAROVSKI, SWATCH, BLUKIDS, VILLEROY & BOCH.
+
+                How the "By Best Group" card works
+                The "By Best Group" card is not transferable to other persons not declared on the membership form.
+
+                How to use the "By Best Group" card
+                Present the "By Best Group" card every time you make a purchase in partner stores.
+                Collect points in each of these purchases starting from 100 ALL. For every 100 ALL spent you will earn 1 point. Accumulated points will be displayed on the purchase invoice.
+                Become part of the benefit clubs starting from 150 points. For every 150, 250, 500, and up to 1,000 points, you have the right to request a voucher at the box office, with which you will benefit, discounts or gifts.
+
+                In case you forget to use the card in your purchases, the points can not be passed to you manually from the cashier to the card. The card is mandatory to use both in the purchase and in the download of points. Without the present card no action can be performed at the checkout.
+
+                In cases where the system may be offline you do not lose any points. They will be transferred to the card the moment the connection is made. The same thing happens when you want to download your points while the system is offline. You will be able to take advantage of the coupon in a second and use it in your purchases.
+
+                The "By Best Group" card is not and is not valid as a credit card. It can not be used for monetary transactions, but only to accumulate points and gain the privileges set for the members of the scheme.'
+        );
+    }
+
+    // Add static column for bb members albanian description
+    protected function bbMembersDescriptionAl(): Attribute
+    {
+        return Attribute::make(
+            get: fn($value) => 'KARTË KLIENTI "BY BEST GROUP"
+
+                Çfarë është karta "By Best Group"
+                Është një program i cili ju mundëson të fitoni pikë me blerjet tuaja në 4 dyqanet tona dhe t\'i shpenzoni ato në secilën prej tyre nëpërmjet një karte të vetme. Karta "By Best Group" përdoret vetëm në rrjetin e dyqaneve të kompanisë "By Best Duty Free". Nëpërmjet kartës "By Best Group" ju përfitoni ulje, dhurata, promocione e aktivitete të dedikuara vetëm për ju në dyqanet: SWAROVSKI, SWATCH, BLUKIDS, VILLEROY & BOCH.
+
+                Si funksionon karta "By Best Group"
+                Karta "By Best Group" nuk është e transferueshme tek persona të tjerë të padeklaruar në formularin e antarësimit.
+
+                Si ta përdorni kartën "By Best Group"
+                Tregoni kartën "By Best Group" çdo herë që bëni blerje në dyqanet partnere. Mblidhni pikë në secilën prej këtyre blerjeve duke filluar nga 100 lekë. Për çdo 100 lekë të shpenzuara ju do të fitoni 1 pikë. Pikët e grumbulluara do të shfaqen në faturën e blerjes. Bëhuni pjesë e klubeve të përfitimeve duke filluar nga 150 pikë. Për çdo 150, 250, 500, e deri 1.000 pikë, ju keni të drejtë të kërkoni një kupon në kasë, me të cilin do të përfitoni, uljen apo dhuratat.
+
+                Në rast se ju harroni të përdorni kartën në blerjet tuaja, pikët nuk mund t\'ju kalojnë manualisht nga kasieri në kartë. Karta është e detyrueshme të përdoret si në blerje ashtu edhe në shkarkimin e pikëve. Pa kartën prezente nuk mund të kryhet asnje veprim në kasë.
+
+                Në rastet kur sistemi mund të jetë offline nuk humbisni asnjë pike. Ato do të kalohen në kartë në momentin që do të realizohet lidhja. E njëjta gjë ndodh edhe kur ju do të doni të shkarkoni pikët tuaja ndërkohë që sistemi është offline. Ju do të mund të përfitoni kuponin në një moment të dytë dhe ta përdorni atë në blerjet tuaja.
+
+                Karta "By Best Group" nuk ështe dhe nuk vlen si një kartë krediti. Me të nuk mund të kryhen veprime monetare, por vetëm të grumbullohen pikë e të përfitohen privilegjet e përcaktuara për pjestarët e skemës.'
         );
     }
 }

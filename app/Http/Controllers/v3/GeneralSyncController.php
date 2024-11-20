@@ -227,4 +227,26 @@ class GeneralSyncController extends Controller
             ]
         );
     }
+
+    // count jobs and failed jobs
+
+    public function countJobs(): \Illuminate\Http\JsonResponse
+    {
+        $jobs = DB::table('jobs')->count();
+        $failedJobs = DB::table('failed_jobs')->count();
+
+        return response()->json([
+            'jobs' => $jobs,
+            'failed_jobs' => $failedJobs
+        ]);
+    }
+
+    // list entities from group table
+
+    public function listGroups(): \Illuminate\Http\JsonResponse
+    {
+        $groups = DB::table('groups')->get();
+
+        return response()->json($groups);
+    }
 }

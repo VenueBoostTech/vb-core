@@ -19,7 +19,7 @@ class ClientServicesController extends Controller
         $this->clientAuthService = $clientAuthService;
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         if ($response = $this->clientAuthService->validateClientAccess()) {
             return $response;
@@ -28,17 +28,35 @@ class ClientServicesController extends Controller
         $client = $this->clientAuthService->getAuthenticatedClient();
 
         // Retrieve all services for the authenticated client
-        $services = Service::where('venue_id', $client->venue_id)->get();
+        $servicesQuery = Service::where('venue_id', $client->venue_id);
+
+        // Apply search filter to services
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $servicesQuery->where('name', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%");
+        }
+
+        $services = $servicesQuery->get();
 
         // Initialize an array to store all services with their categorized requests
         $serviceList = [];
 
         foreach ($services as $service) {
             // Retrieve all requests for this service, categorized by status
-            $requests = ServiceRequest::where('client_id', $client->id)
+            $requestsQuery = ServiceRequest::where('client_id', $client->id)
                 ->where('service_id', $service->id)
-                ->orderBy('created_at', 'desc')
-                ->get();
+                ->orderBy('created_at', 'desc');
+
+            // Apply search filter to service requests
+            if ($request->filled('search')) {
+                $requestsQuery->where(function ($q) use ($search) {
+                    $q->where('reference', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            }
+
+            $requests = $requestsQuery->get();
 
             $categorizedRequests = [
                 'active' => [],
@@ -103,6 +121,7 @@ class ClientServicesController extends Controller
 
         return response()->json($serviceList);
     }
+
 
     public function available(): JsonResponse
     {

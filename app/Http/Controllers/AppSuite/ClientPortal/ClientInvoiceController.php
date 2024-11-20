@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\AppInvoice;
 use App\Services\AppInvoiceService;
 use App\Services\ClientAuthService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,39 +35,53 @@ class ClientInvoiceController extends Controller
 
         $client = $this->clientAuthService->getAuthenticatedClient();
 
-        $invoices = AppInvoice::where('status', 'pending')->get();
-//        // Get stats
-//        $stats = [
-//            'due_now' => $query->whereIn('status', ['pending', 'overdue'])
-//                ->sum('total_amount'),
-//            'last_payment' => $query->where('status', 'paid')
-//                    ->latest()
-//                    ->first()?->total_amount ?? 0,
-//            'total_count' => $query->count()
-//        ];
+        $query = AppInvoice::where('client_id', $client->id)
+            ->with('serviceRequest.service');
 
-//        // Get paginated invoices
-//        $invoices = $query->latest()
-//            ->paginate($request->input('per_page', 15));
+        // Apply filters
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('number', 'like', "%{$search}%")
+                    ->orWhereHas('serviceRequest.service', function($q) use ($search) {
+                        $q->where('name', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        $invoices = $query->latest()->paginate($request->per_page ?? 10);
+
+        // Calculate stats
+        $stats = [
+            'due_now' => $query->where('status', 'pending')->sum('total_amount'),
+            'last_payment' => $query->where('status', 'paid')
+                    ->orderByDesc('updated_at')
+                    ->first()?->total_amount ?? 0,
+            'total_count' => $invoices->total(),
+        ];
 
         return response()->json([
-//            'stats' => $stats,
+            'stats' => $stats,
             'invoices' => [
                 'data' => $invoices->map(function($invoice) {
                     return [
                         'id' => $invoice->id,
                         'number' => $invoice->number,
-                        'service_name' => $invoice->serviceRequest->service->name,
+                        'service_name' => $invoice->serviceRequest->service->name ?? null,
                         'date' => $invoice->issue_date->format('M d, Y'),
                         'due_date' => $invoice->due_date->format('M d, Y'),
                         'amount' => $invoice->total_amount,
                         'status' => $invoice->status
                     ];
                 }),
-                'current_page' => 1,
-                'per_page' => 1,
-                'total' => 10,
-                'total_pages' =>4,
+                'current_page' => $invoices->currentPage(),
+                'per_page' => $invoices->perPage(),
+                'total' => $invoices->total(),
+                'total_pages' => $invoices->lastPage(),
             ]
         ]);
     }
@@ -172,6 +187,41 @@ class ClientInvoiceController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Failed to initiate payment: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function downloadPdf($id)
+    {
+        // Validate client access
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
+        }
+
+        $client = $this->clientAuthService->getAuthenticatedClient();
+
+        try {
+            $invoice = AppInvoice::with([
+                'client',
+                'serviceRequest.service',
+                'items',
+                'payments'
+            ])->where('client_id', $client->id)
+                ->findOrFail($id);
+
+            $pdf = PDF::loadView('invoices.pdf', [
+                'invoice' => $invoice
+            ]);
+
+            // Convert to base64
+            $base64 = base64_encode($pdf->output());
+
+            return response()->json([
+                'data' => $base64,
+                'filename' => "invoice-{$invoice->number}.pdf"
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to generate PDF'], 500);
         }
     }
 }

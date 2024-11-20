@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Barryvdh\DomPDF\Facade\Pdf;  // Add this import at the top
 
 class AdminInvoiceController extends Controller
 {
@@ -95,7 +96,12 @@ class AdminInvoiceController extends Controller
             'service_request_id' => 'required|exists:service_requests,id',
             'due_date' => 'required|date|after:today',
             'payment_terms' => 'required|string',
-            'notes' => 'nullable|string'
+            'notes' => 'nullable|string',
+            'items' => 'required|array|min:1',
+            'items.*.description' => 'required|string',
+            'items.*.quantity' => 'required|numeric|min:1',
+            'items.*.rate' => 'required|numeric|min:0',
+            'items.*.amount' => 'required|numeric'
         ]);
 
         if ($validator->fails()) {
@@ -187,5 +193,85 @@ class AdminInvoiceController extends Controller
                 })
             ]
         ]);
+    }
+
+    // In AdminInvoiceController.php, add this method:
+
+    public function markAsPaid(Request $request, $id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        $validator = Validator::make($request->all(), [
+            'payment_method' => 'required|in:cash,bank_transfer,card',
+            'payment_date' => 'required|date',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $invoice = AppInvoice::where('venue_id', $venue->id)
+                ->findOrFail($id);
+
+            // Create payment record
+            $invoice->payments()->create([
+                'amount' => $invoice->total_amount,
+                'payment_method' => $request->payment_method,
+                'status' => 'completed',
+                'payment_date' => Carbon::parse($request->payment_date),
+            ]);
+
+            // Update invoice status
+            $invoice->update([
+                'status' => 'paid',
+                'payment_method' => $request->payment_method
+            ]);
+
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Invoice marked as paid',
+                'invoice' => $this->show($id)->getData()->invoice
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Failed to mark invoice as paid'], 500);
+        }
+    }
+
+    public function downloadPdf($id)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        try {
+            $invoice = AppInvoice::with([
+                'client',
+                'serviceRequest.service',
+                'items',
+                'payments'
+            ])->where('venue_id', $venue->id)
+                ->findOrFail($id);
+
+            $pdf = PDF::loadView('invoices.pdf', [
+                'invoice' => $invoice
+            ]);
+
+            // Convert to base64
+            $base64 = base64_encode($pdf->output());
+
+            return response()->json([
+                'data' => $base64,
+                'filename' => "invoice-{$invoice->number}.pdf"
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Failed to generate PDF'], 500);
+        }
     }
 }

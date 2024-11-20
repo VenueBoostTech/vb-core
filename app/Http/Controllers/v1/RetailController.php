@@ -1222,16 +1222,16 @@ class RetailController extends Controller
         $brands = $brands->get();
 
         $updatedBrands = $brands->map(function ($brand) {
-            if ($brand->logo_path !== null) {
-                // Generate the new path and update the image_path attribute
-                $newPath = Storage::disk('s3')->temporaryUrl($brand->logo_path, '+5 minutes');
-                $brand->logo_path = $newPath;
-            }
-            if ($brand->white_logo_path !== null) {
-                // Generate the new path and update the image_path attribute
-                $newPath = Storage::disk('s3')->temporaryUrl($brand->white_logo_path, '+5 minutes');
-                $brand->white_logo_path = $newPath;
-            }
+            // if ($brand->logo_path !== null) {
+            //     // Generate the new path and update the image_path attribute
+            //     $newPath = Storage::disk('s3')->temporaryUrl($brand->logo_path, '+5 minutes');
+            //     $brand->logo_path = $newPath;
+            // }
+            // if ($brand->white_logo_path !== null) {
+            //     // Generate the new path and update the image_path attribute
+            //     $newPath = Storage::disk('s3')->temporaryUrl($brand->white_logo_path, '+5 minutes');
+            //     $brand->white_logo_path = $newPath;
+            // }
 
             $totalStock = InventoryRetail
                 ::leftJoin('products', 'inventory_retail.product_id', '=', 'products.id')

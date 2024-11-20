@@ -42,7 +42,6 @@ class CheckoutController extends Controller
         $this->bktPaymentService = $bktPaymentService;
     }
 
-
     public function quickCheckout(Request $request)
     {
         try {
@@ -77,7 +76,7 @@ class CheckoutController extends Controller
                 return response()->json(['message' => 'Product not found'], 404);
             }
 
-            
+
             $currency_all = Currency::where('currency_alpha', '=', 'LEK')->first();
             $currency_eur = Currency::where('currency_alpha', '=', 'EUR')->first();
             $location = Location::get($request->ip());
@@ -129,32 +128,32 @@ class CheckoutController extends Controller
                     ->get();
             }
 
-            Cart::clear();
+//            Cart::clear();
+//
+//            Cart::create([
+//                'id' => $request->product_id,
+//                'name' => $product->product_name,
+//                'price' => $product_details->regular_price,
+//                'quantity' => 1,
+//                'attributes' => array(
+//                    'image' => $product_details->product_image,
+//                    'url' => $product_details->product_url,
+//                    'description' => $product->product_short_description,
+//                    'variation' => $request->variation_id_cart,
+//                    'product_no' => $request->product_no,
+//                    'total_stock' => $product_details->stock_quantity,
+//                    'currency_alpha' => $product_details->currency_alpha,
+//                    'bb_points' => $product_details->bb_points,
+//                    'exchange_rate' => $exchange_rate,
+//                    'date_sale_start' => $product_details->date_sale_start,
+//                    'date_sale_end' => $product_details->date_sale_end,
+//                    'sale_price' => $product_details->sale_price,
+//                    'regular_price' => $product_details->regular_price,
+//                    'brand_id' => $product->brand_id,
+//                    'attributes' => $attributes
+//                )
+//            ]);
 
-            Cart::create([
-                'id' => $request->product_id,
-                'name' => $product->product_name,
-                'price' => $product_details->regular_price,
-                'quantity' => 1,
-                'attributes' => array(
-                    'image' => $product_details->product_image,
-                    'url' => $product_details->product_url,
-                    'description' => $product->product_short_description,
-                    'variation' => $request->variation_id_cart,
-                    'product_no' => $request->product_no,
-                    'total_stock' => $product_details->stock_quantity,
-                    'currency_alpha' => $product_details->currency_alpha,
-                    'bb_points' => $product_details->bb_points,
-                    'exchange_rate' => $exchange_rate,
-                    'date_sale_start' => $product_details->date_sale_start,
-                    'date_sale_end' => $product_details->date_sale_end,
-                    'sale_price' => $product_details->sale_price,
-                    'regular_price' => $product_details->regular_price,
-                    'brand_id' => $product->brand_id,
-                    'attributes' => $attributes
-                )
-            ]);
-            
             $product_discounted_subtotal = 0;
             $product_subtotal = 0;
             $product_price = 0;
@@ -374,7 +373,7 @@ class CheckoutController extends Controller
                             'last_name' => $request->last_name,
                             'status' => 1,
                         ]);
-                        
+
                         $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
 
                         if(!$new_customer) {
@@ -450,7 +449,7 @@ class CheckoutController extends Controller
                 $postal_price = PostalPricing::where('city_id', $request->order_city)
                     ->join('postals', 'postals.id', '=', 'postal_pricing.postal_id')
                     ->where('postal_id', '2')->first();
-                
+
                 $orders = Order::create([
                     'customer_id' => $customer->id,
                     'shipping_id' => 2,
@@ -782,7 +781,7 @@ class CheckoutController extends Controller
                             'last_name' => $request->last_name,
                             'status' => 1,
                         ]);
-                        
+
                         $new_customer = Customer::where("user_id", $new_user->id)->firstOrFail();
 
                         if(!$new_customer) {
@@ -858,7 +857,7 @@ class CheckoutController extends Controller
                 $postal_price = PostalPricing::where('city_id', $request->order_city)
                     ->join('postals', 'postals.id', '=', 'postal_pricing.postal_id')
                     ->where('postal_id', '2')->first();
-                
+
                 $orders = Order::create([
                     'customer_id' => $customer->id,
                     'shipping_id' => 2,
@@ -908,7 +907,7 @@ class CheckoutController extends Controller
                     $is_higher = $temp_date_now > $temp_date_start;
                     $is_lower = $temp_date_now < $temp_date_end;
                     $sale_valid = $is_higher && $is_lower;
-    
+
                     OrderProduct::create([
                         'order_id' => $order_id,
                         'product_id' => $product->id,
@@ -917,7 +916,7 @@ class CheckoutController extends Controller
                         'product_total_price' => $sale_valid ? $product->attributes->regular_price - ($product->attributes->regular_price * ((float)$product->attributes->sale_price / 100)) * $product->quantity : $product->attributes->regular_price * $product->quantity,
                         'product_discount_price' => $sale_valid ? $product->attributes->sale_price : 0,
                     ]);
-                }    
+                }
             } else {
                 // Handle other payment methods like cash
                 $result = $this->finalizeOrder($venue, $customer, $order_products, $total_price, null);
@@ -1050,5 +1049,58 @@ class CheckoutController extends Controller
     public function testCheckout(Request $request)
     {
         // do nothing
+    }
+
+    public function index(Request $request): JsonResponse
+    {
+        $app_key = $request->input('app_key');
+        $venue = Restaurant::where('app_key', $app_key)->first();
+        if (!$venue) {
+            return response()->json(['message' => 'Venue not found'], 400);
+        }
+
+        $postals = $venue->postals()->get()->map(function ($postal) {
+            return [
+                'id' => $postal->id,
+                'type' => $postal->type,
+                'status' => $postal->status,
+                'title' => $postal->title,
+                'name' => $postal->name,
+                'logo' => $postal->logo,
+                'description' => $postal->description,
+            ];
+        });
+
+        return response()->json(['data' => $postals], 200);
+    }
+
+    public function pricing(Request $request)
+    {
+        $app_key = $request->input('app_key');
+        $venue = Restaurant::where('app_key', $app_key)->first();
+        if (!$venue) {
+            return response()->json(['message' => 'Venue not found'], 404);
+        }
+
+        $postalIds = $venue->postals()->pluck('id');
+
+        $pricing = PostalPricing::whereIn('postal_id', $postalIds)
+            ->with(['postal', 'city'])
+            ->get()
+            ->map(function ($price) {
+                return [
+                    'id' => $price->id,
+                    'price' => $price->price,
+                    'price_without_tax' => $price->price_without_tax,
+                    'city' => $price->city->name,
+                    'postal' => $price->postal->name,
+                    'type' => $price->type,
+                    'alpha_id' => $price->alpha_id,
+                    'alpha_description' => $price->alpha_description,
+                    'notes' => $price->notes,
+                ];
+            });
+
+        return response()->json(['data' => $pricing], 200);
     }
 }

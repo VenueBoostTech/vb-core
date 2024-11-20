@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use App\Models\Group;
 use App\Models\Product;
 use App\Models\VbStoreAttribute;
+use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 
 class BbGroupsController extends Controller
@@ -17,9 +18,42 @@ class BbGroupsController extends Controller
     {
         try {
             $group = Group::findOrFail($group_id);
-            $products = Product::with('productImages')->whereHas('groups', function ($query) use ($group_id) {
-                $query->where('group_id', $group_id);
-            })->paginate(20);
+            // $products = Product::with('productImages')->whereHas('groups', function ($query) use ($group_id) {
+            //     $query->where('group_id', $group_id);
+            // });
+
+            // Get product from database
+            $products = Product::with('productImages')
+                ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+                ->where('product_groups.group_id', $group_id);
+
+            // Search product by brands
+            if ($request->filled('brand_id') && is_array($request->brand_id) && count($request->brand_id) != 0) {
+                $products = $products->whereIn('products.brand_id', $request->brand_id);
+            }
+
+            // Search product by collections
+            if ($request->filled('collection_id') && is_array($request->collection_id) && count($request->collection_id) != 0) {
+                $products = $products->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                    ->whereIn('product_collections.collection_id', '=', $request->collection_id);
+            }
+
+            // Search product by minimum price
+            if ($request->filled('min_price_search')) {
+                $products = $products->where('products.price', '>=', $request->min_price_search);
+            }
+
+            // Search product by maximum price
+            if ($request->filled('max_price_search')) {
+                $products = $products->where('products.price', '<=', $request->max_price_search);
+            }
+
+            if ($request->filled('attribute_id') && is_array($request->attribute_id) && count($request->attribute_id) != 0) {
+                $products = $products->join('vb_store_product_attributes', 'vb_store_product_attributes.product_id', '=', 'products.id');
+                $products = $products->whereIn('vb_store_product_attributes.attribute_id', $request->attribute_id);
+            }
+
+            $products = $products->distinct('products.id')->paginate(30);
 
             $filters = VbStoreAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.attribute_id', '=', 'vb_store_attributes.id')
                 ->join('vb_store_product_variant_attributes', 'vb_store_product_variant_attributes.attribute_id', '=', 'vb_store_attributes_options.id')

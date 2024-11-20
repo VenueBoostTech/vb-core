@@ -12,6 +12,7 @@ use App\Models\ProductAttribute;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use App\Models\Brand;
+use App\Models\VbStoreAttribute;
 
 class BbCollectionsController extends Controller
 {
@@ -27,8 +28,8 @@ class BbCollectionsController extends Controller
             $products_query = Product::with(['attribute.option', 'productImages'])
                 ->select(
                     "products.*",
-                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_products.product_name, '$.en')) AS product_name_en"),
-                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_products.product_short_description, '$.en')) AS product_short_description_en"),
+                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(products.product_name, '$.en')) AS product_name_en"),
+                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(products.product_short_description, '$.en')) AS product_short_description_en"),
                     DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
                     DB::raw("(SELECT MIN(vb_store_products_variants.date_sale_start) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_start"),
                     DB::raw("(SELECT MAX(vb_store_products_variants.date_sale_end) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_end"),
@@ -45,15 +46,15 @@ class BbCollectionsController extends Controller
                 ->whereNotNull('products.currency_alpha')->distinct();
 
             if ($request->filled('search')) {
-                $products_query->join('store_product_groups', 'store_product_groups.product_id', '=', 'products.id')
-                    ->where('store_product_groups.group_id', '=', $request->search)->distinct();
+                $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+                    ->where('product_groups.group_id', '=', $request->search)->distinct();
             }
 
             $products = $products_query
                 ->select(
                     "products.*",
-                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_products.product_name, '$.en')) AS product_name_en"),
-                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(store_products.product_short_description, '$.en')) AS product_short_description_en"),
+                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(products.product_name, '$.en')) AS product_name_en"),
+                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(products.product_short_description, '$.en')) AS product_short_description_en"),
                     DB::raw("(SELECT MAX(vb_store_products_variants.sale_price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_sale_price"),
                     DB::raw("(SELECT MIN(vb_store_products_variants.date_sale_start) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_start"),
                     DB::raw("(SELECT MAX(vb_store_products_variants.date_sale_end) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as var_date_sale_end"),
@@ -61,12 +62,120 @@ class BbCollectionsController extends Controller
                     DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_price"),
                     DB::raw("(SELECT COUNT(vb_store_products_variants.stock_quantity) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as total_stock_quantity"),
                     DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
-                )->with('productImages')->distinct()->get();
+                )->with('productImages')->distinct()->paginate(30);
+
+            $filters_query = VbStoreAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.attribute_id', '=', 'vb_store_attributes.id')
+                ->join('vb_store_product_variant_attributes', 'vb_store_product_variant_attributes.attribute_id', '=', 'vb_store_attributes_options.id')
+                ->join('vb_store_products_variants', 'vb_store_product_variant_attributes.variant_id', 'vb_store_products_variants.id')
+                ->join('products', 'vb_store_products_variants.product_id', 'products.id')
+                ->select(
+                    'vb_store_attributes.*',
+                    'vb_store_attributes_options.id as option_id',
+                    'vb_store_attributes_options.option_name as option_id',
+                    'vb_store_attributes_options.option_name_al as option_name_al',
+                    // DB::raw("JSON_UNQUOTE(JSON_EXTRACT(vb_store_attributes_options.option_name, '$." . App::getLocale() . "')) AS option_name")
+                )
+                ->distinct()
+                ->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                ->where('product_collections.collection_id', '=', $collection->id)
+                ->where('products.product_status', '=', 1)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.warehouse_alpha')
+                ->whereNotNull('products.currency_alpha');
+            if (App::getLocale() == "en") {
+                $filters_query = $filters_query->orderByRaw('LENGTH(vb_store_attributes_options.option_name_al) asc')
+                ->orderBy('vb_store_attributes_options.option_name_al', 'ASC');
+            } else {
+                $filters_query = $filters_query->orderByRaw('LENGTH(vb_store_attributes_options.option_name) asc')
+                ->orderBy('vb_store_attributes_options.option_name', 'ASC');
+            }
+
+            $filters_query = $filters_query->distinct();
+
+            $categories = Category::join('product_category', 'product_category.category_id', '=', 'categories.id')
+                ->join('products', 'products.id', '=', 'product_category.product_id')
+                ->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+                ->where('product_groups.group_id', '=', $request->search)
+                ->where('product_collections.collection_id', '=', $collection->id)
+                ->where('products.product_status', '=', 1)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.currency_alpha')
+                // ->whereNull('products.deleted_at')
+                ->with(['childrenCategory' => function ($q) use ($collection) {
+                    $q->leftJoin('product_category', 'product_category.category_id', '=', 'categories.id')
+                        ->join('products', 'products.id', '=', 'product_category.product_id')
+                        ->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                        ->select(
+                            'categories.*',
+                            DB::raw("(SELECT COUNT(product_category.product_id)
+                            FROM `product_category`
+                            ) as product_count")
+                        )
+                        ->where('product_collections.collection_id', '=', $collection->id)
+                        ->where('products.stock_quantity', '>', 0)
+                        ->where('products.product_status', '=', 1)
+                        ->whereNotNull('products.currency_alpha')
+                        ->whereNull('products.deleted_at')
+                        // ->whereNull('product_category.deleted_at')
+                        // ->whereNull('categories.deleted_at')
+                        ->distinct();;
+                }])
+                ->select('categories.*')
+                ->orderBy('categories.order_no', 'ASC', 'categories.category', 'ASC')
+                ->whereNull('parent_id')->distinct()->get();
+
+            $category_status = Category::join('product_category', 'product_category.category_id', '=', 'categories.id')
+                ->join('products', 'product_category.product_id', '=', 'products.id')
+                ->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                ->where('products.product_status', '=', 1)
+                ->where('product_collections.collection_id', '=', $collection->id)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.warehouse_alpha')
+                ->whereNotNull('products.currency_alpha')
+                ->whereNull('products.deleted_at')
+                ->distinct()
+                ->select(
+                    'product_category.category_id',
+                    DB::raw("(SELECT COUNT(product_category.product_id)
+                            FROM `product_category`
+                            ) as product_count")
+                )
+                ->get();
+
+            $prices_query = Product::join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                ->where('product_collections.collection_id', '=', $collection->id)
+                ->where('products.product_status', '=', 1)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.warehouse_alpha')
+                ->whereNotNull('products.currency_alpha')
+                ->select(
+                    DB::raw('IFNULL(Max(products.price), 0) as max_price'),
+                    DB::raw('IFNULL(Min(products.price), 0) as min_price')
+                );
+
+            $brands_query = Brand::join('products', 'products.brand_id', '=', 'brands.id')
+                ->join('product_category', 'product_category.product_id', '=', 'products.id')
+                ->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                ->where('product_collections.collection_id', '=', $collection->id)
+                ->where('products.stock_quantity', '>', 0)
+                ->whereNotNull('products.warehouse_alpha')
+                ->whereNotNull('products.currency_alpha')
+                ->where('products.product_status', '=', 1);
+
+            $filters = $filters_query->distinct()->get()->groupBy('attr_name')->sortDesc();
+
+            $prices = $prices_query->first();
+            $brands = $brands_query->where('brands.status_no', '=', '1')->select('brands.*')->distinct()->get();
 
             // Replace the view rendering with a JSON response
             return response()->json([
                 'collection' => $collection,
                 'products' => $products,
+                'filters' => $filters,
+                'prices' => $prices,
+                'brands' => $brands,
+                'categories' => $categories
             ]);
         // } catch (\Throwable $th) {
         //     return response()->json(['error' => 'Not found'], 404);
@@ -99,8 +208,8 @@ class BbCollectionsController extends Controller
 
             // Filter by product group
             if ($request->filled('group_id')) {
-                $products_query->join('store_product_groups', 'store_product_groups.product_id', '=', 'products.id')
-                    ->where('store_product_groups.group_id', '=', $request->group_id);
+                $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+                    ->where('product_groups.group_id', '=', $request->group_id);
             }
 
             // Filter by brands
@@ -130,7 +239,7 @@ class BbCollectionsController extends Controller
                 });
             }
 
-            $products = $products_query->orderBy('products.created_at', 'DESC')->get();
+            $products = $products_query->orderBy('products.created_at', 'DESC')->paginate(30);
 
             // Replace the view rendering with a JSON response
             return response()->json([

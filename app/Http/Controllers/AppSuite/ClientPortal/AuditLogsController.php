@@ -86,8 +86,8 @@ class AuditLogsController extends Controller
                 'id' => $activity->source . '_' . $activity->id,
                 'action' => $activity->action,
                 'user' => $activity->source === 'staff'
-                    ? $activity->employee->name
-                    : $activity->user->name,
+                    ? $activity->employee?->name
+                    : $activity->user?->name,
                 'timestamp' => $activity->timestamp,
                 'details' => $activity->source === 'staff'
                     ? StaffActivity::find($activity->id)->getActivityDescription()

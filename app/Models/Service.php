@@ -37,4 +37,9 @@ class Service extends Model
     {
         return $this->hasMany(ServiceRequest::class);
     }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(AppSupportTicket::class);
+    }
 }

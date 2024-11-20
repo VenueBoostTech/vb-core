@@ -81,4 +81,18 @@ class AppClient extends Model
     {
         return $this->hasMany(AppFeedback::class, 'client_id');
     }
+
+    // Add support tickets relationship
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(AppSupportTicket::class, 'client_id');
+    }
+
+    // Add ticket messages relationship for messages sent by this client
+    public function ticketMessages(): HasMany
+    {
+        return $this->hasMany(AppSupportTicketMessage::class, 'sender_id')
+            ->where('sender_type', 'client');
+    }
+
 }

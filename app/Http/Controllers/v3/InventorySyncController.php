@@ -387,6 +387,9 @@ class InventorySyncController extends Controller
     public function collectionSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         // Get parameters from request with default values
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
@@ -474,6 +477,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -507,6 +511,9 @@ class InventorySyncController extends Controller
     public function productSync(Request $request)
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -538,7 +545,13 @@ class InventorySyncController extends Controller
 
                 $products = $bybestData['data'];
 
-                $brandIds = Brand::withTrashed()->pluck('id')->toArray();
+                $brandIds = Brand::withTrashed()->pluck('bybest_id','id')->toArray();
+                if (count($brandIds) > 0) {
+                    $brandIds = array_filter($brandIds);
+                    if (count($brandIds) == 0) {
+                        return response()->json(['message' => 'No brands are exists'], 500);
+                    }
+                }
 
                 // foreach (array_chunk($products, $batchSize) as $batch) {
                     foreach ($products as $item) {
@@ -618,7 +631,7 @@ class InventorySyncController extends Controller
                                         'allow_back_order' => $item['allow_back_order'],
                                         'allow_customer_review' => $item['allow_customer_review'],
                                         'syncronize_at' => $item['syncronize_at'],
-                                        'brand_id' => in_array($item['brand_id'], $brandIds) ? $item['brand_id'] : null,
+                                        'brand_id' => array_search($item['brand_id'], $brandIds) !== false ? array_search($item['brand_id'], $brandIds) : null,
                                         'restaurant_id' => $venue->id,
                                         'bybest_id' => $item['id'],
                                         'third_party_product_id' => null,
@@ -639,6 +652,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         // });
@@ -674,6 +688,9 @@ class InventorySyncController extends Controller
     public function brandSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $skippedCount = 0;
         $processedCount = 0;
         $page = $request->input('page', 1);
@@ -784,6 +801,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -818,6 +836,9 @@ class InventorySyncController extends Controller
     public function groupsSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         $batchSize = $request->input('batch_size', 50);
@@ -882,6 +903,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -912,6 +934,9 @@ class InventorySyncController extends Controller
     public function categoriesSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         $batchSize = $request->input('batch_size', 50);
@@ -941,6 +966,14 @@ class InventorySyncController extends Controller
                 }
 
                 $categories = $bybestData['data'];
+
+                $parentCategoryIds = Category::pluck('bybest_id','id')->toArray();
+                if (count($parentCategoryIds) > 0) {
+                    $parentCategoryIds = array_filter($parentCategoryIds);
+                    if (count($parentCategoryIds) == 0) {
+                        return response()->json(['message' => 'No categories are exists'], 500);
+                    }
+                }
 
                 // foreach (array_chunk($categories, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
@@ -972,7 +1005,7 @@ class InventorySyncController extends Controller
                                 $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
                                 $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
-                                $parentCat = Category::where('bybest_id', $item['parent_id'])->first();
+                                // $parentCat = Category::where('bybest_id', $item['parent_id'])->first();
 
                                 $synced_category = Category::updateOrCreate(
                                     ['bybest_id' => $item['id']],
@@ -982,7 +1015,7 @@ class InventorySyncController extends Controller
                                         'title_al' => $title_al,
                                         'description' => $desc,
                                         'description_al' => $desc_al,
-                                        'parent_id' => $parentCat ? $parentCat->id : null,
+                                        'parent_id' => array_search($item['parent_id'], $parentCategoryIds) !== false ? array_search($item['parent_id'], $parentCategoryIds) : null,
                                         'category' => $cat,
                                         'category_al' => $cat_al,
                                         'category_url' => $item['category_url'],
@@ -1009,6 +1042,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1043,9 +1077,12 @@ class InventorySyncController extends Controller
     public function attributesSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        $batchSize = $request->input('batch_size', 50);
+        // $batchSize = $request->input('batch_size', 50);
         $skippedCount = 0;
         $processedCount = 0;
 
@@ -1175,6 +1212,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1209,6 +1247,9 @@ class InventorySyncController extends Controller
     public function attributesOptionsSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -1238,6 +1279,14 @@ class InventorySyncController extends Controller
 
                 $attroptions = $bybestData['data'];
 
+                $attributeIds = VbStoreAttribute::pluck('bybest_id','id')->toArray();
+                if (count($attributeIds) > 0) {
+                    $attributeIds = array_filter($attributeIds);
+                    if (count($attributeIds) == 0) {
+                        return response()->json(['message' => 'No attributes are exists'], 500);
+                    }
+                }
+
                 // foreach (array_chunk($attroptions, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($attroptions as $item) {
@@ -1260,12 +1309,12 @@ class InventorySyncController extends Controller
                                 $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
                                 $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
-                                $attr = VbStoreAttribute::where('bybest_id', $item['attribute_id'])->first();
+                                // $attr = VbStoreAttribute::where('bybest_id', $item['attribute_id'])->first();
 
                                 $attrOption = VbStoreAttributeOption::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
-                                        'attribute_id' => $attr->id,
+                                        'attribute_id' => array_search($item['attribute_id'], $attributeIds) !== false ? array_search($item['attribute_id'], $attributeIds) : null,
                                         'option_name' => $name,
                                         'option_name_al' => $name_al,
                                         'option_url' => $item['option_url'],
@@ -1291,6 +1340,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1325,6 +1375,9 @@ class InventorySyncController extends Controller
     public function productVariantsSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -1352,12 +1405,18 @@ class InventorySyncController extends Controller
                     // break; // No more data to process
                     return response()->json(['message' => 'No more data to process'], 500);
                 }
-
+                
                 error_log("page $page");
 
                 $variations = $bybestData['data'];
 
-                $productIds = Product::withTrashed()->pluck('id')->toArray();
+                $productIds = Product::withTrashed()->pluck('bybest_id','id')->toArray();
+                if (count($productIds) > 0) {
+                    $productIds = array_filter($productIds);
+                    if (count($productIds) == 0) {
+                        return response()->json(['message' => 'No product are exists'], 500);
+                    }
+                }
 
                 // foreach (array_chunk($variations, $batchSize) as $batch) {
                     foreach ($variations as $item) {
@@ -1380,11 +1439,11 @@ class InventorySyncController extends Controller
                             $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
                             // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
-
+                            
                             $attrOption = VbStoreProductVariant::updateOrCreate(
                                 ['bybest_id' => $item['id']],
                                 [
-                                    'product_id' => in_array($item['product_id'], $productIds) ? $item['product_id'] : null,
+                                    'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
                                     'venue_id' => $venue->id,
                                     'name' =>  $item['varation_name'],
                                     // 'variation_image' => 'https://admin.bybest.shop/storage/products/' . $item['variation_image'],
@@ -1432,7 +1491,9 @@ class InventorySyncController extends Controller
                                 UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/products/' . $item['variation_image'], 'variation_image', $venue);
                             }
                             $processedCount++;
+                            DB::commit();
                         } catch (\Exception $e) {
+                            $skippedCount++;
                             DB::rollBack();
                         }
                     }
@@ -1466,6 +1527,9 @@ class InventorySyncController extends Controller
     public function productAttributesSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -1497,6 +1561,22 @@ class InventorySyncController extends Controller
 
                 $productattrs = $bybestData['data'];
 
+                $productIds = Product::withTrashed()->pluck('bybest_id','id')->toArray();
+                if (count($productIds) > 0) {
+                    $productIds = array_filter($productIds);
+                    if (count($productIds) == 0) {
+                        return response()->json(['message' => 'No products are exists'], 500);
+                    }
+                }
+
+                $attributeOptionIds = VbStoreAttributeOption::pluck('bybest_id','id')->toArray();
+                if (count($attributeOptionIds) > 0) {
+                    $attributeOptionIds = array_filter($attributeOptionIds);
+                    if (count($attributeOptionIds) == 0) {
+                        return response()->json(['message' => 'No attribute options are exists'], 500);
+                    }
+                }
+
                 // foreach (array_chunk($productattrs, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($productattrs as $item) {
@@ -1512,14 +1592,14 @@ class InventorySyncController extends Controller
                                 }
                                 error_log("Processing  " . $item['id']);
 
-                                $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
-                                $attr = VbStoreAttributeOption::where('bybest_id', $item['attribute_id'])->first();
+                                // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
+                                // $attr = VbStoreAttributeOption::where('bybest_id', $item['atribute_id'])->first();
 
                                 VbStoreProductAttribute::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
-                                        'product_id' => $product->id,
-                                        'attribute_id' => $attr->id,
+                                        'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
+                                        'attribute_id' => array_search($item['atribute_id'], $attributeOptionIds) !== false ? array_search($item['atribute_id'], $attributeOptionIds) : null,
                                         'venue_id' => $venue->id,
                                         'bybest_id' => $item['id'],
                                         'created_at' => $item['created_at'],
@@ -1530,6 +1610,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1564,6 +1645,9 @@ class InventorySyncController extends Controller
     public function productVariantAttributesSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -1595,6 +1679,22 @@ class InventorySyncController extends Controller
 
                 $productVariantAttrs = $bybestData['data'];
 
+                // $productVariantIds = VbStoreProductVariant::withTrashed()->pluck('bybest_id','id')->toArray();
+                // if (count($productVariantIds) > 0) {
+                //     $productVariantIds = array_filter($productVariantIds);
+                //     if (count($productVariantIds) == 0) {
+                //         return response()->json(['message' => 'No products variants are exists'], 500);
+                //     }
+                // }
+
+                // $attributeOptionIds = VbStoreAttributeOption::pluck('bybest_id','id')->toArray();
+                // if (count($attributeOptionIds) > 0) {
+                //     $attributeOptionIds = array_filter($attributeOptionIds);
+                //     if (count($attributeOptionIds) == 0) {
+                //         return response()->json(['message' => 'No attribute options are exists'], 500);
+                //     }
+                // }
+
                 // foreach (array_chunk($productVariantAttrs, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($productVariantAttrs as $item) {
@@ -1611,11 +1711,13 @@ class InventorySyncController extends Controller
                                 error_log("Processing  " . $item['id']);
 
                                 $variant = VbStoreProductVariant::withTrashed()->where('bybest_id', $item['variant_id'])->first();
-                                $attr = VbStoreAttributeOption::where('bybest_id', $item['attribute_id'])->first();
+                                $attr = VbStoreAttributeOption::where('bybest_id', $item['atribute_id'])->first();
 
                                 VbStoreProductVariantAttribute::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
+                                        // 'variant_id' => array_search($item['variant_id'], $productVariantIds) !== false ? array_search($item['variant_id'], $productVariantIds) : null,
+                                        // 'attribute_id' => array_search($item['atribute_id'], $attributeOptionIds) !== false ? array_search($item['atribute_id'], $attributeOptionIds) : null,
                                         'variant_id' => $variant->id,
                                         'attribute_id' => $attr->id,
                                         'venue_id' => $venue->id,
@@ -1629,6 +1731,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1662,7 +1765,7 @@ class InventorySyncController extends Controller
 
     public function productGroupsSync(Request $request): \Illuminate\Http\JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
+        // $venue = $this->venueService->adminAuthCheck();
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -1692,6 +1795,22 @@ class InventorySyncController extends Controller
                 error_log("page $page");
                 $productgroups = $bybestData['data'];
 
+                $productIds = Product::withTrashed()->pluck('bybest_id','id')->toArray();
+                if (count($productIds) > 0) {
+                    $productIds = array_filter($productIds);
+                    if (count($productIds) == 0) {
+                        return response()->json(['message' => 'No products are exists'], 500);
+                    }
+                }
+
+                $groupIds = Group::pluck('bybest_id','id')->toArray();
+                if (count($groupIds) > 0) {
+                    $groupIds = array_filter($groupIds);
+                    if (count($groupIds) == 0) {
+                        return response()->json(['message' => 'No groups are exists'], 500);
+                    }
+                }
+
                 // foreach (array_chunk($productgroups, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($productgroups as $item) {
@@ -1706,14 +1825,14 @@ class InventorySyncController extends Controller
                                     continue;
                                 }
                                 error_log("Processing  " . $item['id']);
-                                $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
-                                $group = Group::where('bybest_id', $item['group_id'])->first();
+                                // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
+                                // $group = Group::where('bybest_id', $item['group_id'])->first();
 
                                 ProductGroup::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
-                                        'product_id' => $product->id,
-                                        'group_id' => $group->id,
+                                        'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
+                                        'group_id' => array_search($item['group_id'], $groupIds) !== false ? array_search($item['group_id'], $groupIds) : null,
                                         'bybest_id'  => $item['id'],
                                         'created_at' => $item['created_at'],
                                         'updated_at' => $item['updated_at'],
@@ -1723,6 +1842,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1786,6 +1906,22 @@ class InventorySyncController extends Controller
                 error_log("page $page");
                 $productcategories = $bybestData['data'];
 
+                $productIds = Product::withTrashed()->pluck('bybest_id','id')->toArray();
+                if (count($productIds) > 0) {
+                    $productIds = array_filter($productIds);
+                    if (count($productIds) == 0) {
+                        return response()->json(['message' => 'No products are exists'], 500);
+                    }
+                }
+
+                $categoryIds = Category::pluck('bybest_id','id')->toArray();
+                if (count($categoryIds) > 0) {
+                    $categoryIds = array_filter($categoryIds);
+                    if (count($categoryIds) == 0) {
+                        return response()->json(['message' => 'No category are exists'], 500);
+                    }
+                }
+
                 // foreach (array_chunk($productcategories, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($productcategories as $item) {
@@ -1800,14 +1936,17 @@ class InventorySyncController extends Controller
                                     continue;
                                 }
                                 error_log("Processing  " . $item['id']);
-                                $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
-                                $category = Category::where('bybest_id', $item['category_id'])->first();
+
+                                // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
+                                // $category = Category::where('bybest_id', $item['category_id'])->first();
 
                                 ProductCategory::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
-                                        'product_id' => $product->id,
-                                        'category_id' => $category->id,
+                                        // 'product_id' => $product->id,
+                                        // 'category_id' => $category->id,
+                                        'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
+                                        'category_id' => array_search($item['category_id'], $categoryIds) !== false ? array_search($item['category_id'], $categoryIds) : null,
                                         'bybest_id' => $item['id']
                                     ]
                                 );
@@ -1815,6 +1954,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1849,7 +1989,7 @@ class InventorySyncController extends Controller
 
     public function productCollectionSync(Request $request): \Illuminate\Http\JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
+        // $venue = $this->venueService->adminAuthCheck();
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -1879,6 +2019,22 @@ class InventorySyncController extends Controller
                 error_log("page $page");
                 $productcollections = $bybestData['data'];
 
+                $productIds = Product::withTrashed()->pluck('bybest_id','id')->toArray();
+                if (count($productIds) > 0) {
+                    $productIds = array_filter($productIds);
+                    if (count($productIds) == 0) {
+                        return response()->json(['message' => 'No products are exists'], 500);
+                    }
+                }
+
+                $collectionIds = DB::table('collections')->pluck('bybest_id','id')->toArray();
+                if (count($collectionIds) > 0) {
+                    $collectionIds = array_filter($collectionIds);
+                    if (count($collectionIds) == 0) {
+                        return response()->json(['message' => 'No collections are exists'], 500);
+                    }
+                }
+
                 // foreach (array_chunk($productcollections, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($productcollections as $item) {
@@ -1893,14 +2049,16 @@ class InventorySyncController extends Controller
                                     continue;
                                 }
                                 error_log("Processing  " . $item['id'] . " " . $item['product_id'] . " " . $item['collection_id']);
-                                $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
-                                $collection = DB::table('collections')->where('bybest_id', $item['collection_id'])->first();
+                                // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
+                                // $collection = DB::table('collections')->where('bybest_id', $item['collection_id'])->first();
 
                                 ProductCollection::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
-                                        'product_id' => $product->id,
-                                        'collection_id' => $collection->id,
+                                        // 'product_id' => $product->id,
+                                        // 'collection_id' => $collection->id,
+                                        'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
+                                        'collection_id' => array_search($item['collection_id'], $collectionIds) !== false ? array_search($item['collection_id'], $collectionIds) : null,
                                         'bybest_id' => $item['id'],
                                         'created_at' => $item['created_at'],
                                         'updated_at' => $item['updated_at'],
@@ -1910,6 +2068,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -1941,13 +2100,12 @@ class InventorySyncController extends Controller
         ], 200);
     }
 
-
     public function productGallerySync(Request $request): \Illuminate\Http\JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
+        // $venue = $this->venueService->adminAuthCheck();
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        $batchSize = $request->input('batch_size', 50);
+        // $batchSize = $request->input('batch_size', 50);
         $skippedCount = 0;
         $processedCount = 0;
         ini_set('max_execution_time', 3000000);
@@ -1974,6 +2132,14 @@ class InventorySyncController extends Controller
                 error_log("page $page");
                 $productGalleries = $bybestData['data'];
 
+                $productIds = Product::withTrashed()->pluck('bybest_id','id')->toArray();
+                if (count($productIds) > 0) {
+                    $productIds = array_filter($productIds);
+                    if (count($productIds) == 0) {
+                        return response()->json(['message' => 'No products are exists'], 500);
+                    }
+                }
+
                 // foreach (array_chunk($productGalleries, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($productGalleries as $item) {
@@ -1988,12 +2154,13 @@ class InventorySyncController extends Controller
                                     continue;
                                 }
                                 error_log("Processing  " . $item['id']);
-                                $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
+                                // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
 
                                 ProductGallery::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
-                                        'product_id' => $product->id,
+                                        // 'product_id' => $product->id,
+                                        'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
                                         'bybest_id' => $item['id'],
                                         'photo_name' => 'https://admin.bybest.shop/storage/products/' . $item['photo_name'],
                                         'photo_description' => $item['photo_description'],
@@ -2005,6 +2172,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
@@ -2103,6 +2271,7 @@ class InventorySyncController extends Controller
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                $skippedCount++;
                                 DB::rollBack();
                             }
                         }
