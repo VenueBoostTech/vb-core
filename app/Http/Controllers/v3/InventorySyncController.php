@@ -2102,7 +2102,10 @@ class InventorySyncController extends Controller
 
     public function productGallerySync(Request $request): \Illuminate\Http\JsonResponse
     {
-        // $venue = $this->venueService->adminAuthCheck();
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
         // $batchSize = $request->input('batch_size', 50);
@@ -2156,18 +2159,27 @@ class InventorySyncController extends Controller
                                 error_log("Processing  " . $item['id']);
                                 // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
 
-                                ProductGallery::updateOrCreate(
+                                $productGallery = ProductGallery::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
                                         // 'product_id' => $product->id,
                                         'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
                                         'bybest_id' => $item['id'],
-                                        'photo_name' => 'https://admin.bybest.shop/storage/products/' . $item['photo_name'],
+                                        // 'photo_name' => 'https://admin.bybest.shop/storage/products/' . $item['photo_name'],
                                         'photo_description' => $item['photo_description'],
                                         'created_at' => $item['created_at'],
                                         'updated_at' => $item['updated_at'],
                                     ]
                                 );
+
+                                // Dispatch job for photo upload
+                                if ($item['photo_name']) {
+                                    \Log::info('Dispatching UploadPhotoJob', [
+                                        'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
+                                        'photo_url' => $item['photo_name'],
+                                    ]);
+                                    UploadPhotoJob::dispatch($productGallery, 'https://admin.bybest.shop/storage/products/' . $item['photo_name'], 'photo_name', $venue);
+                                }
 
                                 $processedCount++;
                                 DB::commit();

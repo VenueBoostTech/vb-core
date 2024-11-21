@@ -1162,6 +1162,9 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::post('/{id}/assign-team-leaders', [AdminProjectController::class, 'assignTeamLeaders']);
                     Route::post('/{id}/assign-operations-managers', [AdminProjectController::class, 'assignOperationsManagers']);
                     Route::post('{id}/time-entries', [AdminProjectController::class, 'storeTimeEntry']);
+                    Route::post('{id}/unassign-team-leader', [AdminProjectController::class, 'unassignTeamLeader']);
+                    Route::post('{id}/unassign-project-manager', [AdminProjectController::class, 'unassignProjectManager']);
+                    Route::post('{id}/unassign-operations-manager', [AdminProjectController::class, 'unassignOperationsManager']);
 
 
                     // todo: add comment section at project

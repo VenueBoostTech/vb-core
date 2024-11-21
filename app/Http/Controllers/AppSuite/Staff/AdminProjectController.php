@@ -910,6 +910,132 @@ class AdminProjectController extends Controller
             ($interval->i * 60) +
             $interval->s;
     }
+    public function unassignTeamLeader(Request $request, $id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        try {
+            $project = AppProject::where('venue_id', $venue->id)->findOrFail($id);
+
+            $validator = Validator::make($request->all(), [
+                'team_leader_ids' => 'required|array',
+                'team_leader_ids.*' => 'required|exists:employees,id'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['errors' => $validator->errors()], 422);
+            }
+
+            // Check if team leaders are actually assigned to the project
+            $assignedTeamLeaderIds = $project->teamLeaders()->pluck('employees.id');
+            $unassignIds = collect($request->team_leader_ids)->filter(function($id) use ($assignedTeamLeaderIds) {
+                return $assignedTeamLeaderIds->contains($id);
+            });
+
+            if ($unassignIds->isEmpty()) {
+                return response()->json(['error' => 'None of the specified team leaders are assigned to this project'], 400);
+            }
+
+            // Detach only the specified team leaders
+            $project->teamLeaders()->detach($unassignIds);
+
+            // Send notification to the unassigned team leaders
+            $teamLeaders = Employee::whereIn('id', $unassignIds)->get();
+
+            foreach ($teamLeaders as $teamLeader) {
+                $this->notificationService->sendNotification(
+                    $teamLeader,
+                    'task_notifications',
+                    "You have been unassigned as team leader from the project: {$project->name}"
+                );
+            }
+
+            return response()->json(['message' => 'Team leaders unassigned successfully']);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+    }
+
+    public function unassignProjectManager(Request $request, $id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        try {
+            $project = AppProject::where('venue_id', $venue->id)->findOrFail($id);
+
+            if (!$project->project_manager_id) {
+                return response()->json(['error' => 'No project manager assigned to this project'], 400);
+            }
+
+            // Store the current project manager for notification
+            $currentManager = $project->projectManager;
+
+            // Remove the project manager
+            $project->project_manager_id = null;
+            $project->save();
+
+            if ($currentManager) {
+                $this->notificationService->sendNotification(
+                    $currentManager,
+                    'task_notifications',
+                    "You have been unassigned as project manager from the project: {$project->name}"
+                );
+            }
+
+            return response()->json(['message' => 'Project manager unassigned successfully']);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+    }
+
+    public function unassignOperationsManager(Request $request, $id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        try {
+            $project = AppProject::where('venue_id', $venue->id)->findOrFail($id);
+
+            $validator = Validator::make($request->all(), [
+                'operations_manager_ids' => 'required|array',
+                'operations_manager_ids.*' => 'required|exists:employees,id'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json(['errors' => $validator->errors()], 422);
+            }
+
+            // Check if operations managers are actually assigned to the project
+            $assignedManagerIds = $project->operationsManagers()->pluck('employees.id');
+            $unassignIds = collect($request->operations_manager_ids)->filter(function($id) use ($assignedManagerIds) {
+                return $assignedManagerIds->contains($id);
+            });
+
+            if ($unassignIds->isEmpty()) {
+                return response()->json(['error' => 'None of the specified operations managers are assigned to this project'], 400);
+            }
+
+            // Detach only the specified operations managers
+            $project->operationsManagers()->detach($unassignIds);
+
+            // manage it with foreach
+            $employess = Employee::whereIn('id', $unassignIds)->get();
+
+            foreach ($employess as $employee) {
+                $this->notificationService->sendNotification(
+                    $employee,
+                    'task_notifications',
+                    "You have been unassigned as operations manager from the project: {$project->name}"
+                );
+            }
+
+            return response()->json(['message' => 'Operations managers unassigned successfully']);
+        } catch (ModelNotFoundException $e) {
+            return response()->json(['error' => 'Project not found'], 404);
+        }
+    }
 
 
 
