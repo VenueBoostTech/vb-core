@@ -30,7 +30,7 @@ class BbProductsController extends Controller
                 DB::raw("(SELECT MIN(vb_store_products_variants.price) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id) as min_regular_price"),
                 DB::raw("(SELECT COUNT(vb_store_products_variants.currency_alpha) FROM vb_store_products_variants WHERE vb_store_products_variants.product_id = products.id AND vb_store_products_variants.currency_alpha IS NOT NULL) as count_currency_alpha")
             )
-                ->where('id', '=', $product_id)
+                ->where('bybest_id', '=', $product_id)
                 ->where('product_url', '=', $product_url)
                 ->with(['attribute.option', 'productImages', 'postal'])
                 ->first();
@@ -106,8 +106,230 @@ class BbProductsController extends Controller
 
             // $wish_list_products = app('wishlist')->getContent();
             // $payment_methods = PaymentMothod::where('status_id', '=', 1)->orderBy('id', 'ASC')->get();
-            $countries = Country::all();
-            $cities = City::all();
+            // Translation mappings
+            $countryTranslations = [
+                'Albania' => 'Shqipëria',
+                'Kosovo' => 'Kosova',
+                'North Macedonia' => 'Maqedonia e Veriut',
+                'Unspecified' => 'E papërcaktuar'
+            ];
+
+            $stateTranslations = [
+                // Albania
+                'Tirana' => 'Tiranë',
+                'Durres' => 'Durrës',
+                'Vlore' => 'Vlorë',
+                'Elbasan' => 'Elbasan',
+                'Fier' => 'Fier',
+                'Korce' => 'Korçë',
+                'Shkoder' => 'Shkodër',
+                'Berat' => 'Berat',
+                'Lezhe' => 'Lezhë',
+                'Diber' => 'Dibër',
+                'Kukes' => 'Kukës',
+                'Gjirokaster' => 'Gjirokastër',
+                // Kosovo
+                'Pristina' => 'Prishtinë',
+                'Prizren' => 'Prizren',
+                'Peja' => 'Pejë',
+                'Gjakova' => 'Gjakovë',
+                'Mitrovica' => 'Mitrovicë',
+                'Gjilan' => 'Gjilan',
+                'Ferizaj' => 'Ferizaj',
+                // North Macedonia
+                'Skopje' => 'Shkup',
+                'Vardar' => 'Vardari',
+                'East' => 'Lindja',
+                'Southwest' => 'Jugperëndimi',
+                'Southeast' => 'Juglindje',
+                'Pelagonia' => 'Pellagonia',
+                'Polog' => 'Pollogu',
+                'Northeast' => 'Verilindja',
+                'Unspecified' => 'E papërcaktuar'
+            ];
+
+            $cityTranslations = [
+                // Albania - Tirana Region
+                'Tirana' => 'Tiranë',
+                'Kavaja' => 'Kavajë',
+                'Vore' => 'Vorë',
+                'Kamez' => 'Kamëz',
+                'Rrogozhine' => 'Rrogozhinë',
+
+                // Albania - Durres Region
+                'Durres' => 'Durrës',
+                'Shijak' => 'Shijak',
+                'Kruje' => 'Krujë',
+                'Manez' => 'Manëz',
+
+                // Albania - Vlore Region
+                'Vlore' => 'Vlorë',
+                'Himare' => 'Himarë',
+                'Selenice' => 'Selenicë',
+                'Orikum' => 'Orikum',
+                'Dhermi' => 'Dhërmi',
+
+                // Albania - Elbasan Region
+                'Elbasan' => 'Elbasan',
+                'Cerrik' => 'Cërrik',
+                'Belsh' => 'Belsh',
+                'Peqin' => 'Peqin',
+                'Gramsh' => 'Gramsh',
+                'Librazhd' => 'Librazhd',
+
+                // Albania - Fier Region
+                'Fier' => 'Fier',
+                'Patos' => 'Patos',
+                'Roskovec' => 'Roskovec',
+                'Mallakaster' => 'Mallakastër',
+                'Lushnje' => 'Lushnjë',
+                'Divjake' => 'Divjakë',
+
+                // Albania - Other Regions
+                'Shkoder' => 'Shkodër',
+                'Lezhe' => 'Lezhë',
+                'Korce' => 'Korçë',
+                'Berat' => 'Berat',
+                'Kucove' => 'Kuçovë',
+                'Gjirokaster' => 'Gjirokastër',
+                'Permet' => 'Përmet',
+                'Tepelene' => 'Tepelenë',
+                'Sarande' => 'Sarandë',
+                'Delvine' => 'Delvinë',
+                'Konispol' => 'Konispol',
+                'Kukes' => 'Kukës',
+                'Has' => 'Has',
+                'Tropoje' => 'Tropojë',
+                'Peshkopi' => 'Peshkopi',
+                'Bulqize' => 'Bulqizë',
+                'Mat' => 'Mat',
+
+                // Kosovo - Pristina Region
+                'Pristina' => 'Prishtinë',
+                'Podujevo' => 'Podujevë',
+                'Obilic' => 'Obiliq',
+                'Lipjan' => 'Lipjan',
+                'Gllogovc' => 'Gllogoc',
+                'Gracanice' => 'Graçanicë',
+                'Fushe Kosove' => 'Fushë Kosovë',
+
+                // Kosovo - Prizren Region
+                'Prizren' => 'Prizren',
+                'Dragash' => 'Dragash',
+                'Suva Reka' => 'Suharekë',
+                'Mamusha' => 'Mamushë',
+
+                // Kosovo - Peja Region
+                'Peja' => 'Pejë',
+                'Decan' => 'Deçan',
+                'Klina' => 'Klinë',
+                'Istog' => 'Istog',
+                'Junik' => 'Junik',
+
+                // Kosovo - Mitrovica Region
+                'Mitrovica' => 'Mitrovicë',
+                'Skenderaj' => 'Skënderaj',
+                'Vushtrri' => 'Vushtrri',
+                'Zubin Potok' => 'Zubin Potok',
+                'Zvecan' => 'Zveçan',
+
+                // Kosovo - Gjakova Region
+                'Gjakova' => 'Gjakovë',
+                'Rahovec' => 'Rahovec',
+
+                // Kosovo - Gjilan Region
+                'Gjilan' => 'Gjilan',
+                'Kamenica' => 'Kamenicë',
+                'Vitia' => 'Viti',
+                'Novoberdo' => 'Novobërdë',
+                'Ranillug' => 'Ranillug',
+                'Partesh' => 'Partesh',
+                'Kllokot' => 'Kllokot',
+
+                // Kosovo - Ferizaj Region
+                'Ferizaj' => 'Ferizaj',
+                'Kacanik' => 'Kaçanik',
+                'Shtime' => 'Shtime',
+                'Shterpce' => 'Shtërpcë',
+                'Elez Han' => 'Hani i Elezit',
+
+                // North Macedonia - Skopje Region
+                'Skopje' => 'Shkup',
+                'Aerodrom' => 'Aerodrom',
+                'Butel' => 'Butel',
+                'Cair' => 'Çair',
+                'Centar' => 'Qendër',
+                'Gazi Baba' => 'Gazi Babë',
+                'Gjorce Petrov' => 'Gjorçe Petrov',
+                'Karpos' => 'Karposh',
+                'Kisela Voda' => 'Kisella Vodë',
+                'Saraj' => 'Saraj',
+                'Suto Orizari' => 'Shuto Orizarë',
+
+                // North Macedonia - Polog Region
+                'Tetovo' => 'Tetovë',
+                'Gostivar' => 'Gostivar',
+                'Brvenica' => 'Bërvenicë',
+                'Bogovinje' => 'Bogovinë',
+                'Zelino' => 'Zhelinë',
+                'Jegunovce' => 'Jegunovcë',
+                'Mavrovo' => 'Mavrovë',
+                'Tearce' => 'Tearcë',
+                'Vrapciste' => 'Vrapçishtë',
+
+                // North Macedonia - Northeast Region
+                'Kumanovo' => 'Kumanovë',
+                'Kriva Palanka' => 'Kriva Pallankë',
+                'Kratovo' => 'Kratovë',
+                'Lipkovo' => 'Lipkovë',
+                'Rankovce' => 'Rankovcë',
+                'Staro Nagoricane' => 'Nagoriçan i Vjetër',
+
+                // North Macedonia - Southwest Region
+                'Ohrid' => 'Ohër',
+                'Struga' => 'Strugë',
+                'Debar' => 'Dibër',
+                'Vevcani' => 'Vevçani',
+                'Plasnica' => 'Pllasnicë',
+                'Centar Zupa' => 'Qendra Zhupë',
+
+                // Default
+                'Unspecified' => 'E papërcaktuar'
+            ];
+
+            $countries = Country::whereIn('code', ['AL', 'XK', 'MK', 'XX'])
+                ->with(['states' => function ($query) {
+                    $query->with('cities');
+                }])
+                ->get()
+                ->map(function ($country) use ($countryTranslations, $stateTranslations, $cityTranslations) {
+                    return [
+                        'id' => $country->id,
+                        'code' => $country->code,
+                        'names' => [
+                            'en' => $country->name,
+                            'sq' => $countryTranslations[$country->name] ?? $country->name
+                        ],
+                        'states' => $country->states->map(function ($state) use ($stateTranslations, $cityTranslations) {
+                            return [
+                                'id' => $state->id,
+                                'names' => [
+                                    'en' => $state->name,
+                                    'sq' => $stateTranslations[$state->name] ?? $state->name
+                                ],
+                                'cities' => $state->cities->map(function ($city) use ($cityTranslations) {
+                                    return [
+                                        'id' => $city->id,
+                                        'names' => [
+                                            'en' => $city->name,
+                                            'sq' => $cityTranslations[$city->name] ?? $city->name
+                                        ]
+                                    ];
+                                })
+                            ];
+                        })
+                    ];
+                });
 
 
             $response_data = [
@@ -116,9 +338,9 @@ class BbProductsController extends Controller
                 'brand' => $brand,
                 'bb_members' => $bb_memebers,
                 'countries' => $countries,
-                'cities' => $cities,
-                'atributes' => $atributes
-                // Add other necessary data
+                'atributes' => $atributes,
+                'related_products' => $related_products
+                //'cities' => $cities,
             ];
 
             return response()->json($response_data);

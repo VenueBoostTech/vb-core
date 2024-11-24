@@ -34,6 +34,7 @@ class AppClientController extends Controller
         $perPage = $request->input('per_page', 15);
         $clients = AppClient::with(['address.city', 'address.state', 'address.country'])
             ->where('venue_id', $venue->id)
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         // Transform the data to include full address

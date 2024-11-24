@@ -168,7 +168,7 @@ class ClientServiceRequestController extends Controller
                     return [
                         'id' => $request->id,
                         'reference' => $request->reference,
-                        'service_type' => $request->service->name,
+                        'service_type' => $request->service?->name ?? '-',
                         'requested_date' => Carbon::parse($request->requested_date)->format('M d, Y'),
                         'preferred_date' => Carbon::parse($request->preferred_date)->format('M d, Y'),
                         'status' => $request->status,

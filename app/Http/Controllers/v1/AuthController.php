@@ -139,6 +139,7 @@ class AuthController extends Controller
             ]);
         }
 
+
         return $this->respondWithToken($token, $sourceApp, $visionTrack, $allow_clockinout);
     }
 
@@ -266,6 +267,9 @@ class AuthController extends Controller
         $is_vision_track = false;
 
         if (count($restaurants) > 0) {
+
+            $accountType = $this->getUserAccountType($user, $employee);
+
             foreach ($restaurants as $restaurant) {
                 // Update logo/cover URLs
                 $restaurant->cover = $restaurant->cover && $restaurant->cover !== 'logo' && $restaurant->cover !== 'https://via.placeholder.com/300x300'
@@ -378,6 +382,15 @@ class AuthController extends Controller
                 ]);
             }
 
+            // Save Login Activity
+            LoginActivity::create([
+                'user_id' => $user->id,
+                'app_source' => 'none',
+                'venue_id' => $restaurants[0]->id,
+            ]);
+
+            UserActivityLogger::log($user->id, 'Login');
+
             return response()->json([
                 'user' => [
                     'id' => $user->id,
@@ -396,13 +409,16 @@ class AuthController extends Controller
                 'token_type' => 'bearer',
                 'expires_in' => $ttl,
                 'expires_at' => $expiresAt,
-                'account_type' => $user->is_app_client ? 'client' : 'business',
+                'account_type' => $accountType,
                 'is_app_client' => $user->is_app_client,
                 'refresh_expires_in' => $refreshTtl,
                 'refresh_expires_at' => $refreshExpiresAt
 
             ]);
         }
+
+        $accountType = $this->getUserAccountType($user, $employee);
+
 
         // Employee response when no restaurants
         return response()->json([
@@ -422,11 +438,27 @@ class AuthController extends Controller
             'token_type' => 'bearer',
             'expires_in' => $ttl,
             'expires_at' => $expiresAt,
-            'account_type' => $user->is_app_client ? 'client' : 'business',
+            'account_type' => $accountType,
             'is_app_client' => $user->is_app_client,
             'refresh_expires_in' => $refreshTtl, // Add refresh token expiration
             'refresh_expires_at' => $refreshExpiresAt
         ]);
+    }
+
+    private function getUserAccountType($user, $employee) {
+        if (!empty($employee) && count($employee) > 0) {
+            $role = $employee[0]->role->name ?? null;
+
+            if ($role === 'Team Leader') {
+                return 'business_team_leader';
+            }
+
+            if ($role === 'Operations Manager') {
+                return 'business_operations_managers';
+            }
+        }
+
+        return $user->is_app_client ? 'client' : 'business';
     }
 
     protected function respondWithTokenForAffiliate(string $token): JsonResponse

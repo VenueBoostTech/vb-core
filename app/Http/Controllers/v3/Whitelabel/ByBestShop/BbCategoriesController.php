@@ -16,7 +16,7 @@ class BbCategoriesController extends Controller
 {
     public function categoryProducts(Request $request, string $category_url): \Illuminate\Http\JsonResponse
     {
-        // try {
+        try {
             // $category_url = $request->input('category_url');
             // Assuming you have similar logic as in the original controller
             // Retrieve category, products, filters, etc.
@@ -260,9 +260,9 @@ class BbCategoriesController extends Controller
                 'brands' => $brands,
                 'group_id' => $request->search
             ]);
-        // } catch (\Throwable $th) {
-        //     return response()->json(['error' => 'Category not found'], 404);
-        // }
+        } catch (\Throwable $th) {
+            return response()->json(['error' => 'Category not found'], 404);
+        }
     }
 
     public function searchProducts(Request $request): \Illuminate\Http\JsonResponse

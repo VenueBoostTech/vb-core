@@ -41,7 +41,7 @@ class UploadPhotoJob implements ShouldQueue
                 'photo_url' => $this->photoUrl
             ]);
             error_log("Processing UploadPhotoJob $this->photoUrl");
-            $photoContents = file_get_contents($this->photoUrl);
+            $photoContents = file_get_contents($this->file_url($this->photoUrl));
             if ($photoContents !== false) {
                 $filename = Str::random(20) . '.jpg';
                 $requestType = 'other';
@@ -57,7 +57,7 @@ class UploadPhotoJob implements ShouldQueue
                 $photo->save();
 
                 error_log("DONE UploadPhotoJob $path");
-                
+
                 $this->model->update([$this->fieldName => $path]);
 
                 \Log::info('UploadPhotoJob completed successfully', [
@@ -77,5 +77,13 @@ class UploadPhotoJob implements ShouldQueue
         }
     }
 
-
+    public function file_url($url)
+    {
+        $parts = parse_url($url);
+        $path_parts = array_map('rawurldecode', explode('/', $parts['path']));
+        return
+            $parts['scheme'] . '://' .
+            $parts['host'] .
+            implode('/', array_map('rawurlencode', $path_parts));
+    }
 }

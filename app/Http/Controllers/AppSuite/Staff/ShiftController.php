@@ -417,4 +417,127 @@ class ShiftController extends Controller
 
         return $days;
     }
+
+    public function getCalendarEvents(Request $request): JsonResponse
+    {
+        try {
+            $employee = auth()->user()->employee;
+
+            // Default to current week if dates not provided
+            $startDate = $request->input('start')
+                ? Carbon::parse($request->input('start'))
+                : Carbon::now()->startOfWeek();
+
+            $endDate = $request->input('end')
+                ? Carbon::parse($request->input('end'))
+                : Carbon::now()->endOfWeek();
+
+            $schedules = Schedule::with(['employee', 'venue'])
+                ->where('restaurant_id', $employee->restaurant_id)
+                ->whereBetween('date', [$startDate, $endDate])
+                ->get()
+                ->map(function ($schedule) {
+                    $date = Carbon::parse($schedule->date)->format('Y-m-d');
+                    $startTime = Carbon::parse($schedule->start_time)->format('H:i:s');
+                    $endTime = Carbon::parse($schedule->end_time)->format('H:i:s');
+
+                    return [
+                        'id' => $schedule->id,
+                        'title' => $schedule->employee->name . ' - ' .
+                            ($schedule->status === 'time_off' ? 'Leave' :
+                                ($schedule->schedule_type === 'task' ? 'Task' :
+                                    ($schedule->schedule_type === 'job' ? 'Job' : 'Shift'))),
+                        'start' => "{$date}T{$startTime}",
+                        'end' => "{$date}T{$endTime}",
+                        'type' => $schedule->schedule_type ?? 'shift',
+                        'backgroundColor' => $this->getEventColor($schedule),
+                        'employee' => [
+                            'id' => $schedule->employee->id,
+                            'name' => $schedule->employee->name
+                        ],
+                        'venue' => $schedule->venue->name,
+                        'status' => $schedule->status
+                    ];
+                });
+
+            return response()->json($schedules);
+
+        } catch (\Exception $e) {
+            \Log::error('Calendar events error: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to load calendar'], 500);
+        }
+    }
+
+    public function createSchedule(Request $request): JsonResponse
+    {
+        try {
+            $employee = auth()->user()->employee;
+
+            $validator = Validator::make($request->all(), [
+                'employee_id' => 'required|exists:employees,id',
+                'date' => 'required|date',
+                'start_time' => 'required',
+                'end_time' => 'required|after:start_time',
+                'schedule_type' => 'nullable|in:shift,task,job'
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            // Check for schedule conflicts
+            $hasConflict = Schedule::where('employee_id', $request->employee_id)
+                ->where('date', $request->date)
+                ->where(function($query) use ($request) {
+                    $query->whereTime('start_time', '<', $request->end_time)
+                        ->whereTime('end_time', '>', $request->start_time);
+                })
+                ->exists();
+
+            if ($hasConflict) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Schedule conflicts with existing shifts'
+                ], 422);
+            }
+
+            $schedule = Schedule::create([
+                'employee_id' => $request->employee_id,
+                'restaurant_id' => $employee->restaurant_id,
+                'date' => $request->date,
+                'start_time' => $request->start_time,
+                'end_time' => $request->end_time,
+                'schedule_type' => $request->schedule_type ?? 'shift',
+                'status' => 'scheduled'
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Schedule created successfully',
+                'data' => $schedule
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Failed to create schedule: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function getEventColor(Schedule $schedule): string
+    {
+        if ($schedule->status === 'time_off') {
+            return '#ef4444'; // Red for leave
+        }
+
+        return match($schedule->schedule_type) {
+            'task' => '#10b981',  // Green for tasks
+            'job' => '#f59e0b',   // Orange for jobs
+            default => '#3b82f6'  // Blue for regular shifts
+        };
+    }
 }

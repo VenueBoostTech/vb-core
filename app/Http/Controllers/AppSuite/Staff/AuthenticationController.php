@@ -1,8 +1,10 @@
 <?php
 
 namespace App\Http\Controllers\AppSuite\Staff;
+use App\Helpers\UserActivityLogger;
 use App\Http\Controllers\Controller;
 use App\Models\Employee;
+use App\Models\LoginActivity;
 use App\Models\Restaurant;
 use App\Models\User;
 use App\Services\VenueService;
@@ -45,6 +47,24 @@ class AuthenticationController extends Controller
                 ->first();
 
             if (!$connection) {
+                $allConnections = DB::table('venue_user_supabase_connections')
+                    ->select('user_id', 'venue_id', 'supabase_id')
+                    ->get();
+
+                return response()->json([
+                    'message' => 'Connection not found',
+                    'debug' => [
+                        'searched_for' => [
+                            'email' => $request->email,
+                            'user_id' => $user->id,
+                            'supabase_id' => $request->supabase_id
+                        ],
+                        'all_connections_in_db' => $allConnections
+                    ]
+                ], 404);
+            }
+
+            if (!$connection) {
                 return response()->json(['message' => 'Connection not found'], 404);
             }
 
@@ -65,6 +85,15 @@ class AuthenticationController extends Controller
             ])->fromUser($user);
 
             $employee = Employee::where('user_id', $user->id)->first();
+
+            // Save Login Activity
+            LoginActivity::create([
+                'user_id' => $user->id,
+                'app_source' => 'none',
+                'venue_id' => $venue->id,
+            ]);
+
+            UserActivityLogger::log($user->id, 'Login');
 
             // Return user data, venue data, and the token
             return response()->json([

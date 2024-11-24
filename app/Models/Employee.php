@@ -339,4 +339,17 @@ class Employee extends Model
         return $this->belongsTo(User::class);
     }
 
+
+    // Add assigned support tickets relationship
+    public function assignedTickets(): HasMany
+    {
+        return $this->hasMany(AppSupportTicket::class, 'employee_id');
+    }
+
+    // Add ticket messages relationship for messages sent by this employee
+    public function ticketMessages(): HasMany
+    {
+        return $this->hasMany(AppSupportTicketMessage::class, 'sender_id')
+            ->where('sender_type', 'employee');
+    }
 }

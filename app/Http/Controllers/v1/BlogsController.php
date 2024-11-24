@@ -537,10 +537,10 @@ class BlogsController extends Controller
     {
         $limit = $request->input('limit', 10);
 
-        $blogs = Blog::select('id', 'title', 'read_count', 'is_featured', 'is_draft')
+        $blogs = Blog::select('id', 'title', 'author_name', 'is_featured', 'is_draft')
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m-%d') as posted_on")
-            ->orderBy('created_at', 'desc') // Order by latest
-            ->take($limit)
+            ->whereNull('restaurant_id')
+            ->orderBy('created_at', 'desc')
             ->get();
 
         $totalReadCount = (int) Blog::sum('read_count');
@@ -561,7 +561,8 @@ class BlogsController extends Controller
 
         $blogs = Blog::select('id', 'title', 'author_name', 'is_featured', 'is_draft')
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m-%d') as posted_on")
-            ->orderBy('created_at', 'desc') // Order by latest
+            ->whereNull('restaurant_id')
+            ->orderBy('created_at', 'desc')
             ->get();
 
 
@@ -618,7 +619,9 @@ class BlogsController extends Controller
             return response()->json(['error' => $validator->errors()], 400);
         }
 
-        $query = Blog::with('categories')->where('is_draft', false);
+        $query = Blog::with('categories')
+            ->where('is_draft', false)
+            ->whereNull('restaurant_id');
 
         $categoryName = $request->input('category');
         if (!empty($categoryName)) {
@@ -706,6 +709,7 @@ class BlogsController extends Controller
 
         $blogs = Blog::where('title', 'like', '%' . $query . '%')
             ->where('is_draft', false)
+            ->whereNull('restaurant_id')  // Added this line
             ->whereNotIn('id', $excludedIds);
 
         if (!empty($categoryText)) {

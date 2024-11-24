@@ -79,4 +79,9 @@ class ServiceRequest extends Model
     {
         return $this->hasMany(ServiceRequestActivity::class);
     }
+
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(AppSupportTicket::class);
+    }
 }

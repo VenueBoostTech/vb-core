@@ -25,15 +25,19 @@ class Task extends Model
     public const STATUS_IN_PROGRESS = 'in_progress';
     public const STATUS_DONE = 'done';
     public const STATUS_CANCELLED = 'cancelled';
+    public const STATUS_DRAFT = 'draft';
+    public const STATUS_ON_HOLD = 'on_hold';
 
     public static function getStatuses(): array
     {
         return [
-            self::STATUS_BACKLOG => 'Baclog',
+            self::STATUS_BACKLOG => 'Backlog',
             self::STATUS_IN_PROGRESS => 'In Progress',
             self::STATUS_TODO => 'Todo',
             self::STATUS_DONE => 'Done',
+            self::STATUS_DRAFT => 'Draft',
             self::STATUS_CANCELLED => 'Cancelled',
+            self::STATUS_ON_HOLD => 'On Hold',
         ];
     }
     public function project(): BelongsTo

@@ -61,9 +61,9 @@ class VBAppProductsController extends Controller
 
             $updatedProducts = $products->map(function ($product) use ($currency) {
                 $productData = $product->toArray();
-                if ($product->image_path !== null) {
-                    $productData['image_path'] = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
-                }
+                // if ($product->image_path !== null) {
+                //     $productData['image_path'] = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
+                // }
                 $productData['currency'] = $currency;
                 return $productData;
             });
@@ -114,9 +114,9 @@ class VBAppProductsController extends Controller
         $suggestedProducts = $this->getSuggestedProducts($giftOccasion->id, $budget, $storeId);
 
         $suggestions = $suggestedProducts->map(function ($product) {
-            if ($product->image_path !== null) {
-                $product->image_path = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
-            }
+            // if ($product->image_path !== null) {
+            //     $product->image_path = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
+            // }
             return [
                 'id' => $product->id,
                 'name' => $product->name,

@@ -1961,11 +1961,11 @@ class RestaurantController extends Controller
                 $updatedProductsByCategory[$categoryName] = [];
             }
 
-            if ($product->image_path !== null) {
-                // Generate the new path and update the image_path attribute
-                $newPath = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
-                $product->image_path = $newPath;
-            }
+            // if ($product->image_path !== null) {
+            //     // Generate the new path and update the image_path attribute
+            //     $newPath = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
+            //     $product->image_path = $newPath;
+            // }
 
             $stockQuantity = DB::table('inventory_retail')->where('product_id', $product->id)->first();
             $product->stock_quantity = $stockQuantity->stock_quantity ?? 0;
@@ -4594,6 +4594,7 @@ class RestaurantController extends Controller
                 'onboarded' => $venue->onboarded,
                 'email' => $venue->email ?? '-',
                 'created_at' => $venue->created_at ? $venue->created_at->format('d-m-Y H:i:s') : '-',
+                'user_id' => $venue->user_id,
             ];
             $formattedVenues[] = $formattedVenue;
         }

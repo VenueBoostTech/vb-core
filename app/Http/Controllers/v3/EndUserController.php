@@ -286,7 +286,8 @@ class EndUserController extends Controller
                     'brand' => $product->brand ? $product->brand->name : null, // Assuming a brand relationship
                     'description' => $product->description,
                     'price' => $product->price,
-                    'image' => $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null,
+                    'image' => $product->image_path,
+                    // 'image' => $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null,
                 ];
             });
 

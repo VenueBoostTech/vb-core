@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\AppSuite\ClientPortal;
 
 use App\Http\Controllers\Controller;
+use App\Models\AppFeedback;
 use App\Models\Service;
 use App\Models\ServiceRequest;
 use App\Services\ClientAuthService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class ClientServicesController extends Controller
 {
@@ -17,7 +19,7 @@ class ClientServicesController extends Controller
         $this->clientAuthService = $clientAuthService;
     }
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
         if ($response = $this->clientAuthService->validateClientAccess()) {
             return $response;
@@ -26,17 +28,35 @@ class ClientServicesController extends Controller
         $client = $this->clientAuthService->getAuthenticatedClient();
 
         // Retrieve all services for the authenticated client
-        $services = Service::where('venue_id', $client->venue_id)->get();
+        $servicesQuery = Service::where('venue_id', $client->venue_id);
+
+        // Apply search filter to services
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $servicesQuery->where('name', 'like', "%{$search}%")
+                ->orWhere('description', 'like', "%{$search}%");
+        }
+
+        $services = $servicesQuery->get();
 
         // Initialize an array to store all services with their categorized requests
         $serviceList = [];
 
         foreach ($services as $service) {
             // Retrieve all requests for this service, categorized by status
-            $requests = ServiceRequest::where('client_id', $client->id)
+            $requestsQuery = ServiceRequest::where('client_id', $client->id)
                 ->where('service_id', $service->id)
-                ->orderBy('created_at', 'desc')
-                ->get();
+                ->orderBy('created_at', 'desc');
+
+            // Apply search filter to service requests
+            if ($request->filled('search')) {
+                $requestsQuery->where(function ($q) use ($search) {
+                    $q->where('reference', 'like', "%{$search}%")
+                        ->orWhere('description', 'like', "%{$search}%");
+                });
+            }
+
+            $requests = $requestsQuery->get();
 
             $categorizedRequests = [
                 'active' => [],
@@ -101,6 +121,7 @@ class ClientServicesController extends Controller
 
         return response()->json($serviceList);
     }
+
 
     public function available(): JsonResponse
     {
@@ -213,17 +234,13 @@ class ClientServicesController extends Controller
                         'performed_by' => $activity->performer?->name ?? 'System'
                     ];
                 }),
-            ] : null,
-//            'feedback' => [
-//                'can_submit' => $latestRequest &&
-//                    $latestRequest->status === 'Completed' &&
-//                    !$latestRequest->feedback,
-//                'has_previous' => ServiceRequest::where('client_id', $client->id)
-//                    ->where('service_id', $id)
-//                    ->where('status', 'Completed')
-//                    ->whereNotNull('feedback')
-//                    ->exists()
-//            ]
+                'has_feedback' => $latestRequest->feedback !== null,
+                'feedback_details' => $latestRequest->feedback ? [
+                    'rating' => $latestRequest->feedback->rating,
+                    'comment' => $latestRequest->feedback->comment,
+                    'admin_response' => $latestRequest->feedback->admin_response,
+                ] : null
+            ] : null
         ]);
     }
 
@@ -240,6 +257,59 @@ class ClientServicesController extends Controller
             'created_at' => $service->created_at,
             'updated_at' => $service->updated_at
         ];
+    }
+
+
+    public function submitFeedback(Request $request, $id): JsonResponse
+    {
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
+        }
+
+        $client = $this->clientAuthService->getAuthenticatedClient();
+        $serviceRequest = ServiceRequest::where('client_id', $client->id)->findOrFail($id);
+
+        // Validate request can receive feedback
+        if ($serviceRequest->status !== 'Completed') {
+            return response()->json(['error' => 'Can only submit feedback for completed requests'], 422);
+        }
+
+        if ($serviceRequest->feedback) {
+            return response()->json(['error' => 'Feedback already submitted'], 422);
+        }
+
+        $validated = $request->validate([
+            'rating' => 'required|integer|between:1,5',
+            'comment' => 'required|string|min:10|max:500',
+        ]);
+
+        $feedback = AppFeedback::create([
+            'venue_id' => $client->venue_id,
+            'client_id' => $client->id,
+            'project_id' => $serviceRequest->project_id,
+            'rating' => $validated['rating'],
+            'comment' => $validated['comment'],
+            'type' => 'equipment_service',
+        ]);
+
+        $serviceRequest->feedback()->associate($feedback);
+        $serviceRequest->save();
+
+        return response()->json($feedback);
+    }
+
+    public function getFeedback($id): JsonResponse
+    {
+        if ($response = $this->clientAuthService->validateClientAccess()) {
+            return $response;
+        }
+
+        $client = $this->clientAuthService->getAuthenticatedClient();
+        $serviceRequest = ServiceRequest::where('client_id', $client->id)
+            ->with('feedback')
+            ->findOrFail($id);
+
+        return response()->json($serviceRequest->feedback);
     }
 
 }

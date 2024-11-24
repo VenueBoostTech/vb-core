@@ -24,6 +24,9 @@ class AppProject extends Model
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_CANCELLED = 'cancelled';
 
+    public const STATUS_DRAFT = 'draft';
+    public const STATUS_ARCHIVED = 'archived';
+
     public static function getStatuses(): array
     {
         return [
@@ -32,6 +35,8 @@ class AppProject extends Model
             self::STATUS_ON_HOLD => 'On Hold',
             self::STATUS_COMPLETED => 'Completed',
             self::STATUS_CANCELLED => 'Cancelled',
+            self::STATUS_DRAFT => 'Draft',
+            self::STATUS_ARCHIVED => 'Archived',
         ];
     }
 
@@ -184,5 +189,16 @@ class AppProject extends Model
     {
         return $this->hasMany(AppProjectTimesheet::class, 'app_project_id')
             ->where('status', 'active');
+    }
+
+    public function feedbacks()
+    {
+        return $this->hasMany(AppFeedback::class, 'client_id');
+    }
+
+    // Add support tickets relationship
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(AppSupportTicket::class, 'app_project_id');
     }
 }

@@ -781,4 +781,15 @@ class Restaurant extends Model
     {
         return $this->hasMany(ConnectionRefreshLog::class, 'venue_id');
     }
+
+    public function feedbacks()
+    {
+        return $this->hasMany(AppFeedback::class, 'venue_id');
+    }
+
+    // Add support tickets relationship
+    public function supportTickets(): HasMany
+    {
+        return $this->hasMany(AppSupportTicket::class, 'venue_id');
+    }
 }
