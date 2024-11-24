@@ -1158,6 +1158,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::post('{id}/assign-team', [AdminProjectController::class, 'assignTeam']);
                     Route::post('{id}/assign-project-manager', [AdminProjectController::class, 'assignProjectManager']);
                     Route::get('/statuses', [AdminProjectController::class, 'getProjectStatuses']);
+                    Route::get('/time-entries', [AdminProjectController::class, 'getAllTimeEntries']);
                     Route::get('{id}', [AdminProjectController::class, 'show']); // New route for project details
                     Route::post('/{id}/assign-team-leaders', [AdminProjectController::class, 'assignTeamLeaders']);
                     Route::post('/{id}/assign-operations-managers', [AdminProjectController::class, 'assignOperationsManagers']);

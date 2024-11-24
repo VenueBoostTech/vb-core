@@ -58,6 +58,7 @@ class CompanySetupController extends Controller
 
         $departments = Department::where('venue_id', $venue->id)
             ->withCount(['employees', 'teams', 'projects'])  // Add counts using withCount
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         // Transform the data to include the counts
@@ -403,6 +404,7 @@ class CompanySetupController extends Controller
                 'department_id',
                 'user_id'
             )
+            ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($employee) {
                 // Get active projects count

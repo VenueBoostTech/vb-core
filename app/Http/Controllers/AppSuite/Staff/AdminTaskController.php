@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\Task;
 use App\Services\AppNotificationService;
 use App\Services\VenueService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -30,20 +31,31 @@ class AdminTaskController extends Controller
         if ($venue instanceof JsonResponse) return $venue;
 
         $perPage = $request->input('per_page', 15); // Default to 15 items per page
-        $tasks = Task::whereHas('project', function ($query) use ($venue) {
-            $query->where('venue_id', $venue->id);
+
+        $tasks = Task::where('venue_id', $venue->id)  // First filter by venue_id
+        ->where(function ($query) {
+            $query->whereHas('project')  // Then optionally filter by project existence
+            ->orWhereDoesntHave('project');
         })
-            ->with(['assignedEmployees', 'project']) // Eager load assigned employees and project
+            ->with(['assignedEmployees', 'project'])  // Eager load relations
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         // Format the tasks with the required fields
         $formattedTasks = $tasks->map(function ($task) {
+            $isDueOverdue = $task->status !== 'done' &&
+                $task->due_date &&
+                Carbon::parse($task->due_date)->isPast();
             $assignee = $task->assignedEmployees->first(); // Get the first assignee
             return [
                 'id' => $task->id,
                 'name' => $task->name,
                 'status' => $task->status,
+                'description' => $task->description,
                 'priority' => $task->priority,
+                'due_date' => $task->due_date,
+                'start_date' => $task->start_date,
+                'is_overdue' => $isDueOverdue,
                 'assignee' => $assignee ? [
                     'id' => $assignee->id,
                     'name' => $assignee->name,
@@ -51,10 +63,10 @@ class AdminTaskController extends Controller
                         ? Storage::disk('s3')->temporaryUrl($assignee->profile_picture, now()->addMinutes(5))
                         : $this->getInitials($assignee->name)
                 ] : null,
-                'project' => [
+                'project' => $task->project ? [
                     'id' => $task->project->id,
                     'name' => $task->project->name,
-                ],
+                ] : null,
             ];
         });
 
@@ -103,7 +115,7 @@ class AdminTaskController extends Controller
             'start_date' => 'nullable|date',
             'due_date' => 'nullable|date|after_or_equal:start_date',
             'priority' => 'required|in:low,medium,high',
-            'status' => 'required|in:todo,in_progress,done,on_hold,draft',
+            'status' => 'required|in:backlog,todo,in_progress,done,cancelled,draft,on_hold',
             'project_id' => 'nullable|exists:app_projects,id',
             'assigned_employee_ids' => 'nullable|array',
             'assigned_employee_ids.*' => 'exists:employees,id',
@@ -231,21 +243,19 @@ class AdminTaskController extends Controller
     public function destroy(Request $request, $id): JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
-        $task = Task::whereHas('project', function ($query) use ($venue) {
-            $query->where('venue_id', $venue->id);
-        })->findOrFail($id);
+        $task = Task::where('venue_id', $venue->id)->findOrFail($id);
 
         // Optionally send notification to all assigned employees about task deletion
         foreach ($task->assignedEmployees as $employee) {
             $this->notificationService->sendNotification(
                 $employee,
                 'task_notifications',
-                "The task: {$task->name} in project {$task->project->name} has been deleted."
+                "Task: {$task->name} has been deleted."
             );
         }
 
         $task->delete();
-        return response()->json(['message' => 'Project deleted successfully'], 200);
+        return response()->json(['message' => 'Task deleted successfully'], 200);
     }
 
     // New method to assign an employee to a task

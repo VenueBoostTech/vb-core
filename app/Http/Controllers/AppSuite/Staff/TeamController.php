@@ -49,6 +49,7 @@ class TeamController extends Controller
         $perPage = $request->input('per_page', 15);
         $teams = Team::where('venue_id', $venue->id)
             ->with(['department', 'employees', 'departments'])
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         return response()->json([

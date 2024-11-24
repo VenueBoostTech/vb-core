@@ -43,7 +43,17 @@ class TimeEntry extends Model
         parent::boot();
 
         static::creating(function ($timeEntry) {
-            if (!$timeEntry->employee->assignedProjects->contains($timeEntry->project_id)) {
+            $project = $timeEntry->project;
+
+            $allTeamMembers = collect()
+                ->concat($project->assignedEmployees->pluck('id'))
+                ->concat($project->teamLeaders->pluck('id'))
+                ->concat($project->operationsManagers->pluck('id'))
+                ->when($project->projectManager, fn($collection) => $collection->push($project->projectManager->id))
+                ->unique()
+                ->values();
+
+            if (!$allTeamMembers->contains($timeEntry->employee_id)) {
                 throw new \Exception('Employee is not assigned to this project');
             }
         });

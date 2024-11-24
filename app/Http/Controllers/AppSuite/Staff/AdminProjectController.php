@@ -4,6 +4,7 @@ namespace App\Http\Controllers\AppSuite\Staff;
 
 use App\Http\Controllers\Controller;
 use App\Models\Address;
+use App\Models\AppClient;
 use App\Models\AppGallery;
 use App\Models\AppProject;
 use App\Models\City;
@@ -11,6 +12,7 @@ use App\Models\Country;
 use App\Models\Employee;
 use App\Models\State;
 use App\Models\Team;
+use App\Models\TimeEntry;
 use App\Services\AppNotificationService;
 use App\Services\VenueService;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -44,22 +46,33 @@ class AdminProjectController extends Controller
 
         $perPage = $request->input('per_page', 15);
         $projects = AppProject::where('venue_id', $venue->id)
-            ->with(['department', 'team', 'assignedEmployees', 'projectManager', 'timeEntries'])
+            ->with([
+                'department',
+                'team',
+                'assignedEmployees',
+                'projectManager',
+                'teamLeaders',
+                'operationsManagers',
+                'timeEntries',
+                'client'
+            ])
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         $formattedProjects = $projects->map(function ($project) {
             $totalEstimatedHours = $project->estimated_hours ?? 0;
-            $totalWorkedHours = $project->timeEntries->sum('duration') / 3600; // Convert seconds to hours
+            $totalWorkedHours = $project->timeEntries->sum('duration') / 3600;
             $progress = $totalEstimatedHours > 0 ? min(100, ($totalWorkedHours / $totalEstimatedHours) * 100) : 0;
 
-            return [
-                'id' => $project->id,
-                'name' => $project->name,
-                'start_date' => $project->start_date,
-                'end_date' => $project->end_date,
-                'status' => $project->status,
-                'progress' => round($progress, 2),
-                'assigned_employees' => $project->assignedEmployees->map(function ($employee) {
+            // Collect all team members without duplicates
+            $allTeamMembers = collect()
+                ->concat($project->assignedEmployees)
+                ->concat($project->teamLeaders)
+                ->concat($project->operationsManagers)
+                ->when($project->projectManager, fn($collection) => $collection->push($project->projectManager))
+                ->unique('id')
+                ->values()
+                ->map(function ($employee) {
                     return [
                         'id' => $employee->id,
                         'name' => $employee->name,
@@ -67,7 +80,26 @@ class AdminProjectController extends Controller
                             ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5))
                             : $this->getInitials($employee->name)
                     ];
-                })
+                });
+
+            return [
+                'id' => $project->id,
+                'name' => $project->name,
+                'description' => $project->description,
+                'start_date' => $project->start_date,
+                'end_date' => $project->end_date,
+                'status' => $project->status,
+                'progress' => round($progress, 2),
+                'project_type' => $project->project_type,
+                'project_category' => $project->project_category,
+                'estimated_budget' => $project->estimated_budget,
+                'estimated_hours' => $totalEstimatedHours,
+                'worked_hours' => round($totalWorkedHours, 2),
+                'client' => $project->client ? [
+                    'id' => $project->client->id,
+                    'name' => $project->client->name,
+                ] : null,
+                'assigned_employees' => $allTeamMembers
             ];
         });
 
@@ -99,7 +131,7 @@ class AdminProjectController extends Controller
             'description' => 'nullable|string',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'status' => 'required|string|in:' . implode(',', array_keys(AppProject::getStatuses())),
+            'status' => 'required|in:planning,in_progress,on_hold,completed,cancelled,archived,draft',
             'department_id' => 'nullable|exists:departments,id',
             'team_id' => 'nullable|exists:teams,id',
             'estimated_hours' => 'nullable|numeric|min:0',
@@ -107,13 +139,14 @@ class AdminProjectController extends Controller
             'project_manager_id' => 'nullable|exists:employees,id',
             'project_type' => 'required|string',
             'project_category' => 'required|in:inhouse,client',
-            'client_id' => 'required_if:project_category,client|exists:app_clients,id',
-            'address' => 'required|array',
-            'address.address_line1' => 'required|string|max:255',
-            'address.city_id' => 'required|exists:cities,id',
-            'address.state_id' => 'required|exists:states,id',
-            'address.country_id' => 'required|exists:countries,id',
-            'address.postal_code' => 'required|string|max:20',
+            'client_id' => 'nullable|required_if:project_category,client|exists:app_clients,id',
+            'has_different_address' => 'required|boolean',
+            'address' => 'required_if:has_different_address,true|array',
+            'address.address_line1' => 'required_if:has_different_address,true|string|max:255',
+            'address.city_id' => 'required_if:has_different_address,true|exists:cities,id',
+            'address.state_id' => 'required_if:has_different_address,true|exists:states,id',
+            'address.country_id' => 'required_if:has_different_address,true|exists:countries,id',
+            'address.postal_code' => 'required_if:has_different_address,true|string|max:20',
             'team_leader_ids' => 'nullable|array',
             'team_leader_ids.*' => 'exists:employees,id',
             'operations_manager_ids' => 'nullable|array',
@@ -129,52 +162,58 @@ class AdminProjectController extends Controller
         try {
             DB::beginTransaction();
 
-            // Address creation logic
-            $state = State::findOrFail($validated['address']['state_id']);
-            $country = Country::findOrFail($validated['address']['country_id']);
-            $city = City::findOrFail($validated['address']['city_id']);
+            // Address handling
+            $addressId = null;
+            if ($validated['has_different_address'] && isset($validated['address'])) {
+                $state = State::findOrFail($validated['address']['state_id']);
+                $country = Country::findOrFail($validated['address']['country_id']);
+                $city = City::findOrFail($validated['address']['city_id']);
 
-            $address = Address::create([
-                'address_line1' => $validated['address']['address_line1'],
-                'city_id' => $city->id,
-                'state_id' => $state->id,
-                'country_id' => $country->id,
-                'postcode' => $validated['address']['postal_code'],
-                'state' => $state->name,
-                'city' => $city->name,
-                'country' => $country->name,
-            ]);
+                $address = Address::create([
+                    'address_line1' => $validated['address']['address_line1'],
+                    'city_id' => $city->id,
+                    'state_id' => $state->id,
+                    'country_id' => $country->id,
+                    'postcode' => $validated['address']['postal_code'],
+                    'state' => $state->name,
+                    'city' => $city->name,
+                    'country' => $country->name,
+                ]);
 
-            // Project creation with address ID
-            $project = AppProject::create(array_merge($validated, [
-                'venue_id' => $venue->id,
-                'address_id' => $address->id,
-            ]));
+                $addressId = $address->id;
+            } elseif ($validated['project_category'] === 'client') {
+                // Use client's address
+                $client = AppClient::findOrFail($validated['client_id']);
+                $addressId = $client->address_id;
+            }
 
-            // Validate and attach Team Leaders
+            // Project creation
+            $project = AppProject::create(array_merge(
+                collect($validated)->except(['address', 'has_different_address', 'team_leader_ids', 'operations_manager_ids'])->toArray(),
+                [
+                    'venue_id' => $venue->id,
+                    'address_id' => $addressId,
+                ]
+            ));
+
+            // Attach Team Leaders
             if (isset($validated['team_leader_ids'])) {
                 foreach ($validated['team_leader_ids'] as $teamLeaderId) {
                     $employee = Employee::find($teamLeaderId);
-
-                    // Check if employee exists and has 'Team Leader' role
                     if (!$employee || !$employee->hasAnyRoleUpdated('Team Leader')) {
-                        return response()->json(['error' => 'Employee with ID ' . $teamLeaderId . ' is not a Team Leader'], 422);
+                        throw new \Exception('Employee with ID ' . $teamLeaderId . ' is not a Team Leader');
                     }
-
                     $project->teamLeaders()->attach($teamLeaderId);
                 }
             }
 
-            // Validate and attach Operations Managers
+            // Attach Operations Managers
             if (isset($validated['operations_manager_ids'])) {
                 foreach ($validated['operations_manager_ids'] as $operationsManagerId) {
                     $employee = Employee::find($operationsManagerId);
-
-                    // Check if employee exists and has 'Operations Manager' role
                     if (!$employee || !$employee->hasAnyRoleUpdated('Operations Manager')) {
-                        return response()->json(['error' => 'Employee with ID ' . $operationsManagerId . ' is not an Operations Manager'], 422);
+                        throw new \Exception('Employee with ID ' . $operationsManagerId . ' is not an Operations Manager');
                     }
-
                     $project->operationsManagers()->attach($operationsManagerId);
                 }
             }
@@ -383,7 +422,7 @@ class AdminProjectController extends Controller
                 'assignedEmployees',
                 'projectManager',
                 'timeEntries',
-                'tasks',
+                'tasks.assignedEmployees',
                 'client',
                 'address',
                 'service',
@@ -400,6 +439,60 @@ class AdminProjectController extends Controller
         $totalEstimatedHours = $project->estimated_hours ?? 0;
         $totalWorkedHours = $project->timeEntries->sum('duration') / 3600;
         $progress = $totalEstimatedHours > 0 ? min(100, ($totalWorkedHours / $totalEstimatedHours) * 100) : 0;
+
+        // Collect all team members without duplicates
+        $allTeamMembers = collect()
+            ->concat($project->assignedEmployees)
+            ->concat($project->teamLeaders)
+            ->concat($project->operationsManagers)
+            ->when($project->projectManager, fn($collection) => $collection->push($project->projectManager))
+            ->unique('id')
+            ->values()
+            ->map(function ($employee) use ($project) {
+                $employeeData = [
+                    'id' => $employee->id,
+                    'name' => $employee->name,
+                    'avatar' => $employee->profile_picture
+                        ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, now()->addMinutes(5))
+                        : $this->getInitials($employee->name)
+                ];
+
+                // Add tasks and time entries only for assigned employees
+                if ($project->assignedEmployees->contains('id', $employee->id)) {
+                    $employeeData['tasks'] = $project->tasks
+                        ->where('employee_id', $employee->id)
+                        ->map(function ($task) {
+                            return [
+                                'id' => $task->id,
+                                'name' => $task->name,
+                                'status' => $task->status,
+                                'time_entries' => $task->timeEntries->map(function ($timeEntry) {
+                                    return [
+                                        'id' => $timeEntry->id,
+                                        'start_time' => $timeEntry->start_time,
+                                        'end_time' => $timeEntry->end_time,
+                                        'duration' => $timeEntry->duration
+                                    ];
+                                })
+                            ];
+                        });
+
+                    $employeeData['time_entries_without_tasks'] = $project->timeEntries
+                        ->where('employee_id', $employee->id)
+                        ->whereNull('task_id')
+                        ->map(function ($timeEntry) {
+                            return [
+                                'id' => $timeEntry->id,
+                                'start_time' => $timeEntry->start_time,
+                                'end_time' => $timeEntry->end_time,
+                                'duration' => $timeEntry->duration,
+                                'description' => $timeEntry->description
+                            ];
+                        });
+                }
+
+                return $employeeData;
+            });
 
         $formattedProject = [
             'id' => $project->id,
@@ -464,49 +557,21 @@ class AdminProjectController extends Controller
                     'avatar' => $this->getAvatarUrl($manager)
                 ];
             }),
-            'assigned_employees' => $project->assignedEmployees->map(function ($employee) use ($project) {
-                return [
-                    'id' => $employee->id,
-                    'name' => $employee->name,
-                    'avatar' => $this->getAvatarUrl($employee),
-                    'tasks' => $project->tasks->where('employee_id', $employee->id)->map(function ($task) {
-                        return [
-                            'id' => $task->id,
-                            'name' => $task->name,
-                            'status' => $task->status,
-                            'time_entries' => $task->timeEntries->map(function ($timeEntry) {
-                                return [
-                                    'id' => $timeEntry->id,
-                                    'start_time' => $timeEntry->start_time,
-                                    'end_time' => $timeEntry->end_time,
-                                    'duration' => $timeEntry->duration
-                                ];
-                            })
-                        ];
-                    }),
-                    'time_entries_without_tasks' => $project->timeEntries
-                        ->where('employee_id', $employee->id)
-                        ->whereNull('task_id')
-                        ->map(function ($timeEntry) {
-                            return [
-                                'id' => $timeEntry->id,
-                                'start_time' => $timeEntry->start_time,
-                                'end_time' => $timeEntry->end_time,
-                                'duration' => $timeEntry->duration,
-                                'description' => $timeEntry->description
-                            ];
-                        })
-                ];
-            }),
-            'tasks' => $project->tasks->map(function ($task) {
+            'assigned_employees' => $allTeamMembers,
+            'tasks' => $project->tasks->map(function ($task) use ($project) {
+                $assignedEmployee = $task->assignedEmployees->first();
                 return [
                     'id' => $task->id,
                     'name' => $task->name,
                     'status' => $task->status,
-                    'assigned_to' => $task->employee ? [
-                        'id' => $task->employee->id,
-                        'name' => $task->employee->name
-                    ] : null
+                    'priority' => $task->priority ?? 'medium', // Add default priority
+                    'start_date' => $task->start_date,
+                    'due_date' => $task->due_date,
+                    'assignee' => $assignedEmployee ? [
+                        'id' => $assignedEmployee->id,
+                        'name' => $assignedEmployee->name,
+                        'avatar' => $this->getAvatarUrl($assignedEmployee)
+                    ] : null,
                 ];
             }),
             'time_entries' => $project->timeEntries->map(function ($timeEntry) {
@@ -865,6 +930,7 @@ class AdminProjectController extends Controller
         $venue = $this->venueService->adminAuthCheck();
         if ($venue instanceof JsonResponse) return $venue;
 
+        // Fetch the project based on venue_id and id
         $project = AppProject::where('venue_id', $venue->id)->find($id);
         if (!$project) {
             return response()->json(['error' => 'Project not found'], 404);
@@ -882,20 +948,84 @@ class AdminProjectController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // Validate employee assignment to project
         $employee = Employee::where('restaurant_id', $venue->id)->find($request->employee_id);
         if (!$employee) {
             return response()->json(['error' => 'Employee not found'], 404);
         }
 
-        // Get validated data and add is_manually_entered
+        // Collect all team members without duplicates
+        $allTeamMembers = collect()
+            ->concat($project->assignedEmployees()->pluck('employee_id'))
+            ->concat($project->teamLeaders()->pluck('employee_id'))
+            ->concat($project->operationsManagers()->pluck('employee_id'))
+            ->when($project->projectManager, fn($collection) => $collection->push($project->projectManager->id))
+            ->unique()
+            ->values();
+
+        $isTeamMember = $allTeamMembers->contains($request->employee_id);
+
+        if (!$isTeamMember) {
+            return response()->json(['error' => 'Employee is not assigned to this project'], 403);
+        }
+
+        // Prepare time entry data
         $timeEntryData = array_merge($validator->validated(), [
             'is_manually_entered' => true,
+            'venue_id' => $venue->id,
+            'project_id' => $project->id,
             'duration' => $this->calculateDuration($request->start_time, $request->end_time),
         ]);
 
+        // Create the time entry
         $timeEntry = $project->timeEntries()->create($timeEntryData);
 
         return response()->json(['message' => 'Time entry created successfully', 'data' => $timeEntry]);
+    }
+
+    public function getAllTimeEntries(Request $request): JsonResponse
+    {
+        // Authenticate and authorize the user
+        $venue = $this->venueService->adminAuthCheck();
+        if ($venue instanceof JsonResponse) return $venue;
+
+        // Fetch all time entries for the given venue_id
+        $timeEntries = TimeEntry::where('venue_id', $venue->id)
+            ->with(['employee', 'project', 'task'])  // Eager load relationships
+            ->orderBy('id', 'desc')
+            ->get();
+
+        if ($timeEntries->isEmpty()) {
+            return response()->json(['error' => 'No time entries found for this venue'], 404);
+        }
+
+        // Format the response data
+        $timeEntriesData = $timeEntries->map(function ($timeEntry) {
+            return [
+                'id' => $timeEntry->id,
+                'employee' => [
+                    'id' => $timeEntry->employee->id,
+                    'name' => $timeEntry->employee->name
+                ],
+                'start_time' => $timeEntry->start_time,
+                'end_time' => $timeEntry->end_time,
+                'duration' => $timeEntry->duration,
+                'description' => $timeEntry->description,
+                'task' => $timeEntry->task ? [
+                    'id' => $timeEntry->task->id,
+                    'name' => $timeEntry->task->name
+                ] : null,
+                'project' => [
+                    'project_id' => $timeEntry->project?->id ?? '#',
+                    'project_name' => $timeEntry->project?->name ?? 'Deleted/Deactivated Project'
+                ]
+            ];
+        });
+
+        return response()->json([
+            'message' => 'Time entries fetched successfully',
+            'data' => $timeEntriesData
+        ]);
     }
 
     private function calculateDuration($startTime, $endTime): int

@@ -47,6 +47,24 @@ class AuthenticationController extends Controller
                 ->first();
 
             if (!$connection) {
+                $allConnections = DB::table('venue_user_supabase_connections')
+                    ->select('user_id', 'venue_id', 'supabase_id')
+                    ->get();
+
+                return response()->json([
+                    'message' => 'Connection not found',
+                    'debug' => [
+                        'searched_for' => [
+                            'email' => $request->email,
+                            'user_id' => $user->id,
+                            'supabase_id' => $request->supabase_id
+                        ],
+                        'all_connections_in_db' => $allConnections
+                    ]
+                ], 404);
+            }
+
+            if (!$connection) {
                 return response()->json(['message' => 'Connection not found'], 404);
             }
 

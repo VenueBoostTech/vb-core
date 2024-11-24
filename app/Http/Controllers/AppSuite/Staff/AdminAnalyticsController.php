@@ -31,10 +31,10 @@ class AdminAnalyticsController extends Controller
         [$startDate, $endDate] = $this->getDateRange($request);
 
         try {
-            // Base query for services
+            // Base queries
             $servicesQuery = Service::where('services.venue_id', $venue->id);
             $serviceRequestsQuery = ServiceRequest::where('service_requests.venue_id', $venue->id)
-                ->whereBetween('created_at', [$startDate, $endDate]);
+                ->whereBetween('service_requests.created_at', [$startDate, $endDate]);
 
             // Calculate stats
             $stats = [
@@ -50,9 +50,10 @@ class AdminAnalyticsController extends Controller
                 'monthly_comparison' => $this->getMonthlyServiceComparison($venue->id)
             ];
 
-            // Service Usage Over Time
-            $serviceUsage = $serviceRequestsQuery
-                ->selectRaw('DATE_FORMAT(created_at, "%Y-%m") as month, COUNT(*) as count')
+            // Service Usage Over Time (separate query)
+            $serviceUsage = ServiceRequest::where('venue_id', $venue->id)
+                ->whereBetween('service_requests.created_at', [$startDate, $endDate])
+                ->selectRaw('DATE_FORMAT(service_requests.created_at, "%Y-%m") as month, COUNT(*) as count')
                 ->groupBy('month')
                 ->orderBy('month')
                 ->get()
@@ -75,8 +76,9 @@ class AdminAnalyticsController extends Controller
                 })
                 ->values();
 
-            // Revenue by Service
-            $revenueByService = $serviceRequestsQuery
+            // Revenue by Service (separate query)
+            $revenueByService = ServiceRequest::where('service_requests.venue_id', $venue->id)
+                ->whereBetween('service_requests.created_at', [$startDate, $endDate])
                 ->join('services', 'service_requests.service_id', '=', 'services.id')
                 ->selectRaw('services.name, COUNT(*) as bookings, SUM(services.base_price) as revenue')
                 ->groupBy('services.name')
@@ -145,11 +147,11 @@ class AdminAnalyticsController extends Controller
     private function getMonthlyServiceComparison(int $venueId): array
     {
         $currentMonth = ServiceRequest::where('service_requests.venue_id', $venueId)
-            ->whereMonth('created_at', now()->month)
+            ->whereMonth('service_requests.created_at', now()->month)
             ->count();
 
         $lastMonth = ServiceRequest::where('service_requests.venue_id', $venueId)
-            ->whereMonth('created_at', now()->subMonth()->month)
+            ->whereMonth('service_requests.created_at', now()->subMonth()->month)
             ->count();
 
         $change = $lastMonth > 0
@@ -215,7 +217,7 @@ class AdminAnalyticsController extends Controller
             $totalClients = $clientsQuery->count();
 
             $newClients = $currentPeriodClients
-                ->whereBetween('created_at', [$startDate, $endDate])
+                ->whereBetween('app_clients.created_at', [$startDate, $endDate])
                 ->count();
 
             // Active clients (those with service requests in period)
@@ -256,20 +258,23 @@ class AdminAnalyticsController extends Controller
                     'count' => $item->count
                 ]);
 
-            // Booking Frequency
+            // Booking Frequency - Fixed Query
             $bookingFrequency = DB::table('service_requests')
                 ->select('client_id')
                 ->where('service_requests.venue_id', $venue->id)
-                ->whereBetween('created_at', [$startDate, $endDate])
+                ->whereBetween('service_requests.created_at', [$startDate, $endDate])
                 ->groupBy('client_id')
-                ->selectRaw('COUNT(*) as booking_count, COUNT(DISTINCT client_id) as client_count')
-                ->groupBy('booking_count')
-                ->orderBy('booking_count')
+                ->selectRaw('COUNT(*) as booking_count')
                 ->get()
-                ->map(fn($item) => [
-                    'frequency' => "{$item->booking_count} bookings",
-                    'clients' => $item->client_count
-                ]);
+                ->groupBy('booking_count')
+                ->map(function ($group) {
+                    return [
+                        'frequency' => count($group) === 1 ? "1 booking" : count($group) . " bookings",
+                        'clients' => $group->count()
+                    ];
+                })
+                ->sortBy('booking_count')
+                ->values();
 
             // Client Acquisition Over Time
             $acquisitionTrend = $clientsQuery

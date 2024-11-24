@@ -4594,6 +4594,7 @@ class RestaurantController extends Controller
                 'onboarded' => $venue->onboarded,
                 'email' => $venue->email ?? '-',
                 'created_at' => $venue->created_at ? $venue->created_at->format('d-m-Y H:i:s') : '-',
+                'user_id' => $venue->user_id,
             ];
             $formattedVenues[] = $formattedVenue;
         }

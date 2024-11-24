@@ -31,6 +31,7 @@ class ServiceManagementController extends Controller
         $perPage = $request->input('per_page', 15);
         $categories = ServiceCategory::where('venue_id', $venue->id)
             ->withCount(['services', 'activeServices'])
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         foreach ($categories as $category) {
@@ -151,6 +152,7 @@ class ServiceManagementController extends Controller
             ->when($request->filled('status'), function ($query) use ($request) {
                 $query->where('status', $request->status);
             })
+            ->orderBy('id', 'desc')
             ->paginate($perPage);
 
         return response()->json([
