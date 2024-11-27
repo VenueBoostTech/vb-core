@@ -9,7 +9,6 @@ use Illuminate\Http\Request;
 use App\Models\Group;
 use App\Models\Product;
 use App\Models\VbStoreAttribute;
-use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\DB;
 
 class BbGroupsController extends Controller
@@ -17,26 +16,38 @@ class BbGroupsController extends Controller
     public function groupProducts(Request $request, $group_id): \Illuminate\Http\JsonResponse
     {
         try {
-            $group = Group::findOrFail($group_id);
-            // $products = Product::with('productImages')->whereHas('groups', function ($query) use ($group_id) {
-            //     $query->where('group_id', $group_id);
-            // });
+            $group = Group::whereBybestId($group_id)->first();
+            if (!@$group) {
+                return response()->json(['error' => 'Group not found'], 404);
+            }
 
             // Get product from database
             $products = Product::with('productImages')
                 ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                ->where('product_groups.group_id', $group_id);
+                ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                ->where('groups.bybest_id', '=', $group_id);
 
             // Search product by brands
             if ($request->filled('brand_id') && is_array($request->brand_id) && count($request->brand_id) != 0) {
                 $products = $products->whereIn('products.brand_id', $request->brand_id);
             }
 
+            // if ($request->filled('brand_id') && is_array($request->brand_id) && count($request->brand_id) != 0) {
+            //     $products = $products->join('brands', 'brands.id', '=', 'products.brand_id')
+            //         ->whereIn('brands.bybest_id', $request->brand_id);
+            // }
+
             // Search product by collections
             if ($request->filled('collection_id') && is_array($request->collection_id) && count($request->collection_id) != 0) {
                 $products = $products->join('product_collections', 'product_collections.product_id', '=', 'products.id')
                     ->whereIn('product_collections.collection_id', '=', $request->collection_id);
             }
+
+            // if ($request->filled('collection_id') && is_array($request->collection_id) && count($request->collection_id) != 0) {
+            //     $products = $products->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+            //         ->join('collections', 'collections.id', '=', 'product_collections.collection_id')
+            //         ->whereIn('collections.bybest_id', '=', $request->collection_id);
+            // }
 
             // Search product by minimum price
             if ($request->filled('min_price_search')) {
@@ -66,7 +77,8 @@ class BbGroupsController extends Controller
                 ->orderByRaw('LENGTH(vb_store_attributes_options.option_name) asc')
                 ->orderBy('vb_store_attributes_options.option_name', 'ASC')
                 ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                ->where('product_groups.group_id', '=', $group_id)
+                ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                ->where('groups.bybest_id', '=', $group_id)
                 ->select(
                     'vb_store_attributes.*',
                     'vb_store_attributes_options.id as option_id',
@@ -90,7 +102,8 @@ class BbGroupsController extends Controller
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha')
                 ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                ->where('product_groups.group_id', '=', $group_id)
+                ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                ->where('groups.bybest_id', '=', $group_id)
                 ->where('products.product_status', '=', 1)
                 ->whereNull('products.deleted_at')
                 ->where('products.product_status', '=', 1)
@@ -105,7 +118,8 @@ class BbGroupsController extends Controller
                 ->where('products.stock_quantity', '>', 0)
                 ->whereNotNull('products.currency_alpha')
                 ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                ->where('product_groups.group_id', '=', $group_id)
+                ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                ->where('groups.bybest_id', '=', $group_id)
                 ->where('products.product_status', '=', 1)
                 ->select('collections.*')
                 ->where('products.stock_quantity', '>', 0)
@@ -116,7 +130,8 @@ class BbGroupsController extends Controller
 
             $prices = Product::join('product_category', 'product_category.product_id', '=', 'products.id')
                 ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                ->where('product_groups.group_id', '=', $group_id)
+                ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                ->where('groups.bybest_id', '=', $group_id)
                 ->where('products.product_status', '=', 1)
                 ->whereNull('products.deleted_at')
                 ->where('products.stock_quantity', '>', 0)
@@ -136,7 +151,7 @@ class BbGroupsController extends Controller
                 // Add other necessary data
             ]);
         } catch (\Throwable $th) {
-            return response()->json(['error' => 'Group not found'], 404);
+            return response()->json(['error' => 'Something went wrong.'], 404);
         }
     }
 }

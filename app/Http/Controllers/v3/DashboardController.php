@@ -12,6 +12,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class DashboardController extends Controller
 {
@@ -189,7 +192,7 @@ class DashboardController extends Controller
                     'name',
                     'status',
                     DB::raw('(SELECT COUNT(*) FROM tasks WHERE project_id = app_projects.id) as total_tasks'),
-                    DB::raw('(SELECT COUNT(*) FROM tasks WHERE project_id = app_projects.id AND status = "completed") as completed_tasks')
+                    DB::raw("(SELECT COUNT(*) FROM tasks WHERE project_id = app_projects.id AND status = 'done') as completed_tasks") // Changed 'completed' to 'done'
                 )
                 ->get()
                 ->map(function ($project) {
@@ -270,5 +273,139 @@ class DashboardController extends Controller
     {
         $employee = Employee::find($employeeId);
         return $employee->role?->name ?? 'Staff Member';
+    }
+
+    public function export(Request $request): JsonResponse|BinaryFileResponse
+    {
+        try {
+            $venue = $this->venueService->adminAuthCheck();
+            if ($venue instanceof JsonResponse) return $venue;
+
+            $timeFrame = $request->input('time_frame', 'monthly');
+            $startDate = match($timeFrame) {
+                'weekly' => now()->subWeek(),
+                'monthly' => now()->subMonth(),
+                'quarterly' => now()->subMonths(3),
+                'yearly' => now()->subYear(),
+                default => now()->subMonth()
+            };
+
+            // Get dashboard data
+            $overview = $this->getOverview($venue->id, $startDate);
+            $performance = $this->getPerformance($venue->id, $startDate);
+            $tasks = $this->getTasks($venue->id, $startDate);
+            $projects = $this->getProjects($venue->id, $startDate);
+
+            // Create new spreadsheet
+            $spreadsheet = new Spreadsheet();
+
+            // Overview Sheet
+            $sheet = $spreadsheet->getActiveSheet();
+            $sheet->setTitle('Overview');
+
+            $sheet->setCellValue('A1', 'Overview Statistics');
+            $sheet->setCellValue('A2', 'Total Staff');
+            $sheet->setCellValue('B2', $overview['totalStaff']['count']);
+            $sheet->setCellValue('C2', $overview['totalStaff']['change']);
+
+            $sheet->setCellValue('A3', 'Average Productivity');
+            $sheet->setCellValue('B3', $overview['averageProductivity']['percentage'] . '%');
+            $sheet->setCellValue('C3', $overview['averageProductivity']['change']);
+
+            $sheet->setCellValue('A4', 'Tasks Completed');
+            $sheet->setCellValue('B4', $overview['tasksCompleted']['count']);
+            $sheet->setCellValue('C4', $overview['tasksCompleted']['change']);
+
+            $sheet->setCellValue('A5', 'Active Projects');
+            $sheet->setCellValue('B5', $overview['activeProjects']['count']);
+            $sheet->setCellValue('C5', $overview['activeProjects']['completed']);
+
+            // Productivity Trend Sheet
+            $trendSheet = $spreadsheet->createSheet();
+            $trendSheet->setTitle('Productivity Trend');
+            $trendSheet->fromArray([['Date', 'Actual %', 'Target %']]);
+
+            $trendData = array_map(function($date, $actual, $expected) {
+                return [$date, $actual, $expected];
+            },
+                $overview['productivityTrend']['dates']->toArray(),
+                $overview['productivityTrend']['actual']->toArray(),
+                $overview['productivityTrend']['expected']
+            );
+            $trendSheet->fromArray($trendData, null, 'A2');
+
+            // Top Performers Sheet
+            $performersSheet = $spreadsheet->createSheet();
+            $performersSheet->setTitle('Top Performers');
+            $performersSheet->fromArray([
+                ['Name', 'Role', 'Performance Score', 'Activities', 'Active Days', 'Completed Tasks']
+            ]);
+
+            $performerRows = array_map(function($performer) {
+                return [
+                    $performer['name'],
+                    $performer['role'],
+                    $performer['performanceScore'] . '%',
+                    $performer['stats']['activities'],
+                    $performer['stats']['activeDays'],
+                    $performer['stats']['completedTasks']
+                ];
+            }, $performance);
+            $performersSheet->fromArray($performerRows, null, 'A2');
+
+            // Tasks Status Sheet
+            $taskSheet = $spreadsheet->createSheet();
+            $taskSheet->setTitle('Tasks Overview');
+            $taskSheet->setCellValue('A1', 'Task Status Distribution');
+            $taskSheet->fromArray([
+                ['Total Tasks', $tasks['taskStatus']['total']],
+                ['Completed', $tasks['taskStatus']['completed']],
+                ['In Progress', $tasks['taskStatus']['in_progress']],
+                ['Not Started', $tasks['taskStatus']['not_started']],
+                ['Cancelled', $tasks['taskStatus']['cancelled']]
+            ], null, 'A2');
+
+            // Projects Sheet
+            $projectSheet = $spreadsheet->createSheet();
+            $projectSheet->setTitle('Projects');
+            $projectSheet->fromArray([
+                ['Project Name', 'Status', 'Completion %']
+            ]);
+
+            $projectRows = array_map(function($project) {
+                return [
+                    $project['name'],
+                    $project['status'],
+                    $project['completion'] . '%'
+                ];
+            }, $projects['statusOverview']->toArray());
+            $projectSheet->fromArray($projectRows, null, 'A2');
+
+            // Auto-size columns for all sheets
+            foreach ($spreadsheet->getAllSheets() as $sheet) {
+                foreach (range('A', $sheet->getHighestColumn()) as $col) {
+                    $sheet->getColumnDimension($col)->setAutoSize(true);
+                }
+            }
+
+            // Create file
+            $fileName = "dashboard-report-{$timeFrame}-" . now()->format('Y-m-d') . '.xlsx';
+            $tempPath = storage_path('app/temp/' . $fileName);
+
+            if (!file_exists(storage_path('app/temp'))) {
+                mkdir(storage_path('app/temp'), 0755, true);
+            }
+
+            $writer = new Xlsx($spreadsheet);
+            $writer->save($tempPath);
+
+            return response()->download($tempPath, $fileName, [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            ])->deleteFileAfterSend();
+
+        } catch (\Exception $e) {
+            \Sentry\captureException($e);
+            return response()->json(['message' => 'Failed to generate export'], 500);
+        }
     }
 }

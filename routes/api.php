@@ -1061,6 +1061,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
                 // TODO: manage these + dynamic data
                 Route::get('dashboard', [\App\Http\Controllers\v3\DashboardController::class, 'index']);
+                Route::get('dashboard/export', [\App\Http\Controllers\v3\DashboardController::class, 'export']);
                 Route::get('productivity', [\App\Http\Controllers\v3\ProductivityController::class, 'index']);
                 Route::get('productivity/export', [\App\Http\Controllers\v3\ProductivityController::class, 'export']);
                 Route::get('attendance', [\App\Http\Controllers\AppSuite\Staff\AttendanceController::class, 'index']);
@@ -1110,10 +1111,18 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::get('employees/{id}', [CompanySetupController::class, 'getEmployee']);
                 // todo: add what requires the admin side on full
                 Route::get('employees/full/{id}', [CompanySetupController::class, 'getEmployeeFullProfile']);
+                Route::get('employee/{employeeId}/time-data', [AdminStaffController::class, 'getEmployeeTimeData']);
                 Route::post('employees/{id}/status', [AdminStaffController::class, 'updateEmployeeStatus']);
                 Route::post('employees', [CompanySetupController::class, 'createEmployee']);
                 Route::post('employees-update/{id}', [CompanySetupController::class, 'updateEmployee']);
                 Route::delete('employees/{id}', [CompanySetupController::class, 'deleteEmployee']);
+
+
+                // Compliance Overview Screen
+                Route::get('compliance/status', [AdminStaffController::class, 'getCompanyComplianceStatus']);
+
+                // Compliance Report/Details
+                Route::get('compliance/report', [AdminStaffController::class, 'generateCompanyComplianceReport']);
 
                 Route::prefix('teams')->group(function () {
                     Route::get('/', [TeamController::class, 'listTeams']);

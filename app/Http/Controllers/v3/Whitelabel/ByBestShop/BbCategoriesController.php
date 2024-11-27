@@ -58,7 +58,8 @@ class BbCategoriesController extends Controller
 
             if ($request->filled('search')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $products_query = $products_query
@@ -82,7 +83,8 @@ class BbCategoriesController extends Controller
 
             if ($request->filled('search')) {
                 $filters_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $filters = $filters_query
@@ -131,7 +133,8 @@ class BbCategoriesController extends Controller
 
             if ($request->filled('search')) {
                 $brands_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $brands = $brands_query->where(function ($query) use ($category_url) {
@@ -178,7 +181,8 @@ class BbCategoriesController extends Controller
 
             if ($request->filled('search')) {
                 $collections_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $collections = $collections_query
@@ -233,7 +237,8 @@ class BbCategoriesController extends Controller
 
             if ($request->filled('search')) {
                 $prices_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $prices = $prices_query
@@ -292,7 +297,6 @@ class BbCategoriesController extends Controller
             if ($request->filled('category_url')) {
                 $products_query->where(function ($query) use ($request) {
                     $category_multiple = Category::where('category_url', '=', $request->category_url)->get();
-                    $totalCategories = [];
                     foreach ($category_multiple as $single_category) {
                         $hirearkia = Category::with(['childrenCategory'])
                             ->where('id', '=', $single_category->id)
@@ -326,25 +330,45 @@ class BbCategoriesController extends Controller
             // Filter by product group
             if ($request->filled('group_id')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->group_id);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->group_id);
             }
 
             // Filter by brands
             if ($request->filled('brand_id') && is_array($request->brand_id)) {
-                foreach ($request->brand_id as $brand) {
-                    $products_query->where('products.brand_id', '=', $brand);
-                }
+                $products_query->whereIn('products.brand_id', $request->brand_id);
+                // foreach ($request->brand_id as $brand) {
+                //     $products_query->where('products.brand_id', $brand);
+                // }
             }
+
+            // if ($request->filled('brand_id') && is_array($request->brand_id)) {
+            //     $products_query->join('brands', 'brands.id', '=', 'products.brand_id');
+            //     foreach ($request->brand_id as $brand) {
+            //         $products_query->where('brands.bybest_id', '=', $brand);
+            //     }
+            // }
 
             // Filter by collection
             if ($request->filled('collection_id') && is_array($request->collection_id)) {
                 $products_query->join('product_collections', 'product_collections.product_id', '=', 'products.id');
-                $products_query->where(function ($query) use ($request) {
-                    foreach ($request->collection_id as $collection) {
-                        $query->orWhere('product_collections.collection_id', '=', $collection);
-                    }
-                });
+                $products_query->whereIn('product_collections.collection_id', $request->collection_id);
+                // $products_query->where(function ($query) use ($request) {
+                //     foreach ($request->collection_id as $collection) {
+                //         $query->orWhere('product_collections.collection_id', '=', $collection);
+                //     }
+                // });
             }
+
+            // if ($request->filled('collection_id') && is_array($request->collection_id)) {
+            //     $products_query->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+            //         ->join('collections', 'collections.id', '=', 'product_collections.collection_id');
+            //     $products_query->where(function ($query) use ($request) {
+            //         foreach ($request->collection_id as $collection) {
+            //             $query->orWhere('collections.bybest_id', '=', $collection);
+            //         }
+            //     });
+            // }
 
             // Filter by atributes
             if ($request->filled('atributes_id') && is_array($request->atributes_id)) {

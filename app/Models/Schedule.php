@@ -91,4 +91,10 @@ class Schedule extends Model
         $this->completed_at = now();
         $this->save();
     }
+
+    public function attendanceRecords(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class, 'employee_id', 'employee_id')
+            ->whereDate('scanned_at', $this->date);
+    }
 }

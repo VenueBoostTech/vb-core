@@ -267,6 +267,7 @@ class ServiceRequestAdminController extends Controller
             $serviceRequest->activities()->create([
                 'activity_type' => 'Project Connected',
                 'description' => "Connected with project: {$project->name}",
+                'performed_by' => auth()->id(),
                 'user_id' => auth()->id()
             ]);
 
@@ -274,7 +275,7 @@ class ServiceRequestAdminController extends Controller
             return response()->json(['message' => 'Service request connected with project successfully']);
         } catch (\Exception $e) {
             DB::rollback();
-            return response()->json(['error' => 'Failed to connect service request with project'], 500);
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 

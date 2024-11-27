@@ -2175,7 +2175,7 @@ class InventorySyncController extends Controller
                                 // Dispatch job for photo upload
                                 if ($item['photo_name']) {
                                     \Log::info('Dispatching UploadPhotoJob', [
-                                        'product_id' => array_search($item['product_id'], $productIds) !== false ? array_search($item['product_id'], $productIds) : null,
+                                        'product_gallery_id' => $productGallery->id,
                                         'photo_url' => $item['photo_name'],
                                     ]);
                                     UploadPhotoJob::dispatch($productGallery, 'https://admin.bybest.shop/storage/products/' . $item['photo_name'], 'photo_name', $venue);

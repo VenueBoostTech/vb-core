@@ -19,7 +19,7 @@ class BbCollectionsController extends Controller
     // Return collection products
     public function collectionProducts(Request $request, string $collection_url): \Illuminate\Http\JsonResponse
     {
-        // try {
+        try {
             $collection = Collection::where('slug', $collection_url)->first();
             if (!@$collection) {
                 return response()->json(['error' => 'Collections not found'], 404);
@@ -47,7 +47,8 @@ class BbCollectionsController extends Controller
 
             if ($request->filled('search')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search)->distinct();
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search)->distinct();
             }
 
             $products = $products_query
@@ -177,9 +178,9 @@ class BbCollectionsController extends Controller
                 'brands' => $brands,
                 'categories' => $categories
             ]);
-        // } catch (\Throwable $th) {
-        //     return response()->json(['error' => 'Not found'], 404);
-        // }
+        } catch (\Throwable $th) {
+            return response()->json(['error' => 'Not found'], 404);
+        }
     }
 
     // Search products
@@ -192,9 +193,15 @@ class BbCollectionsController extends Controller
                 ->select('products.*')->distinct();
 
             // Filter by category
-            if ($request->filled('category_id')) {
-                $products_query->where('product_category.category_id', '=', $request->category_id)->orderBy('products.created_at', 'DESC');
+            if ($request->filled('category_id') && is_array($request->category_id)) {
+                $products_query->whereIn('product_category.category_id', $request->category_id)->orderBy('products.created_at', 'DESC');
             }
+
+            // if ($request->filled('category_id')) {
+            //     $products_query->join('categories', 'categories.id', '=', 'product_category.category_id')
+            //         ->where('categories.id', '=', $request->category_id)
+            //         ->orderBy('products.created_at', 'DESC');
+            // }
 
             // Filter by minimum price
             if ($request->filled('min_price_search')) {
@@ -209,25 +216,56 @@ class BbCollectionsController extends Controller
             // Filter by product group
             if ($request->filled('group_id')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->group_id);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->group_id);
             }
+
+            // if ($request->filled('group_id')) {
+            //     $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+            //         ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+            //         ->where('groups.bybest_id', '=', $request->search);
+            // }
 
             // Filter by brands
             if ($request->filled('brand_id') && is_array($request->brand_id)) {
-                foreach ($request->brand_id as $brand) {
-                    $products_query->where('products.brand_id', '=', $brand);
-                }
+                $products_query->whereIn('products.brand_id', $request->brand_id);
+                // foreach ($request->brand_id as $brand) {
+                //     $products_query->where('products.brand_id', '=', $brand);
+                // }
             }
 
+            // if ($request->filled('brand_id') && is_array($request->brand_id)) {
+            //     $products_query->join('brands', 'brands.id', '=', 'products.brand_id');
+            //     foreach ($request->brand_id as $brand) {
+            //         $products_query->where('brands.bybest_id', '=', $brand);
+            //     }
+            // }
+
             // Filter by collection
-            if ($request->filled('collection_id') && is_array($request->collection_id)) {
+            if ($request->filled('collection_url')) {
+                $collection = Collection::whereSlug($request->collection_url)->first();
+                if (!@$collection) {
+                    return response()->json(['error' => 'Collection not found'], 404);
+                }
+
                 $products_query->join('product_collections', 'product_collections.product_id', '=', 'products.id');
-                $products_query->where(function ($query) use ($request) {
-                    foreach ($request->collection_id as $collection) {
-                        $query->orWhere('product_collections.collection_id', '=', $collection);
-                    }
-                });
+                $products_query->where('product_collections.collection_id', $collection->id);
+                // $products_query->where(function ($query) use ($request) {
+                //     foreach ($request->collection_id as $collection) {
+                //         $query->orWhere('product_collections.collection_id', '=', $collection);
+                //     }
+                // });
             }
+
+            // if ($request->filled('collection_id') && is_array($request->collection_id)) {
+            //     $products_query->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+            //         ->join('collections', 'collections.id', '=', 'product_collections.collection_id');
+            //     $products_query->where(function ($query) use ($request) {
+            //         foreach ($request->collection_id as $collection) {
+            //             $query->orWhere('collections.bybest_id', '=', $collection);
+            //         }
+            //     });
+            // }
 
             // Filter by atributes
             if ($request->filled('atributes_id') && is_array($request->atributes_id)) {
