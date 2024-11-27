@@ -63,7 +63,8 @@ class BbBrandsController extends Controller
 
             if ($request->filled('search')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $products = $products_query
@@ -100,7 +101,8 @@ class BbBrandsController extends Controller
 
             if ($request->filled('search')) {
                 $filters_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search)->distinct();
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $filters = $filters_query->distinct()->get()->groupBy('attr_name')->sortDesc();
@@ -137,6 +139,7 @@ class BbBrandsController extends Controller
 
             if ($request->filled('search')) {
                 $categorues_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
                     ->select(
                         'categories.*',
                         DB::raw("(SELECT COUNT(product_category.product_id) FROM `product_category`) as product_count")
@@ -146,7 +149,7 @@ class BbBrandsController extends Controller
                     ->whereNotNull('products.warehouse_alpha')
                     ->whereNotNull('products.currency_alpha')
                     ->whereNull('products.deleted_at')
-                    ->where('product_groups.group_id', '=', $request->search)
+                    ->where('groups.bybest_id', '=', $request->search)
                     ->orderBy('categories.order_no', 'ASC')
                     ->orderBy('categories.category', 'ASC');
             }
@@ -199,7 +202,8 @@ class BbBrandsController extends Controller
 
             if ($request->filled('search')) {
                 $collectons_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $collections = $collectons_query->orderBy('collections.name', 'ASC')->distinct()->get();
@@ -218,7 +222,8 @@ class BbBrandsController extends Controller
 
             if ($request->filled('search')) {
                 $prices_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
-                    ->where('product_groups.group_id', '=', $request->search);
+                    ->join('groups', 'groups.id', '=', 'product_groups.group_id')
+                    ->where('groups.bybest_id', '=', $request->search);
             }
 
             $prices = $prices_query->first();

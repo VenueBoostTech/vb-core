@@ -1530,6 +1530,7 @@ class AuthController extends Controller
             'email' => 'required|email|unique:users',
             'first_name' => 'required|string',
             'last_name' => 'required|string',
+            'city'=> 'required|string',
             'password' => 'required|string',
             'source' => 'required|string',
             'phone_number' => 'required|string',
