@@ -164,7 +164,7 @@ class HomePageController extends Controller
         // Marrim menus të cache-uar
         $cacheKey = "menus:{$venue->id}";
         $menus = Cache::remember($cacheKey, 500, function () use ($venue) {
-            return BbMainMenu::with('menuChildren')
+            return BbMainMenu::with(['menuChildren', 'group:id,bybest_id'])
                 // select all columns from `bb_main_menus` table
                 ->select('*')
                 ->where('venue_id', $venue->id)

@@ -580,7 +580,7 @@ class InventorySyncController extends Controller
                                 $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
                                 // $brand = Brand::withTrashed()->where('bybest_id', $item['brand_id'])->first();
-                                $synced_product = Product::updateOrCreate(
+                                $synced_product = Product::withTrashed()->updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
                                         'title' => $title,
@@ -744,7 +744,7 @@ class InventorySyncController extends Controller
                                 $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
                                 $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
-                                $synced_brand = Brand::updateOrCreate(
+                                $synced_brand = Brand::withTrashed()->updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
                                         'title' => $item['brand_name'],
