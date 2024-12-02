@@ -11,7 +11,8 @@ class Quiz extends Model
 
     protected $fillable = [
         'blog_id',
-        'title'
+        'title',
+        'venue_id',
     ];
 
     public function blog(): \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -32,5 +33,10 @@ class Quiz extends Model
     public function quizSessions(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(QuizUserSession::class);
+    }
+
+    public function venue(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Restaurant::class, 'venue_id');
     }
 }

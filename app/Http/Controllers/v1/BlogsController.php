@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Blog;
 use App\Models\BlogCategory;
 use App\Models\Photo;
+use App\Models\Restaurant;
 use App\Models\WebsiteStatistic;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -681,6 +682,110 @@ class BlogsController extends Controller
         ]);
     }
 
+    public function blogsListMetroshop(Request $request): \Illuminate\Http\JsonResponse
+    {
+
+        $apiCallVenueAppKey = request()->get('venue_app_key');
+        if (!$apiCallVenueAppKey) {
+            return response()->json(['error' => 'Venue app key is required'], 400);
+        }
+
+        $venue = Restaurant::where('app_key', $apiCallVenueAppKey)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'category' => 'sometimes|string',
+            'page' => 'sometimes|integer|min:1',
+            'per_page' => 'sometimes|integer|min:1|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        $query = Blog::with('categories')
+            ->where('restaurant_id', $venue->id);
+
+        $categoryName = $request->input('category');
+        if (!empty($categoryName)) {
+            $query->whereHas('categories', function ($query) use ($categoryName) {
+                $query->where('name', '=', $categoryName);
+            });
+        }
+
+
+        $perPage = $request->input('per_page', 10);
+        $page = $request->input('page', 1);
+
+        $blogs = $query->orderBy('created_at', 'desc')
+            ->paginate($perPage, ['id', 'title', 'slug', 'slug_related', 'created_at', 'image', 'tags', 'body', 'read_time', 'show_quiz'], 'page', $page);
+        $blogs->getCollection()->transform(function ($blog) {
+            return [
+                'id' => $blog->id,
+                'title_en' => $blog->title,
+                'title_al' => $blog->title_al,
+                'slug' => $blog->slug,
+                'slug_related' => $blog->slug_related,
+                'date' => $blog->created_at ? $blog->created_at->format('F j, Y') : '-',
+                'image' => $this->getImageUrl($blog),
+                'tags' => $blog->tags,
+                'read_time' => $blog->read_time,
+                'show_quiz' => $blog->show_quiz,
+                'categories' => $blog->categories,
+            ];
+        });
+
+        return response()->json([
+            'data' => $blogs->items(),
+            'current_page' => $blogs->currentPage(),
+            'last_page' => $blogs->lastPage(),
+            'per_page' => $blogs->perPage(),
+            'total' => $blogs->total(),
+        ]);
+    }
+
+    public function getBlogMetroshop(Request $request, $slug): \Illuminate\Http\JsonResponse
+    {
+        $apiCallVenueAppKey = request()->get('venue_app_key');
+        if (!$apiCallVenueAppKey) {
+            return response()->json(['error' => 'Venue app key is required'], 400);
+        }
+
+        $venue = Restaurant::where('app_key', $apiCallVenueAppKey)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $blog = Blog::with('categories')
+            ->where('restaurant_id', $venue->id)
+            ->where('slug', $slug)
+            ->first();
+
+        if (!$blog) {
+            return response()->json(['error' => 'Blog not found'], 404);
+        }
+
+        $data = [
+            'id' => $blog->id,
+            'title_en' => $blog->title,
+            'title_al' => $blog->title_al,
+            'slug' => $blog->slug,
+            'slug_related' => $blog->slug_related,
+            'date' => $blog->created_at ? $blog->created_at->format('F j, Y') : '-',
+            'image' => $this->getImageUrl($blog),
+            'tags' => $blog->tags,
+            // 'body' => $blog->body,
+            'content_en' => $blog->content,
+            'content_al' => $blog->content_al,
+            'read_time' => $blog->read_time,
+            'show_quiz' => $blog->show_quiz,
+            'categories' => $blog->categories,
+        ];
+
+        return response()->json($data);
+    }
     public function searchBlogs(Request $request): \Illuminate\Http\JsonResponse
     {
         $validator = Validator::make($request->all(), [
@@ -892,6 +997,20 @@ class BlogsController extends Controller
         }
     }
 
+    protected function generateUniqueSlug($title): string
+    {
+        $baseSlug = Str::slug($title);
+        $slug = $baseSlug;
+        $counter = 2;
+
+        while (Blog::where('slug', $slug)->exists()) {
+            $slug = $baseSlug . '-' . $counter;
+            $counter++;
+        }
+
+        return $slug;
+    }
+
     public function storeBlog(Request $request): \Illuminate\Http\JsonResponse
     {
 
@@ -921,7 +1040,7 @@ class BlogsController extends Controller
 
         $requestType = 'gallery';
 
-        $slug = Str::slug($request->input('title'));
+        $slug = $this->generateUniqueSlug($request->input('title'));
         $slugRelated = "/blog/{$slug}";
 
         $path = null;

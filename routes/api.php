@@ -226,8 +226,10 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
     });
 
     Route::group(['prefix' => 'web'], function () {
+        Route::get('/country-city-state', 'App\Http\Controllers\v2\WebController@getCSCConfig');
         Route::post('/contact', 'App\Http\Controllers\v2\WebController@contact');
         Route::post('/update-statistics', 'App\Http\Controllers\v2\WebController@updateMarketingStatistics');
+
     });
 
     Route::group(['prefix' => 'ai'], function () {
@@ -239,6 +241,11 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::get('/blogs/{slug}', 'App\Http\Controllers\v1\BlogsController@getOneBlog');
         Route::post('/chat', 'App\Http\Controllers\v1\AI\ChatbotController@sendChat');
         Route::get('/search-blogs', 'App\Http\Controllers\v1\BlogsController@searchBlogs');
+
+        Route::get('/blogs-list-metroshop', 'App\Http\Controllers\v1\BlogsController@blogsListMetroshop');
+        Route::get('/blogs-list-metroshop/{slug}', 'App\Http\Controllers\v1\BlogsController@getBlogMetroshop');
+        Route::post('/suggest-quiz-metroshop', 'App\Http\Controllers\v1\AI\Web\QuizzesController@suggestQuizMetroshop');
+        Route::post('/store-quiz-answers-metroshop', 'App\Http\Controllers\v1\AI\Web\QuizzesController@storeQuizAnswersMetroshop');
 
     });
 
@@ -1045,6 +1052,8 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
         Route::group(['prefix' => 'marketing'], function () {
             Route::get('referrals', 'App\Http\Controllers\v1\ReferralsController@getReferrals');
             Route::patch('/referrals', 'App\Http\Controllers\v1\ReferralsController@updateUserReferralCreditFor');
+            Route::get('quizzes', 'App\Http\Controllers\v1\AI\Web\QuizzesController@quizListMetroshop');
+            Route::put('/update-quiz-config', 'App\Http\Controllers\v1\AI\Web\QuizzesController@updateQuizMetroshop');
         });
 
         Route::group(['prefix' => 'ai'], function () {
