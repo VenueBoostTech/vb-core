@@ -11,6 +11,7 @@ class InventoryActivity extends Model
 
     protected $fillable = [
         'inventory_id',
+        'inventory_retail_id',
         'product_id',
         'order_id',
         'quantity',
@@ -29,6 +30,10 @@ class InventoryActivity extends Model
     public function inventory()
     {
         return $this->belongsTo(Inventory::class);
+    }
+    public function inventoryRetail()
+    {
+        return $this->belongsTo(InventoryRetail::class);
     }
 
     public function order()

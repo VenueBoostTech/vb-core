@@ -792,4 +792,14 @@ class Restaurant extends Model
     {
         return $this->hasMany(AppSupportTicket::class, 'venue_id');
     }
+
+    public function quizConfiguration(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(QuizConfiguration::class, 'venue_id');
+    }
+
+    public function quizzes(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Quiz::class, 'venue_id');
+    }
 }

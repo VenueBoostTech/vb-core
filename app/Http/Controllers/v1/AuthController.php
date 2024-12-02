@@ -14,6 +14,10 @@ use App\Models\Guest;
 use App\Models\HotelRestaurant;
 use App\Models\LoginActivity;
 use App\Models\MarketingLink;
+use App\Models\Quiz;
+use App\Models\QuizConfiguration;
+use App\Models\QuizUserResponse;
+use App\Models\QuizUserSession;
 use App\Models\Restaurant;
 use App\Models\RestaurantConfiguration;
 use App\Models\Subscription;
@@ -221,7 +225,9 @@ class AuthController extends Controller
 
         UserActivityLogger::log(auth()->user()->id, 'Login');
 
-        return $this->respondWithTokenForEndUser($token, $request->source, $request->password);
+        $sessionId = $request->session_id;
+
+        return $this->respondWithTokenForEndUser($token, $request->source, $request->password, $sessionId);
     }
 
     /**
@@ -547,7 +553,7 @@ class AuthController extends Controller
         ]);
     }
 
-    protected function respondWithTokenForEndUser(string $token, string $source, string $password): JsonResponse
+    protected function respondWithTokenForEndUser(string $token, string $source, string $password, $sessionId): JsonResponse
     {
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
         $refreshTtl = $ttl * 8;
@@ -643,6 +649,36 @@ class AuthController extends Controller
         } else {
             // If source is neither bybest.shop_web nor metrosuites
             $venue = null;
+        }
+
+        // In respondWithTokenForEndUser method:
+        if ($sessionId) {
+            // Find quiz session and update user ID
+            $quizSession = QuizUserSession::where('session_id', $sessionId)->first();
+            if ($quizSession) {
+                $quizSession->user_id = $user->id;
+                $quizSession->save();
+
+                // Update associated quiz responses with user ID
+                QuizUserResponse::where('session_id', $sessionId)
+                    ->update(['user_id' => $user->id]);
+
+                // Calculate points earned for CRM update
+                $quizConfig = QuizConfiguration::where('venue_id', $venue->id)->first();
+                if ($quizConfig) {
+                    $correctAnswers = QuizUserResponse::where('session_id', $sessionId)
+                        ->where('is_correct', 1)
+                        ->count();
+
+                    $pointsEarned = min(
+                        $correctAnswers * $quizConfig->earn_per_correct_answer,
+                        $quizConfig->max_earn
+                    );
+
+                    // Here you can add logic to update CRM with points earned
+                    // TODO: Implement CRM points update
+                }
+            }
         }
 
         return response()->json([
@@ -1603,6 +1639,32 @@ class AuthController extends Controller
 
             if (!$customerAddress) {
                 return response()->json(['error' => 'Customer Address is not created'], 400);
+            }
+
+            if ($request->session_id) {
+                // Find and update quiz session with the new user ID
+                $quizSession = QuizUserSession::where('session_id', $request->session_id)->first();
+                if ($quizSession) {
+                    $quizSession->user_id = $user->id;
+                    $quizSession->save();
+
+                    // Update all associated quiz responses with the user ID
+                    QuizUserResponse::where('session_id', $request->session_id)
+                        ->update(['user_id' => $user->id]);
+
+                    // Calculate earned points for CRM integration
+                    $quizConfig = QuizConfiguration::where('venue_id', $venue->id)->first();
+                    if ($quizConfig) {
+                        $correctAnswers = QuizUserResponse::where('session_id', $request->session_id)
+                            ->where('is_correct', 1)
+                            ->count();
+
+                        $pointsEarned = min(
+                            $correctAnswers * $quizConfig->earn_per_correct_answer,
+                            $quizConfig->max_earn
+                        );
+                    }
+                }
             }
 
             // Insert user to CRM Pixel Breeze
