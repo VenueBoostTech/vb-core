@@ -473,6 +473,7 @@ class DashboardController extends Controller
 
         // General Data
         $totalRevenue = Booking::where('venue_id', $venue->id)
+            ->whereIn('status', ['confirmed', 'completed']) // Include only relevant statuses
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('check_in_date', [$startDate, $endDate])
                     ->orWhereBetween('check_out_date', [$startDate, $endDate])
@@ -516,6 +517,7 @@ class DashboardController extends Controller
             DB::raw('SUM(total_amount) as revenue')
         )
             ->where('venue_id', $venue->id)
+            ->whereIn('status', ['confirmed', 'completed']) // Include only relevant statuses
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('check_in_date', [$startDate, $endDate])
                     ->orWhereBetween('check_out_date', [$startDate, $endDate])
@@ -527,6 +529,7 @@ class DashboardController extends Controller
             ->groupBy(DB::raw('DATE(check_in_date)'))
             ->orderBy('date', 'asc')
             ->get();
+
 
         // Booking Schedule
         $bookingSchedule = Booking::select(
@@ -561,7 +564,8 @@ class DashboardController extends Controller
             ->get()
             ->map(function($booking) {
                 return [
-                    'booking_id' => $booking->receipt->receipt_id,
+                    'id' => $booking->id,
+                    'booking_id' => $booking->confirmation_code,
                     'guest_name' => $booking->guest->name,
                     'check_in_date' => $booking->check_in_date,
                     'check_out_date' => $booking->check_out_date,

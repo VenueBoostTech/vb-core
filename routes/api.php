@@ -613,6 +613,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::get('/', 'App\Http\Controllers\v1\BookingController@index');
                 Route::get('/{id}', 'App\Http\Controllers\v1\BookingController@getBookingDetails');
                 Route::patch('/change-status', 'App\Http\Controllers\v1\BookingController@changeStatus');
+                Route::patch('/paid', 'App\Http\Controllers\v1\BookingController@paid');
             });
         });
 

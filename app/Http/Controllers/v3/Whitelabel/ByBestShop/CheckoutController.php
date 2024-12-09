@@ -603,6 +603,7 @@ class CheckoutController extends Controller
             }
 
             if ($payment_method == 'cash') {
+                $new_customer = null;
                 if($request->email) {
                     $customer = User::where('email', $request->email)->first();
                     if(!$customer) {
@@ -652,6 +653,35 @@ class CheckoutController extends Controller
                                 \Sentry\captureException($e);
                             }
                         }
+                    } else {
+                        $new_customer = Customer::where('email', $request->email)->first();
+                        if(!$new_customer) {
+                            $newCustomer = Customer::create([
+                                'name' => $request->first_name . $request->last_name,
+                                'email' => $request->email,
+                                'phone' => $request->phone,
+                                'address' => $request->address,
+                            ]);
+
+                            $newCustomer->assignRole('client');
+
+                            try {
+                                $data_string = [
+                                    "crm_client_customer_id" => $new_user->id,
+                                    "source" => "bybest.shop_web",
+                                    "firstName" => $new_user->first_name,
+                                    "lastName" => $new_user->last_name,
+                                    "email" => $new_user->email,
+                                    "phone" => $newCustomer->phone,
+                                    "email_type" => "welcome"
+                                ];
+                                $response = Http::withHeaders([
+                                    "Content-Type" => "application/json",
+                                ])->post('https://crmapi.pixelbreeze.xyz/api/create-crm-cart-session', $data_string);
+                            } catch (\Exception $e) {
+                                \Sentry\captureException($e);
+                            }
+                        }   
                     }
                 } else {
                     $temp_email = $this->unique_code(10).'@temp.com';
@@ -752,7 +782,7 @@ class CheckoutController extends Controller
                 $order_id = $orders->id;
 
                 foreach ($order_products as $productData) {
-                    $product = Product::find($productData['id']);
+                    $product = Product::where('id', $productData['id'])->first();
                     if (!$product) continue;
 
                     $sale_valid = false;
@@ -794,20 +824,19 @@ class CheckoutController extends Controller
                 ];
 
                 $paymentInfo = $this->bktPaymentService->initiatePayment($orderDetails);
-
+                foreach($order_products as $productData) {
+                    $product = Product::where('id', $productData['id'])->first();
+                    if ($product) {
+                        $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $result_order->id);
+                    }
+                }
                 return response()->json([
                     'status' => 'success',
                     'payment_url' => $paymentInfo['url'],
                     'payment_data' => $paymentInfo['data']
                 ]);
             }
-
-            foreach($order_products as $productData) {
-                $product = Product::find($productData['id']);
-                if ($product) {
-                    $this->inventoryService->deductStock($product, $productData['product_quantity']);
-                }
-            }
+          
 
             // if ($venue->email) {
             //     Mail::to($venue->email)->send(new NewOrderEmail($venue->name));
@@ -945,7 +974,7 @@ class CheckoutController extends Controller
 
     public function pricing(Request $request)
     {
-        $app_key = $request->input('app_key');
+        $app_key = $request->input('venue_app_key');
         $venue = Restaurant::where('app_key', $app_key)->first();
         if (!$venue) {
             return response()->json(['message' => 'Venue not found'], 404);

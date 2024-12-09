@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Traits\HasOperationalFeatures;
+use App\Traits\HasEquipment;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -14,6 +16,8 @@ class AppProject extends Model
 {
     use HasFactory, SoftDeletes;
 
+    use HasOperationalFeatures;
+    use HasEquipment;
     // Add project source constants
     public const SOURCE_MANUAL = 'manual';
     public const SOURCE_SERVICE_REQUEST = 'service_request';

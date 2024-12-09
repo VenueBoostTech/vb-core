@@ -95,4 +95,43 @@ class AppClient extends Model
             ->where('sender_type', 'client');
     }
 
+    public function serviceTickets(): HasMany
+    {
+        return $this->hasMany(ServiceTicket::class, 'client_id');
+    }
+
+    public function pendingServiceTickets(): HasMany
+    {
+        return $this->serviceTickets()
+            ->whereIn('status', [
+                ServiceTicket::STATUS_SCHEDULED,
+                ServiceTicket::STATUS_IN_PROGRESS,
+                ServiceTicket::STATUS_PENDING_SIGN_OFF
+            ]);
+    }
+
+    public function completedServiceTickets(): HasMany
+    {
+        return $this->serviceTickets()
+            ->where('status', ServiceTicket::STATUS_SIGNED_OFF);
+    }
+
+    public function getPendingSignOffsAttribute()
+    {
+        return $this->serviceTickets()
+            ->where('status', ServiceTicket::STATUS_PENDING_SIGN_OFF)
+            ->count();
+    }
+
+    public function getServiceHistoryAttribute()
+    {
+        return $this->serviceTickets()
+            ->with(['service', 'photos'])
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy(function($ticket) {
+                return $ticket->created_at->format('Y-m');
+            });
+    }
+
 }

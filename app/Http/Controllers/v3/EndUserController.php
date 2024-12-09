@@ -5,6 +5,7 @@ namespace App\Http\Controllers\v3;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\v1\OrdersController;
 use App\Mail\PasswordConfirmationMail;
+use App\Mail\EndUserPasswordConfirmationMail;
 use App\Models\Address;
 use App\Models\Chat;
 use App\Models\City;
@@ -19,12 +20,14 @@ use App\Models\Order;
 use App\Models\Product;
 use App\Models\Promotion;
 use App\Models\Receipt;
+use App\Models\Restaurant;
 use App\Models\State;
 use App\Models\StoreSetting;
 use App\Models\User;
 use App\Models\Wallet;
 use App\Models\WishlistItem;
 use App\Models\UserActivityLog;
+use App\Models\Discount;
 use App\Helpers\UserActivityLogger;
 use App\Services\EndUserService;
 use Carbon\Carbon;
@@ -407,10 +410,15 @@ class EndUserController extends Controller
         // Extract data from CRM response
         $crmData = $crmResponse['result']['endUser'];
 
+        // Get balance and calculate money value (100 points = 1 EUR)
+        $balance = $crmData['wallet']['balance'] ?? 0;
+        $moneyValue = $balance > 0 ? ($balance / 100) : 0;
+
         // Prepare wallet info response
         $walletInfo = new \stdClass();
-        $walletInfo->balance = $crmData['wallet']['balance'] ?? 0;
-        $walletInfo->currency = 'Lek';
+        $walletInfo->balance = $balance;
+        $walletInfo->currency = 'EUR';
+        $walletInfo->money_value = number_format($moneyValue, 2, '.', ''); // Format to 2 decimal places
         $walletInfo->walletActivities = $crmData['wallet']['transactions'] ?? [];
         $walletInfo->referralsList = $crmData['referrals'] ?? [];
         $walletInfo->loyaltyTier = $crmData['currentTierName'] ?? null;
@@ -584,35 +592,60 @@ class EndUserController extends Controller
         }
 
         $user = $userOrResponse;
+        $venueId = $user->guest?->restaurant_id;
+        $perPage = $request->get('per_page', 10);
+        $type = $request->get('type', 'all'); // Options: all, current, past, used
 
-        $perPage = $request->get('per_page');
-        $all_promotions = Promotion::with(['discounts', 'coupons'])
-            ->where('venue_id', $user->guest?->restaurant_id)
-            ->where('status', 1)
-            ->paginate($perPage);
+        $baseQuery = Promotion::with(['discounts', 'coupons'])
+            ->where('venue_id', $venueId);
 
-        $paginatedData = [
-            'data' => $all_promotions->items(),
-            'current_page' => $all_promotions->currentPage(),
-            'per_page' => $all_promotions->perPage(),
-            'total' => $all_promotions->total(),
-            'total_pages' => $all_promotions->lastPage(),
-        ];
+        switch ($type) {
+            case 'current':
+                $promotions = $baseQuery
+                    ->where('status', 1)
+                    ->whereDate('end_time', '>=', Carbon::now())
+                    ->paginate($perPage);
+                break;
 
-        $all_promotions = Promotion::with(['discounts', 'coupons']);
+            case 'past':
+                $promotions = $baseQuery
+                    ->whereDate('end_time', '<', Carbon::now())
+                    ->paginate($perPage);
+                break;
 
-        // You can still keep the additional promotion filtering if needed
-        $currentPromotions = $all_promotions->where('status', 1)->paginate($perPage);
-        $pastPromotions = $all_promotions->whereDate('end_time', '<', Carbon::now()->toDateTimeString())->paginate($perPage);
-//        $usedPromotions = $all_promotions->whereHas('orders', function ($query) use ($user) {
-//            $query->where('guest_id', $user->guest?->id);
-//        })->paginate($perPage);
+            case 'used':
+                $promotions = $baseQuery
+                    ->with([
+                        'discounts' => function ($query) use ($user) {
+                            $query->whereHas('bookings', function ($bookingQuery) use ($user) {
+                                $bookingQuery->where('guest_id', $user->guest?->id);
+                            })
+                                ->with(['bookings' => function ($bookingQuery) use ($user) {
+                                    $bookingQuery->select('id', 'discount_id', 'discount_price')
+                                        ->where('guest_id', $user->guest?->id);
+                                }]);
+                        }
+                    ])
+                    ->whereHas('discounts.bookings', function ($query) use ($user) {
+                        $query->where('guest_id', $user->guest?->id);
+                    })
+                    ->paginate($perPage);
+                break;
+
+            default: // 'all'
+                $promotions = $baseQuery
+                    ->where('status', 1)
+                    ->paginate($perPage);
+                break;
+        }
 
         return response()->json([
-            'promotions' => $paginatedData,
-            'current_promotions' => $currentPromotions,
-            'past_promotions' => $pastPromotions,
-            'used_promotions' => [],
+            'message' => 'Promotions retrieved successfully',
+            'data' => $promotions->items(),
+            'current_page' => $promotions->currentPage(),
+            'per_page' => $promotions->perPage(),
+            'total' => $promotions->total(),
+            'total_pages' => $promotions->lastPage(),
         ], 200);
     }
 
@@ -645,7 +678,10 @@ class EndUserController extends Controller
         $user->password = Hash::make($request->newPassword);
         $user->save();
 
-        Mail::to($user->email)->send(new PasswordConfirmationMail($user->email, $user->name));
+        $venueId = $user->guest?->restaurant_id ?? $user->customer->venue_id;
+        $venue = Restaurant::where('id', $venueId)->first();
+        $venueLogo = $venue->logo ? Storage::disk('s3')->temporaryUrl($venue->logo, '+8000 minutes') : null;
+        Mail::to($user->email)->send(new EndUserPasswordConfirmationMail($user->email, $user->name, $venue->name, $venueLogo));
 
         UserActivityLogger::log(auth()->user()->id, 'Reset password');
 
@@ -905,7 +941,7 @@ class EndUserController extends Controller
                 ]);
             }
 
-            $address = Address::where('id', $request->aId)->exists();
+            $address = Address::where('id', $request->aId)->first();
             if($address) {
                 $address->address_line1 = $request->street_address;
                 $address->state = $request->state;

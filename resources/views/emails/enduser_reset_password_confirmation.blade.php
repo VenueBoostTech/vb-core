@@ -2,7 +2,6 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>{{$subject}}</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap');
 
@@ -93,12 +92,36 @@
         </tr>
         </tbody>
     </table>
-
-    <!-- Subject/Content Section -->
-    <h1>{{$subject}}</h1>
-    <p>{{$content}}</p>
-
-
+    <tr>
+        <td align="left" class="txt middle" style="
+																		font-size: 0px;
+																		word-break: break-word;
+																		border-collapse: collapse;
+																		mso-table-lspace: 0pt;
+																		mso-table-rspace: 0pt;
+																		padding: 0px 0px 20px;
+																	">
+            <div style="
+																			font-family: Manrope, Arial, sans-serif;
+																			font-size: 16px;
+																			line-height: 30px;
+																			color: #000000;
+																		" align="left">
+            <span style="
+																				mso-line-height-rule: exactly;
+																				font-size: 16px;
+																				font-family: Manrope, Arial, sans-serif;
+																				text-transform: none;
+																				font-style: none;
+																				font-weight: 400;
+																				color: #666666;
+																				line-height: 30px;
+																				letter-spacing: 0px;
+																				text-decoration: initial;
+																			"> You have changed your password successfully. If this is not done by your please contact {{$venue_name}} Team. </span>
+            </div>
+        </td>
+    </tr>
     <!-- Footer Section -->
     <div class="footer">
         <p>&copy; {{$venue_name}} on VenueBoost. All Rights Reserved.</p>

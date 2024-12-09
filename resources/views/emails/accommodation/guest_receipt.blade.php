@@ -17,6 +17,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <!--
 
+
 						<![endif]-->
     <title></title>
     <style type="text/css">
@@ -176,6 +177,7 @@
     <link href="https://fonts.googleapis.com/css?family=Raleway:400,700&display=swap" rel="stylesheet" type="text/css">
     <!--
 
+
 							<![endif]-->
 </head>
 <body class="clean-body u_body" style="margin: 0;padding: 0;-webkit-text-size-adjust: 100%;background-color: #ffffff;color: #000000">
@@ -214,6 +216,7 @@
                                 <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                     <!--
 
+
                                                                                                                             <![endif]-->
                                     <table id="u_content_text_2" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
@@ -229,11 +232,12 @@
                                         </tbody>
                                     </table>
                                     <!--[if (!mso)&(!IE)]>
-                                                                                                                            <!-->
+                                                                                                                                <!-->
                                 </div>
                                 <!--
 
-                                                                                                                      <![endif]-->
+
+                                                                                                                          <![endif]-->
                             </div>
                         </div>
                         <!--[if (mso)|(IE)]>
@@ -265,11 +269,12 @@
                         <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
                             <div style="background-color: #ffffff;height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                 <!--[if (!mso)&(!IE)]>
-                                                                                                                      <!-->
+                                                                                                                          <!-->
                                 <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                     <!--
 
-                                                                                                                            <![endif]-->
+
+                                                                                                                                <![endif]-->
                                     <table style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
@@ -295,7 +300,7 @@
                                                             <tbody>
                                                             <tr style="padding:0;vertical-align:top;text-align:left">
                                                                 <th style="color:#0a0a0a;font-family:'Raleway',sans-serif;font-weight:normal;padding:0;text-align:left;font-size:16px;line-height:19px;margin:0 auto;padding-bottom:16px;width:564px;padding-left:16px;padding-right:16px">
-                                                                    <p style="padding:0;margin:0;text-align:left;font-family:'Raleway',sans-serif;max-width:485px;font-weight:700;color:#484848;font-size:24px;line-height:28px;margin-bottom:0!important"> Your receipt from  {{$guest_receipt_data['rental_unit_name']}} </p>
+                                                                    <p style="padding:0;margin:0;text-align:left;font-family:'Raleway',sans-serif;max-width:485px;font-weight:700;color:#484848;font-size:24px;line-height:28px;margin-bottom:0!important"> Your receipt from {{$guest_receipt_data['rental_unit_name']}} </p>
                                                                 </th>
                                                             </tr>
                                                             </tbody>
@@ -366,7 +371,9 @@
                                                                             <tbody>
                                                                             <tr style="padding:0;vertical-align:top;text-align:left">
                                                                                 <th style="color:#0a0a0a;font-family:'Raleway',sans-serif;font-weight:normal;padding:0;margin:0;text-align:left;font-size:16px;line-height:19px;width:100%">
-                                                                                    <p style="padding:0;margin:0;text-align:left;font-family:'Raleway',sans-serif;font-size:14px;font-weight:300;line-height:19px;margin-bottom:2px;color:#6f6f6f">  {{$guest_receipt_data['check_in_date']}} <img alt="" src="https://ci5.googleusercontent.com/proxy/8DF3DPgr4TOmN1G5ybdITmZ5hljrpEqiFyf0YfdYiilvL8eJHh782lloUEH5FyDxzUbnnp_ZmWefJIwKTJJFtGBI3y7LLXBrwIrbr6bu5S6957ag1JL7vtu7ISNTcP1yjYJ5im0kT_yWVyHBJg=s0-d-e1-ft#https://a0.muscache.com/airbnb/rookery/dls/arrow-next-dd335273a9fadaf4aec452dde11d35c6.png" style="outline:none;text-decoration:none;width:auto;clear:both;display:inline;max-width:24px;max-height:19px;margin:0 auto;float:none;text-align:center" class="CToWUd" data-bit="iit"> {{$guest_receipt_data['check_out_date']}} </p>
+                                                                                    <p style="padding:0;margin:0;text-align:left;font-family:'Raleway',sans-serif;font-size:14px;font-weight:300;line-height:19px;margin-bottom:2px;color:#6f6f6f"> {{$guest_receipt_data['check_in_date']}}
+                                                                                        <img alt="" src="https://ci5.googleusercontent.com/proxy/8DF3DPgr4TOmN1G5ybdITmZ5hljrpEqiFyf0YfdYiilvL8eJHh782lloUEH5FyDxzUbnnp_ZmWefJIwKTJJFtGBI3y7LLXBrwIrbr6bu5S6957ag1JL7vtu7ISNTcP1yjYJ5im0kT_yWVyHBJg=s0-d-e1-ft#https://a0.muscache.com/airbnb/rookery/dls/arrow-next-dd335273a9fadaf4aec452dde11d35c6.png" style="outline:none;text-decoration:none;width:auto;clear:both;display:inline;max-width:24px;max-height:19px;margin:0 auto;float:none;text-align:center" class="CToWUd" data-bit="iit"> {{$guest_receipt_data['check_out_date']}}
+                                                                                    </p>
                                                                                     <p style="padding:0;margin:0;text-align:left;font-family:'Raleway',sans-serif;font-size:14px;font-weight:300;line-height:19px;margin-bottom:2px;color:#6f6f6f"> {{$guest_receipt_data['rental_type']}} · {{$guest_receipt_data['nr_of_guests']}} guests </p>
                                                                                     <p style="padding:0;margin:0;text-align:left;font-family:'Raleway',sans-serif;font-size:14px;font-weight:300;line-height:19px;margin-bottom:2px;color:#6f6f6f"> Confirmation code: {{$guest_receipt_data['confirmation_code']}} </p>
                                                                                 </th>
@@ -616,11 +623,12 @@
                                         </table>
                                     </center>
                                     <!--[if (!mso)&(!IE)]>
-                                                                                                                                                                    <!-->
+                                                                                                                                                                        <!-->
                                 </div>
                                 <!--
 
-                                                                                                                                                              <![endif]-->
+
+                                                                                                                                                                  <![endif]-->
                             </div>
                         </div>
                         <!--[if (mso)|(IE)]>
@@ -633,6 +641,73 @@
                         </tr>
                         </table>
                         <![endif]-->
+                    </div>
+                </div>
+            </div>
+            <div class="u-row-container" style="padding: 0px;background-color: #ececec">
+                <div class="u-row" style="margin: 0 auto;min-width: 320px;max-width: 600px;overflow-wrap: break-word;word-wrap: break-word;word-break: break-word;background-color: #ffffff;">
+                    <div style="border-collapse: collapse;display: table;width: 100%;height: 100%;background-color: transparent;">
+                        <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
+                            <div style="background-color: #ffffff;height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
+                                <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
+                                    <div style="padding-top:24px;padding-bottom:24px">
+                                        <table style="border-spacing:0;border-collapse:collapse;vertical-align:top;text-align:left;padding:0;width:100%;display:table">
+                                            <tbody>
+                                            <tr style="padding:0;vertical-align:top;text-align:left">
+                                                <th style="color:#0a0a0a;font-family:'Raleway',sans-serif;font-weight:normal;padding:0;text-align:left;font-size:16px;line-height:19px;margin:0 auto;padding-bottom:16px;width:564px;padding-left:16px;padding-right:16px">
+                                                    <hr style="max-width:580px;border-right:0;border-top:0;border-bottom:1px solid #cacaca;border-left:0;margin:20px auto;clear:both;background-color:#dbdbdb;min-height:1px;border:none;width:100%;margin-top:0;margin-bottom:0">
+                                                </th>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div style="padding-bottom:8px">
+                                        <table style="border-spacing:0;border-collapse:collapse;vertical-align:top;text-align:left;padding:0;width:100%;display:table">
+                                            <tbody>
+                                            <tr style="padding:0;vertical-align:top;text-align:left">
+                                                <th style="color:#0a0a0a;font-family:'Raleway',sans-serif;font-weight:normal;padding:0;text-align:left;font-size:16px;line-height:19px;margin:0 auto;padding-bottom:16px;width:564px;padding-left:16px;padding-right:16px">
+                                                    <p style="padding:0;margin:0;text-align:left;font-family:'Raleway',sans-serif;max-width:485px;font-weight:700;color:#484848;font-size:24px;line-height:28px;margin-bottom:16px!important">Your Account Access</p>
+                                                    <p style="padding:0;margin:0;font-family:'Raleway',sans-serif;font-weight:300;color:#484848;font-size:15px;line-height:22px;text-align:left;margin-bottom:16px!important"> You can access your booking details and manage your reservation by logging into your account at <a href="https://metrosuites.al/login" style="color:#2E273C;text-decoration:underline">metrosuites.al</a>
+                                                    </p> @if(isset($guest_receipt_data['password'])) <div style="background-color:#f8f8f8;padding:16px;margin:16px 0;border-radius:4px;">
+                                                        <p style="padding:0;margin:0;font-family:'Raleway',sans-serif;font-weight:300;color:#484848;font-size:15px;line-height:22px;text-align:left;margin-bottom:8px!important"> Your account has been created with the following credentials: </p>
+                                                        <p style="padding:0;margin:0;font-family:'Raleway',sans-serif;font-weight:500;color:#484848;font-size:15px;line-height:22px;text-align:left;margin-bottom:4px!important"> Email: {{$guest_receipt_data['email']}}
+                                                        </p>
+                                                        <p style="padding:0;margin:0;font-family:'Raleway',sans-serif;font-weight:500;color:#484848;font-size:15px;line-height:22px;text-align:left;margin-bottom:8px!important"> Password: {{$guest_receipt_data['password']}}
+                                                        </p>
+                                                        <p style="padding:0;margin:0;font-family:'Raleway',sans-serif;font-weight:300;color:#484848;font-size:14px;line-height:20px;text-align:left;"> Please make sure to change your password after your first login for security purposes. </p>
+                                                    </div> @endif <table style="border-spacing:0;border-collapse:collapse;padding:0;vertical-align:top;text-align:center;width:100%;margin-top:20px;">
+                                                        <tr>
+                                                            <td align="center">
+                                                                <a href="https://metrosuites.al/login" style="background-color:#2E273C;
+                                                              color:white;
+                                                              padding:12px 30px;
+                                                              text-decoration:none;
+                                                              border-radius:4px;
+                                                              font-family:'Raleway',sans-serif;
+                                                              font-weight:600;
+                                                              display:inline-block;"> Access Your Account </a>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </th>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div style="padding-top:8px;padding-bottom:8px">
+                                        <table style="border-spacing:0;border-collapse:collapse;vertical-align:top;text-align:left;padding:0;width:100%;display:table">
+                                            <tbody>
+                                            <tr style="padding:0;vertical-align:top;text-align:left">
+                                                <th style="color:#0a0a0a;font-family:'Raleway',sans-serif;font-weight:normal;padding:0;text-align:left;font-size:16px;line-height:19px;margin:0 auto;padding-bottom:16px;width:564px;padding-left:16px;padding-right:16px">
+                                                    <hr style="max-width:580px;border-right:0;border-top:0;border-bottom:1px solid #cacaca;border-left:0;margin:20px auto;clear:both;background-color:#dbdbdb;min-height:1px;border:none;width:100%;margin-top:0;margin-bottom:0">
+                                                </th>
+                                            </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -652,35 +727,31 @@
                         <div class="u-col u-col-100" style="max-width: 320px;min-width: 600px;display: table-cell;vertical-align: top;">
                             <div style="height: 100%;width: 100% !important;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                 <!--[if (!mso)&(!IE)]>
-                                                                                                                                                              <!-->
+                                                                                                                                                                          <!-->
                                 <div style="box-sizing: border-box; height: 100%; padding: 0px;border-top: 0px solid transparent;border-left: 0px solid transparent;border-right: 0px solid transparent;border-bottom: 0px solid transparent;border-radius: 0px;-webkit-border-radius: 0px; -moz-border-radius: 0px;">
                                     <!--
 
-                                                                                                                                                                    <![endif]-->
 
+                                                                                                                                                                                <![endif]-->
                                     <table id="u_content_text_6" class="hide-mobile" style="font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
                                             <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:10px 10px 40px;font-family:'Raleway',sans-serif;" align="left">
                                                 <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="font-size: 14px; line-height: 160%;"> {{$guest_receipt_data['rental_unit_name']}} on VenueBoost</p>
-
-                                                        All Right Reserved. </p>
+                                                    <p style="font-size: 14px; line-height: 160%;"> {{$guest_receipt_data['rental_unit_name']}} on VenueBoost</p> All Right Reserved. </p>
                                                 </div>
                                             </td>
                                         </tr>
                                         </tbody>
                                     </table>
                                     <!--[if !mso]>
-                                                                                                                                                                                        <!-->
+                                                                                                                                                                            <!-->
                                     <table id="u_content_text_9" class="hide-default__display-table hide-desktop" style="display: none;mso-hide: all;font-family:'Raleway',sans-serif;" role="presentation" cellpadding="0" cellspacing="0" width="100%" border="0">
                                         <tbody>
                                         <tr>
                                             <td class="v-container-padding-padding" style="overflow-wrap:break-word;word-break:break-word;padding:0px 10px 40px;font-family:'Raleway',sans-serif;" align="left">
                                                 <div class="v-color v-text-align" style="font-size: 14px; line-height: 160%; text-align: center; word-wrap: break-word;">
-                                                    <p style="font-size: 14px; line-height: 160%;"> {{$guest_receipt_data['rental_unit_name']}} on VenueBoost</p>
-
-                                                    All Right Reserved. </p>
+                                                    <p style="font-size: 14px; line-height: 160%;"> {{$guest_receipt_data['rental_unit_name']}} on VenueBoost</p> All Right Reserved. </p>
                                                 </div>
                                             </td>
                                         </tr>
@@ -688,13 +759,15 @@
                                     </table>
                                     <!--
 
-                                                                                                                                                                                        <![endif]-->
+
+                                                                                                                                                                        <![endif]-->
                                     <!--[if (!mso)&(!IE)]>
-                                                                                                                                                                                        <!-->
+                                                                                                                                                                        <!-->
                                 </div>
                                 <!--
 
-                                                                                                                                                                                  <![endif]-->
+
+                                                                                                                                                                  <![endif]-->
                             </div>
                         </div>
                         <!--[if (mso)|(IE)]>

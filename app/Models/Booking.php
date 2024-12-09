@@ -18,6 +18,7 @@ class Booking extends Model
         'check_out_date',
         'total_amount',
         'subtotal',
+        'discount_id',
         'discount_price',
         'status',
         'paid_with',
@@ -65,6 +66,11 @@ class Booking extends Model
     public function rentalUnit(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(RentalUnit::class);
+    }
+
+    public function discount(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Discount::class);
     }
 
 }

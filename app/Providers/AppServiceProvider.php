@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Services\FirebaseService;
 use App\Services\NotificationService;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Database\Eloquent\Relations\Relation;
+
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,6 +29,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //
+         Relation::morphMap([
+                'milestone' => 'App\Models\Milestone',
+            ]);
     }
 }
