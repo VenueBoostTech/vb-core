@@ -75,7 +75,8 @@ class BookingsController extends Controller
             'rentalUnit.venue.addresses.country',
             'rentalUnit.accommodation_detail',
             'rentalUnit.rooms',
-            'guest'
+            'guest',
+            'discount'
         ])
             ->where('guest_id', $guest->id)
             ->where('id', $bookingId)
@@ -107,6 +108,19 @@ class BookingsController extends Controller
                 'status' => Chat::STATUS_ACTIVE
             ]
         );
+        if($booking->stripe_payment_id){
+            \Stripe\Stripe::setApiKey(config('services.stripe.key'));
+            // Get stripe payment details
+            $paymentIntent = \Stripe\PaymentIntent::retrieve($booking->stripe_payment_id);
+            $paymentMethodId = $paymentIntent->payment_method;
+            if ($paymentMethodId) {
+                // Retrieve the Payment Method object
+                $paymentMethod = \Stripe\PaymentMethod::retrieve($paymentMethodId);
+    
+                // Get the last 4 digits of the card
+                $booking->last_four_digit = $paymentMethod->card->last4;
+            }
+        }
 
         $bookingDetails = [
             'id' => $booking->id,

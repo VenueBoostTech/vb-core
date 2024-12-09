@@ -228,7 +228,7 @@ background-color: #f5f5f5;">
                                                 <div class="v-color v-text-align" style="font-size: 14px; line-height: 140%; text-align: center; word-wrap: break-word;">
                                                     <p style="line-height: 140%;">
                                                     <div class="logo" style="text-align: center;">
-                                                        <img src="{{ asset('storage/bb-apartments-logo.png') }}" alt="By Best Apartments Logo" width="225" height="38" class="fr-fic fr-dii"/>
+                                                        <img src="{{ asset('storage/bb-apartments-logo.png') }}" alt="By Best Apartments Logo" style="width: 10%"  class="fr-fic fr-dii"/>
                                                     </div>
                                                     </p>
                                                 </div>
@@ -307,34 +307,6 @@ background-color: #f5f5f5;">
                                                                         </tr>
                                                                         </tbody>
                                                                     </table>
-                                                                </td>
-                                                            </tr>
-                                                            </tbody>
-                                                        </table>
-                                                        <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
-                                                            <tbody>
-                                                            <tr style="margin:0px!important">
-                                                                <td>
-                                                                    <a href="#" style="font-family:'Raleway',sans-serif;font-weight:800;color:#222222" rel="noreferrer noopener" target="_blank">
-                                                                        <div>
-                                                                            <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%;max-height:none">
-                                                                                <tbody>
-                                                                                <tr>
-                                                                                    <td background="{{$rental_unit_booking_confirmation_data['rental_unit_photo']}}" style="padding-bottom:56.2%;background-position:center;background-color:#f1f1f1;background-repeat:no-repeat!important;background-size:cover!important;min-height:0px!important;max-height:0px!important;overflow:hidden!important;width:100%!important;border-radius:8px!important" bgcolor="#F1F1F1"></td>
-                                                                                </tr>
-                                                                                </tbody>
-                                                                            </table>
-                                                                        </div>
-                                                                        <table cellpadding="0" style="border-collapse:collapse;border-spacing:0;width:100%">
-                                                                            <tbody>
-                                                                            <tr style="margin:0px!important">
-                                                                                <td style="display:none">
-                                                                                    <img alt="{{$rental_unit_booking_confirmation_data['rental_unit_name']}}" src="https://ci3.googleusercontent.com/proxy/gu2ePsk9Fxe81LrorgTztLtEd2qcnPVCqgvP_PAzaSOPiUlNBGM-3W34ugA9COwnmyJaDNcOrWx3MVkMpMZz2jDCllo0VCyTm1M0CqJObyncfa2vig0_llreRzLalUx1oevfQmQUQTa3K78OCkEOpA=s0-d-e1-ft#https://a0.muscache.com/im/pictures/e07cb947-c112-4d71-a843-70cc3bef8355.jpg?aki_policy=large" style="border:0!important" class="CToWUd" data-bit="iit">
-                                                                                </td>
-                                                                            </tr>
-                                                                            </tbody>
-                                                                        </table>
-                                                                    </a>
                                                                 </td>
                                                             </tr>
                                                             </tbody>

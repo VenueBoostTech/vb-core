@@ -40,7 +40,7 @@ class BbGroupsController extends Controller
             // Search product by collections
             if ($request->filled('collection_id') && is_array($request->collection_id) && count($request->collection_id) != 0) {
                 $products = $products->join('product_collections', 'product_collections.product_id', '=', 'products.id')
-                    ->whereIn('product_collections.collection_id', '=', $request->collection_id);
+                    ->whereIn('product_collections.collection_id', $request->collection_id);
             }
 
             // if ($request->filled('collection_id') && is_array($request->collection_id) && count($request->collection_id) != 0) {

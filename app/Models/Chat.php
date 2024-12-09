@@ -13,6 +13,7 @@ class Chat extends Model
         'end_user_id',     // nullable, for old system
         'venue_user_id',   // nullable, for old system
         'venue_id',
+        'booking_id',
         'project_id',      // for staff/client chats
         'sender_id',       // for staff/client chats
         'receiver_id',     // for staff/client chats

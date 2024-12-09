@@ -1021,7 +1021,7 @@ class InventorySyncController extends Controller
                                         'category_url' => $item['category_url'],
                                         'subtitle' => $subtitle,
                                         'subtitle_al' => $subtitle_al,
-                                        'photo' => 'https://admin.bybest.shop/storage/categories/' . $item['photo'],
+                                        // 'photo' => 'https://admin.bybest.shop/storage/categories/' . $item['photo'],
                                         'order_no' => $item['order_no'],
                                         'visible' => $item['visible'],
                                         'bybest_id' => $item['id'],

@@ -4031,7 +4031,7 @@ class RestaurantController extends Controller
             ];
         });
 
-        $url = 'https://venueboost.io/venue/'.$venue->venueType->short_name.'/'.$venue->app_key;
+        $url = 'https://metrosuites.al/';
 
         $finalWhiteLabelInformation = new StdClass();
         $finalWhiteLabelInformation->gallery = $modifiedGallery;

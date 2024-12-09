@@ -1890,9 +1890,12 @@ class AccommodationController extends Controller
         }
         $headerSection->guests = $formattedGuestsList;
         // get only non expired and active one
+
+        
         $rentalUnitDiscount = Discount::where('rental_unit_id', $rentalUnit->id)->where('status', true)
             ->where('end_time', '>=', Carbon::now())
-            ->select('type', 'value')
+            ->select('id', 'type', 'value')
+            ->orderBy('created_at', 'desc')
             ->first();
         $headerSection->discount = $rentalUnitDiscount ?? null;
 

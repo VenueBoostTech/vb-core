@@ -204,7 +204,7 @@ class ArticleSyncController extends Controller
                                         'author_designation' => '',
                                         'read_time' => (int)$item['time_to_read'],
                                         'tags' =>  $item['article_tags'],
-                                        'image' => 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'],
+                                        // 'image' => 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'],
                                         'bybest_id' => $item['id'],
                                         'created_at' => $item['created_at'],
                                         'updated_at' => $item['updated_at'],

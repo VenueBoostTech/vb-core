@@ -2294,7 +2294,12 @@ class OrdersController extends Controller
         // Ensure the discount does not exceed the subtotal
         $discountValue = min($discountValue, $request->subtotal);
 
-        return response()->json(['discount_value' => $discountValue]);
+        return response()->json(['discount_value' => $discountValue, 'coupon' => [
+                'expiry_time' => $coupon->expiry_time,
+                'discount_amount' => $coupon->discount_amount,
+                'discount_type' => $coupon->discount_type,
+            ]
+        ]);
     }
 
     public function validateCoupon(Request $request): \Illuminate\Http\JsonResponse
@@ -2341,7 +2346,12 @@ class OrdersController extends Controller
         // Ensure the discount does not exceed the subtotal
         $discountValue = min($discountValue, $request->subtotal);
 
-        return response()->json(['discount_value' => $discountValue]);
+        return response()->json(['discount_value' => $discountValue, 'coupon' => [
+                'expiry_time' => $coupon->expiry_time,
+                'discount_amount' => $coupon->discount_amount,
+                'discount_type' => $coupon->discount_type,
+            ]
+        ]);
     }
 
     public function getRetailOrders(): \Illuminate\Http\JsonResponse

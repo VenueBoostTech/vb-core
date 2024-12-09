@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use JetBrains\PhpStorm\NoReturn;
 use Twilio\Exceptions\ConfigurationException;
@@ -149,11 +150,12 @@ class CampaignController extends Controller
                 foreach ($guests as $guest) {
                     if ($guest->email) {
                         try {
+                            $venueLogo = $venue->logo ? Storage::disk('s3')->temporaryUrl($venue->logo, '+8000 minutes') : null;
                             // Send email
                             $restaurantName = $venue->name;
                             $subject = $request->input('title');
                             $content = $request->input('description');
-                            Mail::to($guest->email)->send(new CampaignEmail($subject, $content, $restaurantName));
+                            Mail::to($guest->email)->send(new CampaignEmail($subject, $content, $restaurantName, $venueLogo));
                         } catch (\Exception $e) {
                             // do nothing
                             \Sentry\captureException($e);

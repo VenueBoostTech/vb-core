@@ -5,6 +5,7 @@ namespace App\Http\Controllers\v1;
 use App\Mail\GuestReceiptEmail;
 use App\Mail\NewBookingEmail;
 use App\Mail\RentalUnitBookingConfirmationEmail;
+use App\Mail\RentalUnitBookingDeclinedEmail;
 use App\Models\Chat;
 use App\Models\Gallery;
 use App\Models\Guest;
@@ -131,7 +132,8 @@ class BookingController extends Controller
             $checkInDate = $request->input('check_in_date');
             $checkOutDate = $request->input('check_out_date');
 
-            $guestId = null;
+            $guestDetail = null;
+            $password = null;
             if ($request->guest_id) {
 
                 // check if guest belongs to the venue and is is_for_accommodation
@@ -150,16 +152,17 @@ class BookingController extends Controller
                 }
 
 
-                $guestId = $guest->id;
+                $guestDetail = $guest;
 
                 // also create user if not exists
                 $user = User::where('email', $guest->email)->first();
                 if (!$user) {
+                    $password = Str::random(8);
                    $user = User::create([
                         'name' => $guest->name,
                         'email' => $guest->email,
                         // make hash random password
-                        'password' => Hash::make(Str::random(8)),
+                        'password' => Hash::make($password),
                         'country_code' => 'US',
                         'enduser' => true
                     ]);
@@ -168,6 +171,7 @@ class BookingController extends Controller
                 $guest->save();
             }
             else {
+                $password = null;
                 if ($request->guest['email']){
                     // First check if guest exists
                     $guest = Guest::where('email', $request->guest['email'])->first();
@@ -176,10 +180,11 @@ class BookingController extends Controller
                     $user = User::where('email', $request->guest['email'])->first();
 
                     if (!$user) {
+                        $password = Str::random(8);
                         $user = User::create([
                             'name' => $request->guest['first_name'] . ' ' . $request->guest['last_name'],
                             'email' => $request->guest['email'],
-                            'password' => Hash::make(Str::random(8)),
+                            'password' => Hash::make($password),
                             'country_code' => 'US',
                             'enduser' => true
                         ]);
@@ -207,9 +212,9 @@ class BookingController extends Controller
                             'loyalty_tier_id' => $tier->id,
                             'balance' => 0,
                         ]);
-                        $guestId = $guest->id;
+                        $guestDetail = $guest;
                     } else {
-                        $guestId = $guest->id;
+                        $guestDetail = $guest;
 
                         // Update existing guest with user_id if not set
                         if (!$guest->user_id) {
@@ -262,12 +267,13 @@ class BookingController extends Controller
             $booking = new Booking;
             $booking->venue_id = $venueId;
             $booking->rental_unit_id = $rentalUnit->id;
-            $booking->guest_id = $guestId;
+            $booking->guest_id = $guestDetail->id;
             $booking->guest_nr = $request->guest_nr;
             $booking->check_in_date = $request->check_in_date;
             $booking->check_out_date = $request->check_out_date;
             $booking->discount_price = $request->discount_price;
             $booking->total_amount = $request->total_amount;
+            $booking->discount_id = $request->discount_id;
 
             $booking->subtotal = $request->subtotal;
             $booking->status = "Pending";
@@ -345,6 +351,8 @@ class BookingController extends Controller
                 'check_in_date' => Carbon::parse($booking->check_in_date)->format('M d, Y'),
                 // check out date
                 'check_out_date' => Carbon::parse($booking->check_out_date)->format('M d, Y'),
+                'password' => $password ?? null,
+                'email' => $guestDetail->email ?? null,
             ];
 
             Mail::to($guest['email'])->send(new GuestReceiptEmail($venue->name, $guestReceiptData));
@@ -352,7 +360,9 @@ class BookingController extends Controller
             $venueLogo = $venue->logo ? Storage::disk('s3')->temporaryUrl($venue->logo, '+8000 minutes') : null;
             // send a new booking email to the venue
             if ($venue->email) {
-                Mail::to($venue->email)->send(new NewBookingEmail(
+                // send to ggerveni@gmail.com
+                 Mail::to('griseld.gerveni@yahoo.com')->send(new NewBookingEmail(
+                // Mail::to($venue->email)->send(new NewBookingEmail(
                     $venue->name,
                     $guest->name,
                     $rentalUnit->name,
@@ -382,7 +392,8 @@ class BookingController extends Controller
                 try {
                      //Send SMS message
                     $client->messages->create(
-                        $venue->phone_number,
+                        '+306908654153',
+                        // $venue->phone_number,
                         array(
                             'from' => $twilio_number,
                             'body' => $smsBody
@@ -393,6 +404,8 @@ class BookingController extends Controller
                     \Sentry\captureException($e);
                 }
             }
+
+
 
             // check tier of guest, get points and update wallet balance with points and update activate
             // get guest's tier attribute
@@ -860,10 +873,64 @@ class BookingController extends Controller
             ];
 
             Mail::to($guest['email'])->send(new RentalUnitBookingConfirmationEmail($venue->name, $rentalUnitBookingConfirmationData));
+        } else if ($request->input('status') === 'Cancelled') {
+            // prepare data for guest confirmation booking email
+            $rentalUnitBookingDeclinedData = [
+                // rental unit name
+                'rental_unit_name' => $rentalUnit->name,
+                'rental_type' => $rentalUnit->accommodation_type,
+                'rental_unit_host' => $rentalUnit->accommodation_host_profile->host_name,
+                // rental unit host
+               ];
+
+            Mail::to($guest['email'])->send(new RentalUnitBookingDeclinedEmail($venue->name, $rentalUnitBookingDeclinedData));
         }
 
 
         return response()->json(['message' => 'Booking status updated successfully', 'data' => $booking]);
+    }
+
+    public function paid(Request $request): JsonResponse
+    {
+
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+
+        $validator = Validator::make($request->all(), [
+            'id' => 'required|exists:bookings,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        $booking = Booking::where('id', $request->input('id'))->where('venue_id', $venue->id)->first();
+        if (!$booking) {
+            return response()->json(['error' => 'Booking not found'], 404);
+        }
+
+        $receipt = Receipt::where('booking_id', $booking->id)->first();
+        if (!$receipt) {
+            return response()->json(['error' => 'Receipt not found'], 404);
+        }
+
+        $receipt->status = 'fully_paid';
+        $receipt->save();
+
+        // paid receipt response
+        return response()->json(['message' => 'Booking receipt status updated successfully', 'data' => $receipt]);
     }
 
     public function getBookingDetails(Request $request, $id): JsonResponse
