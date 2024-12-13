@@ -94,7 +94,7 @@ class BbWebSyncController extends Controller
                                         'photo_url' => $item['photo'],
                                     ]);
                                     error_log("UploadPhotoJob $slider->id => " . $item['photo']);
-                                    dispatch(new UploadPhotoJob($slider, 'https://admin.bybest.shop/storage/sliders/' . $item['photo'], 'photo', $venue));
+                                    // dispatch(new UploadPhotoJob($slider, 'https://admin.bybest.shop/storage/sliders/' . $item['photo'], 'photo', $venue));
                                 }
 
                                 $processedCount++;
@@ -156,14 +156,12 @@ class BbWebSyncController extends Controller
                 }
 
                 $bybestData = $response->json();
-
                 if (empty($bybestData) || !isset($bybestData['data'])) {
                     // break; // No more data to process
                     return response()->json(['message' => 'No more data to process'], 500);
                 }
 
                 $groups = $bybestData['data'];
-
                 // foreach (array_chunk($groups, $batchSize) as $batch) {
                     // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
                         foreach ($groups as $item) {
@@ -180,7 +178,8 @@ class BbWebSyncController extends Controller
                                 $typeId = $item['type_id'] ? DB::table('bb_menu_type')->where('bybest_id', $item['type_id'])->value('id') : null;
 
                                 $title = json_decode($item['title']);
-                                BbMainMenu::updateOrCreate(
+                                
+                                $created = BbMainMenu::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
                                         'venue_id' => $venue->id,
@@ -197,11 +196,12 @@ class BbWebSyncController extends Controller
                                         'deleted_at' => $item['deleted_at'],
                                     ]
                                 );
-
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
+                                dd($e);
                                 DB::rollBack();
+                                error_log("Error in groups 1 sync " . $e->getMessage());
                             }
                         }
                     // });
@@ -220,7 +220,7 @@ class BbWebSyncController extends Controller
         // } while (count($groups) == $perPage);
 
         return response()->json([
-            'message' => 'groups sync completed successfully',
+            'message' => 'menu sync completed successfully',
             'processed_count' => $processedCount,
             'skipped_count' => $skippedCount,
             'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,

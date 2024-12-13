@@ -41,7 +41,14 @@ class InventoryConfigurationController extends Controller
     public function listWarehouses(): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
-
+        // The $venue can be response or object if response then return it else return object
+        if($venue instanceof \Illuminate\Http\JsonResponse){
+            return $venue;
+        }
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+        
         $warehouses = InventoryWarehouse::where('venue_id', $venue->id)->with('address', 'inventoryRetails')->get();
         $warehouses = $warehouses->map(function ($warehouse) {
             $total_products = 0;

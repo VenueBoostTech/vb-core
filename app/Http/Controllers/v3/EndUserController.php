@@ -596,7 +596,7 @@ class EndUserController extends Controller
         $perPage = $request->get('per_page', 10);
         $type = $request->get('type', 'all'); // Options: all, current, past, used
 
-        $baseQuery = Promotion::with(['discounts', 'coupons'])
+        $baseQuery = Promotion::with(['discounts','discounts.rental_unit', 'coupons'])
             ->where('venue_id', $venueId);
 
         switch ($type) {
@@ -624,7 +624,8 @@ class EndUserController extends Controller
                                     $bookingQuery->select('id', 'discount_id', 'discount_price')
                                         ->where('guest_id', $user->guest?->id);
                                 }]);
-                        }
+                        },
+                        'discounts.rental_unit'
                     ])
                     ->whereHas('discounts.bookings', function ($query) use ($user) {
                         $query->where('guest_id', $user->guest?->id);

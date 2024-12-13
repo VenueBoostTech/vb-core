@@ -4031,7 +4031,12 @@ class RestaurantController extends Controller
             ];
         });
 
-        $url = 'https://metrosuites.al/';
+        if($venue->short_code != 'BY 0312SCDF') {
+            $url = 'https://metrosuites.al/';
+        } else {
+            $url = 'https://venueboost.io/venue/'.$venue->venueType->short_name.'/'.$venue->app_key;
+        }
+
 
         $finalWhiteLabelInformation = new StdClass();
         $finalWhiteLabelInformation->gallery = $modifiedGallery;

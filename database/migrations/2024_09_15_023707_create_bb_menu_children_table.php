@@ -228,30 +228,30 @@ return new class extends Migration
             [30, 10, 2, '{"en":"Klin"}', 'klin', 4, '2022-02-16 14:50:04', '2022-03-30 20:41:27', '2022-03-29 20:27:45']
         ];
 
-        foreach ($menuChildren as $child) {
-            $menuBybestId = DB::table('bb_main_menu')->where('bybest_id', $child[1])->value('bybest_id');
-            $typeBybestId = DB::table('bb_menu_children_type')->where('bybest_id', $child[2])->value('bybest_id');
+        // foreach ($menuChildren as $child) {
+        //     $menuBybestId = DB::table('bb_main_menu')->where('bybest_id', $child[1])->value('bybest_id');
+        //     $typeBybestId = DB::table('bb_menu_children_type')->where('bybest_id', $child[2])->value('bybest_id');
 
-            if ($menuBybestId && $typeBybestId) {
-                DB::table('bb_menu_children')->insert([
-                    'bybest_id' => $child[0],
-                    'menu_id' => $menuBybestId,
-                    'type_id' => $typeBybestId,
-                    'text' => $child[3],
-                    'link' => $child[4],
-                    'order' => $child[5],
-                    'created_at' => $child[6],
-                    'updated_at' => $child[7],
-                    'deleted_at' => $child[8],
-                ]);
-            } else {
-                \Log::warning("Unable to insert menu child. Menu ID or Type ID not found.", [
-                    'bybest_id' => $child[0],
-                    'menu_bybest_id' => $child[1],
-                    'type_bybest_id' => $child[2],
-                ]);
-            }
-        }
+        //     if ($menuBybestId && $typeBybestId) {
+        //         DB::table('bb_menu_children')->insert([
+        //             'bybest_id' => $child[0],
+        //             'menu_id' => $menuBybestId,
+        //             'type_id' => $typeBybestId,
+        //             'text' => $child[3],
+        //             'link' => $child[4],
+        //             'order' => $child[5],
+        //             'created_at' => $child[6],
+        //             'updated_at' => $child[7],
+        //             'deleted_at' => $child[8],
+        //         ]);
+        //     } else {
+        //         \Log::warning("Unable to insert menu child. Menu ID or Type ID not found.", [
+        //             'bybest_id' => $child[0],
+        //             'menu_bybest_id' => $child[1],
+        //             'type_bybest_id' => $child[2],
+        //         ]);
+        //     }
+        // }
     }
 
     /**

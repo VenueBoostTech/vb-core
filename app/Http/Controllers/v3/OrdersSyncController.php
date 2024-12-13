@@ -231,6 +231,7 @@ class OrdersSyncController extends Controller
                                 // find customer based on bybest_id =  item['customer_id']
                                 $userId = User::where('old_platform_user_id', $item['customer_id'])->first();
                                 $customer = Customer::where('user_id', $userId?->id)->first();
+                                
                                 Order::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [

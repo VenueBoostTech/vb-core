@@ -18,6 +18,7 @@ class Chat extends Model
         'sender_id',       // for staff/client chats
         'receiver_id',     // for staff/client chats
         'status',
+        'order_id',
         'type'
     ];
 

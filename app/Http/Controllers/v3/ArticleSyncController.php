@@ -157,7 +157,6 @@ class ArticleSyncController extends Controller
                 }
 
                 $bybestData = $response->json();
-
                 if (empty($bybestData) || !isset($bybestData['data'])) {
                     // break; // No more data to process
                     return response()->json(['message' => 'No more data to process'], 500);
@@ -204,7 +203,7 @@ class ArticleSyncController extends Controller
                                         'author_designation' => '',
                                         'read_time' => (int)$item['time_to_read'],
                                         'tags' =>  $item['article_tags'],
-                                        // 'image' => 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'],
+                                        'image' => 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'],
                                         'bybest_id' => $item['id'],
                                         'created_at' => $item['created_at'],
                                         'updated_at' => $item['updated_at'],
@@ -233,7 +232,7 @@ class ArticleSyncController extends Controller
                                         'photo_url' => $item['article_featured_image'],
                                     ]);
 
-                                    UploadPhotoJob::dispatch($blog, 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'], 'image', $venue);
+                                    // UploadPhotoJob::dispatch($blog, 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'], 'image', $venue);
                                 }
                                 $processedCount++;
                                 DB::commit();

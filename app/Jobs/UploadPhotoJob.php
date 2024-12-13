@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Models\Photo;
+use GuzzleHttp\Client;
 
 class UploadPhotoJob implements ShouldQueue
 {
@@ -41,7 +42,11 @@ class UploadPhotoJob implements ShouldQueue
                 'photo_url' => $this->photoUrl
             ]);
             error_log("Processing UploadPhotoJob $this->photoUrl");
-            $photoContents = file_get_contents($this->file_url($this->photoUrl));
+
+            // $photoContents = file_get_contents($this->file_url($this->photoUrl));
+            $client = new Client();
+            $response = $client->getAsync($this->file_url($this->photoUrl))->wait();
+            $photoContents = $response->getBody()->getContents();
             if ($photoContents !== false) {
                 $filename = Str::random(20) . '.jpg';
                 $requestType = 'other';

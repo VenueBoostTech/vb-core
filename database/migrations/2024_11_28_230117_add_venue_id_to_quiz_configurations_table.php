@@ -8,10 +8,10 @@ return new class extends Migration
     public function up()
     {
 
-        Schema::table('quiz_configurations', function (Blueprint $table) {
-            $table->dropForeign(['venue_id']);
-            $table->dropColumn('venue_id');
-        });
+        // Schema::table('quiz_configurations', function (Blueprint $table) {
+        //     $table->dropForeign(['venue_id']);
+        //     $table->dropColumn('venue_id');
+        // });
 
         Schema::table('quiz_configurations', function (Blueprint $table) {
             $table->foreignId('venue_id')->nullable()->constrained('restaurants')->onDelete('cascade');

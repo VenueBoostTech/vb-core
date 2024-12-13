@@ -14,18 +14,18 @@ return new class extends Migration
      */
     public function up()
     {
-        $oldEmail = 'development+077@snapfood.io';
-        $newEmail = 'staf@electral.al';
+        // $oldEmail = 'development+077@snapfood.io';
+        // $newEmail = 'staf@electral.al';
 
-        $affected = DB::table('users')
-            ->where('email', $oldEmail)
-            ->update(['email' => $newEmail]);
+        // $affected = DB::table('users')
+        //     ->where('email', $oldEmail)
+        //     ->update(['email' => $newEmail]);
 
-        if ($affected === 0) {
-            throw new Exception("No user found with email: {$oldEmail}");
-        } elseif ($affected > 1) {
-            throw new Exception("Multiple users found with email: {$oldEmail}");
-        }
+        // if ($affected === 0) {
+        //     throw new Exception("No user found with email: {$oldEmail}");
+        // } elseif ($affected > 1) {
+        //     throw new Exception("Multiple users found with email: {$oldEmail}");
+        // }
     }
 
     /**

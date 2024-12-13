@@ -24,23 +24,23 @@ return new class extends Migration
             $table->foreign('venue_id')->references('id')->on('restaurants')->onDelete('cascade');
         });
 
-        $types = [
-            [1, '{"en":"Kategori"}', '{"en":null}', '2022-02-14 20:14:05', '2022-03-30 20:42:22', null],
-            [2, '{"en":"Brand"}', '{"en":null}', '2022-02-14 20:14:05', '2022-03-30 20:42:22', null],
-            [3, '{"en":"Koleksion"}', '{"en":null}', '2022-02-14 20:14:05', '2022-03-30 20:42:22', null],
-        ];
+        // $types = [
+        //     [1, '{"en":"Kategori"}', '{"en":null}', '2022-02-14 20:14:05', '2022-03-30 20:42:22', null],
+        //     [2, '{"en":"Brand"}', '{"en":null}', '2022-02-14 20:14:05', '2022-03-30 20:42:22', null],
+        //     [3, '{"en":"Koleksion"}', '{"en":null}', '2022-02-14 20:14:05', '2022-03-30 20:42:22', null],
+        // ];
 
-        foreach ($types as $type) {
-            DB::table('bb_menu_children_type')->insert([
-                'bybest_id' => $type[0],
-                'venue_id' => 58, // Assuming all types belong to venue_id 58
-                'type' => $type[1],
-                'description' => $type[2],
-                'created_at' => $type[3],
-                'updated_at' => $type[4],
-                'deleted_at' => $type[5],
-            ]);
-        }
+        // foreach ($types as $type) {
+        //     DB::table('bb_menu_children_type')->insert([
+        //         'bybest_id' => $type[0],
+        //         'venue_id' => 58, // Assuming all types belong to venue_id 58
+        //         'type' => $type[1],
+        //         'description' => $type[2],
+        //         'created_at' => $type[3],
+        //         'updated_at' => $type[4],
+        //         'deleted_at' => $type[5],
+        //     ]);
+        // }
     }
 
     /**

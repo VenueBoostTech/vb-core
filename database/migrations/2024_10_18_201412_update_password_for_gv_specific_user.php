@@ -13,12 +13,12 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::table('users')
-            ->where('email', 'griseld.gerveni+1@venueboost.io')
-            ->update([
-                'password' => Hash::make('Test12345!'),
-                'email_verified_at' => now()
-            ]);
+        // DB::table('users')
+        //     ->where('email', 'griseld.gerveni+1@venueboost.io')
+        //     ->update([
+        //         'password' => Hash::make('Test12345!'),
+        //         'email_verified_at' => now()
+        //     ]);
     }
 
     /**
