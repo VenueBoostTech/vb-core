@@ -607,7 +607,7 @@ class RetailController extends Controller
                 'title' => $item->title,
                 'order_count' => $item->order_count,
                 'brand_title' => $item->brand_title,
-                'image_path' =>  Storage::disk('s3')->temporaryUrl($item->image_path, '+5 minutes'),
+                'image_path' =>  $item->image_path ? Storage::disk('s3')->temporaryUrl($item->image_path, '+5 minutes') : null,
             ];
         });
 

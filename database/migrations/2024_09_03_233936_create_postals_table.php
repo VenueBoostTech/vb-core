@@ -24,43 +24,43 @@ return new class extends Migration
         });
 
         // Seed initial data
-        $venueId = 58; // Assuming the venue ID is 58 based on the error message
+        // $venueId = 58; // Assuming the venue ID is 58 based on the error message
 
-        DB::table('postals')->insert([
-            [
-                'type' => 'normal',
-                'status' => true,
-                'title' => 'Unspecified',
-                'name' => 'Unspecified',
-                'logo' => null,
-                'description' => null,
-                'venue_id' => $venueId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'type' => 'normal',
-                'status' => true,
-                'title' => 'Ged Normale',
-                'name' => 'Global Express Delivery',
-                'logo' => 'postals_1655937771.png',
-                'description' => null,
-                'venue_id' => $venueId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'type' => 'fast',
-                'status' => true,
-                'title' => 'Ged Express',
-                'name' => 'Global Express Delivery',
-                'logo' => 'postals_1655938603.png',
-                'description' => null,
-                'venue_id' => $venueId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ]);
+        // DB::table('postals')->insert([
+        //     [
+        //         'type' => 'normal',
+        //         'status' => true,
+        //         'title' => 'Unspecified',
+        //         'name' => 'Unspecified',
+        //         'logo' => null,
+        //         'description' => null,
+        //         'venue_id' => $venueId,
+        //         'created_at' => now(),
+        //         'updated_at' => now(),
+        //     ],
+        //     [
+        //         'type' => 'normal',
+        //         'status' => true,
+        //         'title' => 'Ged Normale',
+        //         'name' => 'Global Express Delivery',
+        //         'logo' => 'postals_1655937771.png',
+        //         'description' => null,
+        //         'venue_id' => $venueId,
+        //         'created_at' => now(),
+        //         'updated_at' => now(),
+        //     ],
+        //     [
+        //         'type' => 'fast',
+        //         'status' => true,
+        //         'title' => 'Ged Express',
+        //         'name' => 'Global Express Delivery',
+        //         'logo' => 'postals_1655938603.png',
+        //         'description' => null,
+        //         'venue_id' => $venueId,
+        //         'created_at' => now(),
+        //         'updated_at' => now(),
+        //     ],
+        // ]);
     }
 
     public function down()

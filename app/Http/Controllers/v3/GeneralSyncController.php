@@ -35,7 +35,6 @@ class GeneralSyncController extends Controller
 
             if ($response->successful()) {
                 $userData = $response->json('data');
-
                 foreach ($userData as $oldUser) {
                     DB::transaction(function () use ($oldUser, &$skippedUsers, &$skippedCustomers, &$syncedUsers) {
                         // Check if user exists

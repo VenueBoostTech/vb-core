@@ -23,6 +23,13 @@ use App\Models\Photo;
 use App\Models\PhysicalStore;
 use App\Models\PlanFeature;
 use App\Models\Product;
+use App\Models\ProductCategory;
+use App\Models\ProductCollection;
+use App\Models\ProductGroup;
+use App\Models\InventoryWarehouse;
+use App\Models\InventorySynchronization;
+use App\Models\Order;
+use App\Models\OrderProduct;
 use App\Models\ProductAttribute;
 use App\Models\Restaurant;
 use App\Models\ScanActivity;
@@ -188,6 +195,7 @@ class ProductsController extends Controller
                 //     $product->image_path = $newPath;
                 // }
                 $product->currency = $currency ?? 'USD';
+                 $product->brand_name = $product->brand->title ?? null;
                 $product->try_at_home = $product?->takeHome ?? null;
                 return $product;
             });
@@ -2407,7 +2415,7 @@ class ProductsController extends Controller
                     : collect();
 
                 $inventory->product_title = $inventory->product->title ?? null;
-                $inventory->brand = Brand::where('id', $inventory->product->brand_id)->first();
+                $inventory->brand = $inventory->product ? Brand::where('id', $inventory->product->brand_id)->first() : null;
                 $inventory->supplier_name = $inventory->supplier->name ?? null;
                 $inventory->inventory_alert_histories = $inventoryAlertHistories;
                 $inventory->inventory_alert = $activeInventoryAlert;
@@ -2422,7 +2430,168 @@ class ProductsController extends Controller
             'data' => $inventories
         ], 200);
     }
+    public function getProductInventoriesSummery(): JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
 
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $totalProductCount = Product::where('restaurant_id', $venue->id)->count();
+        $totalCategoryCount = ProductCategory::join('products', 'products.id', '=', 'product_category.product_id')
+            ->where('products.restaurant_id', $venue->id)
+            ->distinct()
+            ->count('product_category.category_id');
+
+        $totalCollectionCount = ProductCollection::join('products', 'products.id', '=', 'product_collections.product_id')
+            ->where('products.restaurant_id', $venue->id)
+            ->distinct()
+            ->count();
+
+        $totalGroupCount = ProductGroup::join('products', 'products.id', '=', 'product_groups.product_id')
+            ->where('products.restaurant_id', $venue->id)
+            ->distinct()
+            ->count();
+
+        $totalVariantsCount = InventorySynchronization::where('venue_id', $venue->id)->count();
+
+        $totalWareHouseCount = InventoryWarehouse::where('venue_id', $venue->id)->count();
+        $totalPhysicalStoreCount = PhysicalStore::where('venue_id', $venue->id)->count();
+
+        $totalEcomStores = EcommercePlatform::where('venue_id', $venue->id)->count();
+        return response()->json([
+            'total_product_count' => $totalProductCount,
+            'total_category_count' => $totalCategoryCount,
+            'total_collection_count' => $totalCollectionCount,
+            'total_group_count' => $totalGroupCount,
+            'total_variants_count' => $totalVariantsCount,
+            'total_warehouse_count' => $totalWareHouseCount,
+            'total_physical_store_count' => $totalPhysicalStoreCount,
+            'total_ecom_store_count' => $totalEcomStores
+        ], 200);
+    }
+
+
+    public function getCrossLocationInventoryBalance(): JsonResponse
+    {
+
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $limit = request()->get('limit', 6);
+        $month = request()->get('month', now()->month);
+        $year = request()->get('year', now()->year);
+
+        $warehouses = InventoryWarehouse::withSum(['inventoryRetails' => function ($query) use ($month, $year) {
+                    $query->whereMonth('last_synchronization', $month)
+                        ->whereYear('last_synchronization', $year);
+                    }], 'stock_quantity')
+                    ->where('venue_id', $venue->id)
+                    ->orderByDesc('inventory_retails_sum_stock_quantity')
+                    ->take($limit)
+                    ->get();
+
+
+        return response()->json([
+            'success' => true,
+            'data' => $warehouses
+        ], 200);
+    }
+
+    public function getSalesByBrands(): JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $month = request()->get('month', now()->month);
+        $year = request()->get('year', now()->year);
+        
+        $brands = Brand::with(['products' => function($query) use ($month, $year) {
+            $query->select('products.id', 'products.brand_id')
+                ->join('order_products', 'products.id', '=', 'order_products.product_id')
+                ->join('orders', 'orders.id', '=', 'order_products.order_id')
+                ->whereMonth('orders.created_at', $month)
+                ->whereYear('orders.created_at', $year)
+                ->groupBy('products.brand_id')
+                ->select(
+                    'products.brand_id',
+                    DB::raw('COUNT(DISTINCT orders.id) as total_orders'),
+                    DB::raw('SUM(orders.total_amount) as total_amount')
+                );
+        }])
+        ->where('venue_id', $venue->id)
+        ->select('id', 'title')
+        ->get();
+
+        // Transform the data structure to match original format
+        $brands->each(function($brand) {
+            $brand->total_orders = $brand->products->first()->total_orders ?? 0;
+            $brand->total_amount = $brand->products->first()->total_amount ?? 0;
+            unset($brand->products);
+        });
+        
+        return response()->json([
+            'success' => true,
+            'data' => $brands
+        ], 200);
+    }
+
+    public function getSalesByEcomStore(): JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $data = EcommercePlatform::where('venue_id', $venue->id)
+            ->withCount(['importedSales'])
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $data
+        ], 200);
+    }
 
     public function getRetailProductInventoryActivity($inventory_id): JsonResponse|\Illuminate\Support\Collection
     {

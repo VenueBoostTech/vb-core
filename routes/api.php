@@ -383,9 +383,6 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::post('/stock', [AlphaSyncController::class, 'syncStockAlpha']);
                 Route::post('/calculate-stock', [AlphaSyncController::class, 'calculateStock']);
             });
-
-
-
         });
 
 
@@ -815,6 +812,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::patch('/delivery/{id}/status', 'App\Http\Controllers\v1\OrdersController@changeOrderDeliveryStatus');
             Route::get('/pickup', 'App\Http\Controllers\v1\OrdersController@getPickupOrders');
             Route::get('/{id}', 'App\Http\Controllers\v1\OrdersController@show');
+            Route::get('/tracking/details/{id}', 'App\Http\Controllers\v1\OrdersController@getTracking')->withoutMiddleware(['admin_api_key', 'jwt']);
             Route::post('finalize-order', 'App\Http\Controllers\v1\OrdersController@finalizeOrder');
             Route::post('create-customer', 'App\Http\Controllers\v1\OrdersController@createCustomer');
         });
@@ -881,6 +879,21 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::delete('/product-variations/{id}', 'App\Http\Controllers\v1\ProductsController@deleteProductVariation');
             Route::post('/products/bulk-import', 'App\Http\Controllers\v1\ProductsController@bulkImportProducts');
             Route::post('/products/try-home-product', 'App\Http\Controllers\v1\ProductsController@tryHomeProduct');
+
+
+            Route::group(['prefix' => 'inventory-management'], function () {
+                Route::get('/summery', 'App\Http\Controllers\v1\ProductsController@getProductInventoriesSummery');
+                Route::get('/cross-location-inventory-balance', 'App\Http\Controllers\v1\ProductsController@getCrossLocationInventoryBalance');
+            });
+
+            Route::group(['prefix' => 'sales-metrics'], function () {
+                Route::get('/by-brands', 'App\Http\Controllers\v1\ProductsController@getSalesByBrands');
+                Route::get('/by-ecomstore', 'App\Http\Controllers\v1\ProductsController@getSalesByEcomStore');
+            });
+
+            Route::resource('bb-menu', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BbMenusController');
+            Route::resource('bb-slider', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BbSliderController');
+            Route::post('bb-menu/{id}', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BbMenusController@update');
 
         });
 

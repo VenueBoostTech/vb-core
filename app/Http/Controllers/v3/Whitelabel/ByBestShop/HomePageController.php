@@ -180,7 +180,7 @@ class HomePageController extends Controller
         $products = Product::with(['attribute.option', 'productImages'])
             ->join('product_groups', 'products.id', '=', 'product_groups.product_id')
             ->join('vb_store_products_variants as variants', 'products.id', '=', 'variants.product_id')
-            ->select("products.*",
+            ->select("products.title", "products.title_al", 
                 DB::raw("MAX(variants.price) as max_regular_price"),
                 DB::raw("MIN(variants.price) as min_regular_price"),
                 DB::raw("COUNT(variants.currency_alpha) as count_currency_alpha")
@@ -190,7 +190,7 @@ class HomePageController extends Controller
             ->where('product_groups.group_id', '=', $group->id)
             ->where('products.restaurant_id', $venue->id)
             ->whereNotNull('products.currency_alpha')
-            ->groupBy('products.id', 'product_groups.created_at') // Add created_at to GROUP BY
+            ->groupBy('products.id', 'products.title', 'products.title_al' , 'product_groups.created_at')
             ->orderBy('product_groups.created_at', 'DESC')
             ->limit(4)
             ->get();

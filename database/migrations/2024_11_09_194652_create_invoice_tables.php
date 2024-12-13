@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('service_request_id')->constrained('service_requests');
             $table->enum('status', ['draft', 'pending', 'paid', 'overdue', 'cancelled'])->default('draft');
             $table->timestamp('issue_date');
-            $table->timestamp('due_date');
+            $table->timestamp('due_date')->nullable();
             $table->decimal('amount', 10, 2);
             $table->decimal('tax_amount', 10, 2)->default(0);
             $table->decimal('total_amount', 10, 2);

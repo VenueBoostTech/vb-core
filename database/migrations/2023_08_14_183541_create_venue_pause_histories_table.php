@@ -18,7 +18,7 @@ return new class extends Migration
             $table->unsignedBigInteger('venue_id');
             $table->string('reason');
             $table->timestamp('start_time');
-            $table->timestamp('end_time');
+            $table->timestamp('end_time')->nullable();;
             $table->timestamp('reactivated_at')->nullable();
             $table->timestamps();
 

@@ -20,13 +20,12 @@ class BbGroupsController extends Controller
             if (!@$group) {
                 return response()->json(['error' => 'Group not found'], 404);
             }
-
             // Get product from database
             $products = Product::with('productImages')
                 ->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                 ->join('groups', 'groups.id', '=', 'product_groups.group_id')
                 ->where('groups.bybest_id', '=', $group_id);
-
+            
             // Search product by brands
             if ($request->filled('brand_id') && is_array($request->brand_id) && count($request->brand_id) != 0) {
                 $products = $products->whereIn('products.brand_id', $request->brand_id);
@@ -64,8 +63,10 @@ class BbGroupsController extends Controller
                 $products = $products->whereIn('vb_store_product_attributes.attribute_id', $request->attribute_id);
             }
 
-            $products = $products->distinct('products.id')->paginate(30);
+            $products = $products->select('products.*');
 
+            $products = $products->distinct('products.id')->paginate(30);
+             
             $filters = VbStoreAttribute::join('vb_store_attributes_options', 'vb_store_attributes_options.attribute_id', '=', 'vb_store_attributes.id')
                 ->join('vb_store_product_variant_attributes', 'vb_store_product_variant_attributes.attribute_id', '=', 'vb_store_attributes_options.id')
                 ->join('vb_store_products_variants', 'vb_store_product_variant_attributes.variant_id', 'vb_store_products_variants.id')
@@ -95,7 +96,7 @@ class BbGroupsController extends Controller
                 ->get()
                 ->groupBy('attr_name')
                 ->sortDesc();
-
+            
             $brands = Brand::join('products', 'products.brand_id', '=', 'brands.id')
                 ->join('product_category', 'product_category.product_id', '=', 'products.id')
                 ->where('products.product_status', '=', 1)
@@ -140,7 +141,7 @@ class BbGroupsController extends Controller
                     DB::raw('IFNULL(Max(products.price), 0) as max_price'),
                     DB::raw('IFNULL(Min(products.price), 0) as min_price')
                 )->first();
-
+                
             return response()->json([
                 'group' => $group,
                 'products' => $products,

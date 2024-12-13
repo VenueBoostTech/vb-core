@@ -87,4 +87,9 @@ class Brand extends Model
             get: fn($value) => $value != null ? Storage::disk('s3')->temporaryUrl($value, '+5 minutes') : null,
         );
     }
+
+    public function products()
+    {
+        return $this->hasMany(Product::class);
+    }
 }

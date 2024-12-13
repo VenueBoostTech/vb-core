@@ -15,22 +15,22 @@ return new class extends Migration
      */
     public function up()
     {
-        $oldEmail = 'staffluentweb@gmail.com';
-        $newEmail = 'march@staffluenttechsolutions.com';
-        $newPassword = Hash::make('securepassword1234');
+        // $oldEmail = 'staffluentweb@gmail.com';
+        // $newEmail = 'march@staffluenttechsolutions.com';
+        // $newPassword = Hash::make('securepassword1234');
 
-        $affected = DB::table('users')
-            ->where('email', $oldEmail)
-            ->update([
-                'email' => $newEmail,
-                'password' => $newPassword
-            ]);
+        // $affected = DB::table('users')
+        //     ->where('email', $oldEmail)
+        //     ->update([
+        //         'email' => $newEmail,
+        //         'password' => $newPassword
+        //     ]);
 
-        if ($affected === 0) {
-            throw new Exception("No user found with email: {$oldEmail}");
-        } elseif ($affected > 1) {
-            throw new Exception("Multiple users found with email: {$oldEmail}");
-        }
+        // if ($affected === 0) {
+        //     throw new Exception("No user found with email: {$oldEmail}");
+        // } elseif ($affected > 1) {
+        //     throw new Exception("Multiple users found with email: {$oldEmail}");
+        // }
     }
 
     /**

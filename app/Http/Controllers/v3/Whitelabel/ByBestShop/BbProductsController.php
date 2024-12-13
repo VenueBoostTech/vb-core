@@ -34,7 +34,6 @@ class BbProductsController extends Controller
                 ->where('product_url', '=', $product_url)
                 ->with(['attribute.option', 'productImages', 'postal'])
                 ->first();
-
             if (!$product) {
                 return response()->json(['error' => 'Not found product'], 404);
             }

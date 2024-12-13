@@ -12,6 +12,7 @@ use App\Models\ActivityRetail;
 use App\Models\Address;
 use App\Models\Coupon;
 use App\Models\Customer;
+use App\Models\Chat;
 use App\Models\CustomerAddress;
 use App\Models\DeliveryProvider;
 use App\Models\DeliveryProviderRestaurant;
@@ -630,6 +631,26 @@ class OrdersController extends Controller
 
         return response()->json([
             'order' => $order,
+            'message' => 'Order retrieved successfully'
+        ]);
+    }
+
+
+    public function getTracking($id){
+        $order = OrderStatusChange::where('order_id', $id)->first();
+        if(!$order){
+            return response()->json(['error' => 'Order not found'], 404);
+        }
+        return response()->json([
+            'order_id' => $order->order->order_number,
+            'order_status' => $order->new_status,
+            'order_last_update' => $order->changed_at,
+            'customer'=> $order->order->customer->name,
+            'reservation_id'=> $order->order->reservation_id,
+            'total_amount'=> $order->order->total_amount,
+            'discount_total'=> $order->order->discount_total,
+            'delivery_fee'=> $order->order->delivery_fee,
+            'payment_method'=> $order->order->paymentMethod->name,
             'message' => 'Order retrieved successfully'
         ]);
     }
@@ -2439,7 +2460,15 @@ class OrdersController extends Controller
             // Get currency setting for the venue
             $storeSetting = StoreSetting::where('venue_id', $venue->id)->first();
             $currency = '$  ';
-
+            $chat = Chat::where('order_id', $order->id)->first();
+            if($chat == null) {
+                $chat = Chat::create([
+                    'venue_id' => $venue->id,
+                    'order_id' => $order->id,
+                    'sender_id' => auth()->user()->id,
+                    'receiver_id' => $order->customer->id,
+                ]);
+            }
             $response = [
                 'delivery_address' => $orderAddress,
                 'customer' => [
@@ -2463,6 +2492,7 @@ class OrdersController extends Controller
                 'order_for' => $order->is_for_self ? 'Self' : $order->other_person_name,
                 'is_for_self' => $order->is_for_self ?? null,
                 'hospital_room_id' => $order->hospital_room_id ?? null,
+                'chat' => $chat ? $chat : null
             ];
 
             return response()->json(['data' => $response], 200);
@@ -2771,13 +2801,13 @@ class OrdersController extends Controller
             return response()->json(['error' => 'Status is required'], 400);
         }
 
-        if (!in_array($newStatus, [OrderStatus::NEW_ORDER, OrderStatus::ON_HOLD, OrderStatus::PROCESSING, OrderStatus::ORDER_CANCELLED, OrderStatus::ORDER_COMPLETED])) {
-            return response()->json(['error' => 'Invalid status provided'], 400);
-        }
+        // if (!in_array($newStatus, [OrderStatus::NEW_ORDER, OrderStatus::ON_HOLD, OrderStatus::PROCESSING, OrderStatus::ORDER_CANCELLED, OrderStatus::ORDER_COMPLETED])) {
+        //     return response()->json(['error' => 'Invalid status provided'], 400);
+        // }
 
-        if (!$this->isStatusTransitionValid($order->status, $newStatus)) {
-            return response()->json(['error' => 'Invalid status transition'], 400);
-        }
+        // if (!$this->isStatusTransitionValid($order->status, $newStatus)) {
+        //     return response()->json(['error' => 'Invalid status transition'], 400);
+        // }
 
         // Update order status and save.
         $order->status = $newStatus;
@@ -2834,9 +2864,9 @@ class OrdersController extends Controller
             return response()->json(['error' => 'Status is required'], 400);
         }
 
-        if (!in_array($newStatus, [OrderStatus::NEW_ORDER, OrderStatus::ORDER_ON_DELIVERY, OrderStatus::PROCESSING, OrderStatus::ORDER_CANCELLED, OrderStatus::ORDER_COMPLETED])) {
-            return response()->json(['error' => 'Invalid status provided'], 400);
-        }
+        // if (!in_array($newStatus, [OrderStatus::NEW_ORDER, OrderStatus::ORDER_ON_DELIVERY, OrderStatus::PROCESSING, OrderStatus::ORDER_CANCELLED, OrderStatus::ORDER_COMPLETED])) {
+        //     return response()->json(['error' => 'Invalid status provided'], 400);
+        // }
 
         if (!$this->isDeliveryStatusTransitionValid($order->status, $newStatus)) {
             return response()->json(['error' => 'Invalid status transition'], 400);

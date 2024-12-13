@@ -465,7 +465,7 @@ class InventorySyncController extends Controller
                                 );
 
                                 // Dispatch job for photo upload
-                                if ($bybestCollection['photo']) {
+                                if ($collection->wasRecentlyCreated && $bybestCollection['photo']) {
                                     \Log::info('Dispatching UploadCollectionPhotoJob', [
                                         'collection_id' => $collection->id,
                                         'photo_url' => $bybestCollection['photo'],
@@ -647,7 +647,7 @@ class InventorySyncController extends Controller
                                         'product_id' => $synced_product->id,
                                         'photo_url' => $item['product_image'],
                                     ]);
-                                    UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
+                                    // UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
                                 }
                                 $processedCount++;
                                 DB::commit();
@@ -982,6 +982,7 @@ class InventorySyncController extends Controller
                             DB::beginTransaction();
                             try {
 
+                                error_log("Hello 1");
                                 \Log::info('Processing categories', ['item' => $item]);
 
                                 // Make sure the required fields are available
@@ -1031,14 +1032,16 @@ class InventorySyncController extends Controller
                                 );
 
                                 // Dispatch job for photo upload
-                                if ($item['photo']) {
-                                    \Log::info('Dispatching UploadPhotoJob', [
-                                        'cat_id' => $synced_category->id,
-                                        'photo_url' => $item['photo'],
-                                    ]);
+                                // if ($item['photo']) {
+                                //     \Log::info('Dispatching UploadPhotoJob', [
+                                //         'cat_id' => $synced_category->id,
+                                //         'photo_url' => $item['photo'],
+                                //     ]);
 
-                                    UploadPhotoJob::dispatch($synced_category, 'https://admin.bybest.shop/storage/categories/' . $item['photo'], 'photo', $venue);
-                                }
+                                //     UploadPhotoJob::dispatch($synced_category, 'https://admin.bybest.shop/storage/categories/' . $item['photo'], 'photo', $venue);
+                                // }
+
+
                                 $processedCount++;
                                 DB::commit();
                             } catch (\Exception $e) {
@@ -1335,7 +1338,7 @@ class InventorySyncController extends Controller
                                         'photo_url' => $item['option_photo'],
                                     ]);
 
-                                    UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/options/' . $item['option_photo'], 'option_photo', $venue);
+                                    // UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/options/' . $item['option_photo'], 'option_photo', $venue);
                                 }
                                 $processedCount++;
                                 DB::commit();
@@ -1488,7 +1491,7 @@ class InventorySyncController extends Controller
                                     'photo_url' => $item['variation_image'],
                                 ]);
 
-                                UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/products/' . $item['variation_image'], 'variation_image', $venue);
+                                // UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/products/' . $item['variation_image'], 'variation_image', $venue);
                             }
                             $processedCount++;
                             DB::commit();
@@ -2178,7 +2181,7 @@ class InventorySyncController extends Controller
                                         'product_gallery_id' => $productGallery->id,
                                         'photo_url' => $item['photo_name'],
                                     ]);
-                                    UploadPhotoJob::dispatch($productGallery, 'https://admin.bybest.shop/storage/products/' . $item['photo_name'], 'photo_name', $venue);
+                                    // UploadPhotoJob::dispatch($productGallery, 'https://admin.bybest.shop/storage/products/' . $item['photo_name'], 'photo_name', $venue);
                                 }
 
                                 $processedCount++;

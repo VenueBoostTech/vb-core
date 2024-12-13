@@ -29,13 +29,13 @@ return new class extends Migration
             $table->unique(['venue_id', 'user_id', 'supabase_id'], 'venue_user_supabase_unique');
         });
 
-        DB::table('venue_user_supabase_connections')->insert([
-            'venue_id' => 85,
-            'user_id' => 213,  // Changed to integer
-            'supabase_id' => '7b3629fd-de91-467c-9e88-7585613393db',
-            'created_at' => now(),
-            'updated_at' => now()
-        ]);
+        // DB::table('venue_user_supabase_connections')->insert([
+        //     'venue_id' => 85,
+        //     'user_id' => 213,  // Changed to integer
+        //     'supabase_id' => '7b3629fd-de91-467c-9e88-7585613393db',
+        //     'created_at' => now(),
+        //     'updated_at' => now()
+        // ]);
     }
 
     /**

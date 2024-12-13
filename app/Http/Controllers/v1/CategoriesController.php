@@ -88,6 +88,7 @@ class CategoriesController extends Controller
                         'id' => $category->id,
                         'title' => $category->title,
                         'description' => $category->description,
+                        'visible' => $category->visible,
                         'parent' => $category->parent // assuming you have a relation named 'parent' in Category model
                     ];
                 });

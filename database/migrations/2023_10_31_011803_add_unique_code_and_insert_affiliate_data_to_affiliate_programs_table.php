@@ -18,7 +18,7 @@ return new class extends Migration
 
         Schema::table('affiliate_programs', function (Blueprint $table) {
             $table->string('ap_unique')->unique();
-            $table->string('preferred_method');
+            $table->string('preferred_method')->nullable();
         });
 
 

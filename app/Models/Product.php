@@ -171,6 +171,11 @@ class Product extends Model
         return $this->belongsTo(Postal::class, 'shipping_class', 'id');
     }
 
+    public function brand()
+    {
+        return $this->belongsTo(Brand::class, 'brand_id');
+    }
+
     public function variants(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(VbStoreProductVariant::class);
