@@ -146,17 +146,36 @@ class EndUserController extends Controller
         $customer = Customer::where('user_id', $user->id)->first();
 
         $perPage = $request->input('per_page', 15);
-        $orders = Order::where('customer_id', $customer->id)->with('orderProducts.product')->paginate($perPage);
+        $status = $request->input('status'); // Get status from request
 
-        $paginatedData = [
+        $query = Order::where('customer_id', $customer->id)
+            ->with('orderProducts.product');
+
+        // Apply status filter if provided
+        if ($status) {
+            // Handle multiple statuses if comma-separated
+            if (str_contains($status, ',')) {
+                $statuses = explode(',', $status);
+                $query->whereIn('status', $statuses);
+            } else {
+                // Single status filter
+                $query->where('status', $status);
+            }
+        }
+
+        // Order by latest first
+        $query->orderBy('created_at', 'desc');
+
+        $orders = $query->paginate($perPage);
+
+        return response()->json([
+            'message' => 'Orders retrieved successfully',
             'data' => $orders->items(),
             'current_page' => $orders->currentPage(),
             'per_page' => $orders->perPage(),
             'total' => $orders->total(),
             'total_pages' => $orders->lastPage(),
-        ];
-
-        return response()->json(['orders' => $paginatedData], 200);
+        ], 200);
     }
 
 
@@ -275,35 +294,6 @@ class EndUserController extends Controller
 
         $user = $userOrResponse;
         $perPage = $request->input('per_page', 15); // Default to 15 items per page
-        $isDemo = $request->input('demo', false); // Check if demo mode is requested
-
-        if ($isDemo) {
-            // Fetch random products in demo mode
-            $randomProducts = Product::inRandomOrder()->take($perPage)->get(['id', 'title', 'brand_id', 'description', 'price', 'image_path']);
-
-            // Format each product for the response
-            $formattedProducts = $randomProducts->map(function ($product) {
-                return [
-                    'id' => $product->id,
-                    'title' => $product->title,
-                    'brand' => $product->brand ? $product->brand->name : null, // Assuming a brand relationship
-                    'description' => $product->description,
-                    'price' => $product->price,
-                    'image' => $product->image_path,
-                    // 'image' => $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null,
-                ];
-            });
-
-            return response()->json([
-                'wishlist' => [
-                    'data' => $formattedProducts,
-                    'current_page' => 1,
-                    'per_page' => $perPage,
-                    'total' => $formattedProducts->count(),
-                    'total_pages' => 1,
-                ]
-            ], 200);
-        }
 
         // Fetch the actual wishlist items if not in demo mode
         $wishlistItems = WishlistItem::where('customer_id', $user->customer->id)
@@ -551,35 +541,49 @@ class EndUserController extends Controller
         }
 
         $user = $userOrResponse;
+        $venueId = $user->customer->venue_id;
+        $perPage = $request->get('per_page', 10);
+        $type = $request->get('type', 'all'); // Options: all, current, past, used
 
-        $perPage = $request->get('per_page');
-        $all_promotions = Promotion::with(['discounts', 'coupons'])
-            ->where('venue_id', $user->customer->venue_id)
-            ->where('status', 1)
-            ->paginate($perPage);
+        $baseQuery = Promotion::with(['discounts', 'coupons'])
+            ->where('venue_id', $venueId);
 
-        $paginatedData = [
-            'data' => $all_promotions->items(),
-            'current_page' => $all_promotions->currentPage(),
-            'per_page' => $all_promotions->perPage(),
-            'total' => $all_promotions->total(),
-            'total_pages' => $all_promotions->lastPage(),
-        ];
+        switch ($type) {
+            case 'current':
+                $promotions = $baseQuery
+                    ->where('status', 1)
+                    ->whereDate('end_time', '>=', Carbon::now())
+                    ->paginate($perPage);
+                break;
 
-        $all_promotions = Promotion::with(['discounts', 'coupons']);
+            case 'past':
+                $promotions = $baseQuery
+                    ->whereDate('end_time', '<', Carbon::now())
+                    ->paginate($perPage);
+                break;
 
-        // You can still keep the additional promotion filtering if needed
-        $currentPromotions = $all_promotions->where('status', 1)->paginate($perPage);
-        $pastPromotions = $all_promotions->whereDate('end_time', '<', Carbon::now()->toDateTimeString())->paginate($perPage);
-        $usedPromotions = $all_promotions->whereHas('orders', function ($query) use ($user) {
-            $query->where('customer_id', $user->customer->id);
-        })->paginate($perPage);
+            case 'used':
+                $promotions = $baseQuery
+                    ->whereHas('orders', function ($query) use ($user) {
+                        $query->where('customer_id', $user->customer->id);
+                    })
+                    ->paginate($perPage);
+                break;
+
+            default: // 'all'
+                $promotions = $baseQuery
+                    ->where('status', 1)
+                    ->paginate($perPage);
+                break;
+        }
 
         return response()->json([
-            'promotions' => $paginatedData,
-            'current_promotions' => $currentPromotions,
-            'past_promotions' => $pastPromotions,
-            'used_promotions' => $usedPromotions,
+            'message' => 'Promotions retrieved successfully',
+            'data' => $promotions->items(),
+            'current_page' => $promotions->currentPage(),
+            'per_page' => $promotions->perPage(),
+            'total' => $promotions->total(),
+            'total_pages' => $promotions->lastPage(),
         ], 200);
     }
 
@@ -816,8 +820,6 @@ class EndUserController extends Controller
         ], 200);
     }
 
-    //updateProfile
-
     public function getGuestProfile(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
@@ -875,6 +877,7 @@ class EndUserController extends Controller
         ], 200);
     }
 
+    //updateProfile
     public function updateProfile(Request $request): JsonResponse
     {
         $userOrResponse = $this->endUserService->endUserAuthCheck();
@@ -1026,7 +1029,6 @@ class EndUserController extends Controller
     }
 
     public function updateCustomerProfile(Request $request): JsonResponse {
-
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
         if ($userOrResponse instanceof JsonResponse) {
@@ -1035,43 +1037,129 @@ class EndUserController extends Controller
 
         $user = $userOrResponse;
 
+        // First check if email is actually changing
+        if ($request->email !== $user->email) {
+            // Check both users and customers tables for email uniqueness
+            $userExists = User::where('email', $request->email)
+                ->where('id', '!=', $user->id)
+                ->exists();
+
+            $customerExists = Customer::where('email', $request->email)
+                ->where('user_id', '!=', $user->id)
+                ->exists();
+
+            if ($userExists || $customerExists) {
+                return response()->json([
+                    'errors' => [
+                        'email' => ['The email has already been taken.']
+                    ]
+                ], 400);
+            }
+        }
+
         $validator = Validator::make($request->all(), [
             'first_name' => 'required|string',
             'last_name' => 'required|string',
             'phone' => 'required|string',
             'email' => 'required|string|email',
-            'street_address' => 'required|string',
+            'street_address' => 'nullable|string',
             'cId' => 'required',
             'uId' => 'required',
-            'aId' => 'required',
+            'aId' => 'nullable',
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['error' => $validator->errors()], 400);
+            return response()->json(['errors' => $validator->errors()], 400);
         }
 
         try {
-            $user = User::where('id', $user->id)->first();
-            $user->first_name = $request->first_name;
-            $user->last_name = $request->last_name;
-            $user->name = $request->first_name . ' ' . $request->last_name;
-            $user->email = $request->email;
-            $user->save();
+            DB::beginTransaction();
 
+            // Update User
+            $user->update([
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'name' => $request->first_name . ' ' . $request->last_name,
+                'email' => $request->email
+            ]);
+
+            // Update Customer
             $customer = Customer::where('user_id', $user->id)->first();
-            $customer->name = $request->first_name . ' ' . $request->last_name;
-            $customer->email = $request->email;
-            $customer->phone = $request->phone;
-            $customer->address = $request->street_address;
-            $customer->save();
+            if ($customer) {
+                $customer->update([
+                    'name' => $request->first_name . ' ' . $request->last_name,
+                    'email' => $request->email,
+                    'phone' => $request->phone,
+                    'address' => $request->street_address,
+                ]);
+            }
 
-            $address = Address::where('id', $request->aId)->first();
-            $address->address_line1 = $request->street_address;
-            $address->state = $request->state;
-            $address->city = $request->city;
-            $address->postcode = $request->zip;
-            $address->country = $request->country;
-            $address->save();
+            // Handle Address
+            if ($request->street_address) {
+                $address = $request->aId ? Address::find($request->aId) : null;
+
+                if ($address) {
+                    $address->update([
+                        'address_line1' => $request->street_address,
+                        'state' => $request->state,
+                        'city' => $request->city,
+                        'postcode' => $request->zip,
+                        'country' => $request->country,
+                    ]);
+                } else {
+                    $address = Address::create([
+                        'address_line1' => $request->street_address,
+                        'city' => $request->city,
+                        'state' => $request->state,
+                        'postcode' => $request->zip,
+                        'country' => $request->country,
+                    ]);
+                }
+
+                CustomerAddress::updateOrCreate(
+                    ['customer_id' => $customer->id],
+                    ['address_id' => $address->id]
+                );
+
+                EndUserAddress::updateOrCreate(
+                    ['user_id' => $user->id],
+                    ['address_id' => $address->id]
+                );
+            }
+
+            // Handle complex address object if provided
+            if ($request->has('address')) {
+                // Get location names from IDs
+                $country = Country::find($request->address['country_id']);
+                $state = State::find($request->address['state_id']);
+                $city = City::find($request->address['city_id']);
+
+                $address = Address::create([
+                    'address_line1' => $request->address['address_line1'],
+                    'address_line2' => $request->address['address_line2'] ?? null,
+                    'city' => $city->name,
+                    'state' => $state->name,
+                    'postcode' => $request->address['postcode'],
+                    'country' => $country->name,
+                    'country_id' => $request->address['country_id'],
+                    'state_id' => $request->address['state_id'],
+                    'city_id' => $request->address['city_id'],
+                    'latitude' => $request->address['latitude'] ?? null,
+                    'longitude' => $request->address['longitude'] ?? null
+                ]);
+
+                CustomerAddress::updateOrCreate(
+                    ['customer_id' => $customer->id],
+                    ['address_id' => $address->id]
+                );
+
+                EndUserAddress::updateOrCreate(
+                    ['user_id' => $user->id],
+                    ['address_id' => $address->id]
+                );
+            }
+
+            DB::commit();
 
             return response()->json([
                 'message' => 'Profile updated successfully',
@@ -1079,10 +1167,19 @@ class EndUserController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'email_verified_at' => $user->email_verified_at,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
                 ],
+                'customer' => [
+                    'id' => $customer->id,
+                    'phone' => $customer->phone,
+                    'email' => $customer->email,
+                ],
+                'address' => $address ?? null
             ], 200);
+
         } catch (\Exception $e) {
+            DB::rollBack();
             \Sentry\captureException($e);
             return response()->json(['message' => $e->getMessage()], 500);
         }
@@ -1090,7 +1187,6 @@ class EndUserController extends Controller
 
     public function getCustomerProfile(Request $request): JsonResponse
     {
-
         $userOrResponse = $this->endUserService->endUserAuthCheck();
 
         if ($userOrResponse instanceof JsonResponse) {
@@ -1104,19 +1200,37 @@ class EndUserController extends Controller
             return response()->json(['error' => 'Customer not found'], 404);
         }
 
-        $customerAddress = CustomerAddress::where('customer_id', $customer->id)->first();
-        if (!$customerAddress) {
-            return response()->json(['error' => 'Customer Address not found'], 404);
-        }
+        // Get CustomerAddress with related address
+        $customerAddress = CustomerAddress::with('address')
+            ->where('customer_id', $customer->id)
+            ->latest()
+            ->first();
 
-        $address = Address::where('id', $customerAddress->address_id)->first();
-        if (!$address) {
-            return response()->json(['error' => 'Address not found'], 404);
-        }
 
-        $user = User::where('id', $request->uId)->first();  // Get the user
-        if (!$user) {
-            return response()->json(['error' => 'User not found'], 404);
+        // Get EndUserAddress with related address
+        $endUserAddress = EndUserAddress::with('address')
+            ->where('user_id', $user->id)
+            ->latest()
+            ->first();
+
+        // Prepare address data
+        $addressData = null;
+        if ($customerAddress && $customerAddress->address) {
+            $addressData = [
+                'id' => $customerAddress->address->id,
+                'address_line1' => $customerAddress->address->address_line1,
+                'address_line2' => $customerAddress->address->address_line2,
+                'state' => $customerAddress->address->state,
+                'city' => $customerAddress->address->city,
+                'postcode' => $customerAddress->address->postcode,
+                'country' => $customerAddress->address->country,
+                'is_for_retail' => $customerAddress->address->is_for_retail,
+                'latitude' => $customerAddress->address->latitude,
+                'longitude' => $customerAddress->address->longitude,
+                'country_id' => $customerAddress->address->country_id,
+                'state_id' => $customerAddress->address->state_id,
+                'city_id' => $customerAddress->address->city_id,
+            ];
         }
 
         return response()->json([
@@ -1130,22 +1244,8 @@ class EndUserController extends Controller
                 'email' => $customer->email,
                 'phone' => $customer->phone,
             ],
-            'address' => [
-                'id' => $address->id,
-                'address_line1' => $address->address_line1,
-                'address_line2' => $address->address_line2,
-                'state' => $address->state,
-                'city' => $address->city,
-                'postcode' => $address->postcode,
-                'country' => $address->country,
-                'is_for_retail' => $address->is_for_retail,
-                'latitude' => $address->latitude,
-                'longitude' => $address->longitude,
-                'country_id' => $address->country_id,
-                'state_id' => $address->state_id,
-                'city_id' => $address->city_id,
-            ],
+            'address' => $addressData,
+            'end_user_address' => $endUserAddress ? $endUserAddress->address : null
         ], 200);
     }
-
 }

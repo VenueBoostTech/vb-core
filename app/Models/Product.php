@@ -70,6 +70,10 @@ class Product extends Model
         'title_al',
         'short_description_al',
         'description_al',
+        'collection',
+        'tags',
+        'parent',
+        'dimensions',
         'created_at',
         'updated_at',
         'deleted_at'
@@ -81,6 +85,12 @@ class Product extends Model
      * @var array
      */
     protected $appends = ['bb_members_description', 'bb_members_description_al'];
+
+    protected $casts = [
+        'collection' => 'array',
+        'tags' => 'array',
+        'parent' => 'array',
+    ];
 
     public function groups(): HasOne
     {
@@ -161,6 +171,26 @@ class Product extends Model
         return $this->hasMany(VbStoreProductAttribute::class, 'product_id', 'id');
     }
 
+
+    public function productAttribute(){
+        return $this->hasMany(ProductAttribute::class, 'product_id', 'id');
+    }
+ 
+    public function productAttributeValue()
+    {
+        return $this->hasOne(ProductAttributeValue::class, 'product_id');
+    }
+
+    public function attributeValues()
+    {
+        return $this->belongsToMany(
+            AttributeValue::class, // Related model
+            'product_attribute_value', // Pivot table name
+            'product_id', // Foreign key for Product in the pivot table
+            'attribute_value_id' // Foreign key for AttributeValue in the pivot table
+        );
+    }
+
     public function productImages()
     {
         return $this->hasMany(ProductGallery::class, 'product_id', 'id');
@@ -179,6 +209,11 @@ class Product extends Model
     public function variants(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(VbStoreProductVariant::class);
+    }
+
+    public function variations(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Variation::class);
     }
 
     // Add this new method
@@ -350,4 +385,36 @@ class Product extends Model
             </div>'
         );
     }
+
+    public function setCollectionAttribute($value)
+    {
+        $this->attributes['collection'] = json_encode($value);
+    }
+
+    public function setTagsAttribute($value)
+    {
+        $this->attributes['tags'] = json_encode($value);
+    }
+
+    public function setParentAttribute($value)
+    {
+        $this->attributes['parent'] = json_encode($value);
+    }
+
+    // Accessors to customize getting attributes
+    public function getCollectionAttribute($value)
+    {
+        return json_decode($value, true);
+    }
+
+    public function getTagsAttribute($value)
+    {
+        return json_decode($value, true);
+    }
+
+    public function getParentAttribute($value)
+    {
+        return json_decode($value, true);
+    }
+
 }

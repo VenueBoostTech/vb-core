@@ -35,7 +35,21 @@ use App\Http\Controllers\AppSuite\Staff\ShiftController;
 use App\Http\Controllers\AppSuite\Staff\StaffReportController;
 use App\Http\Controllers\AppSuite\Staff\TeamController;
 use App\Http\Controllers\AppSuite\Staff\TimeEntryController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeCheckListController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeServiceTicketController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeEquipmentController;
+use App\Http\Controllers\AppSuite\Staff\EmployeeEquipmentCheckInCheckOutController;
+use App\Http\Controllers\AppSuite\Staff\QualityInspectionsConstructionController;
+use App\Http\Controllers\AppSuite\Staff\ConstructionSiteController;
+use App\Http\Controllers\AppSuite\Staff\OshaComplianceEquipmentController;
+use App\Http\Controllers\AppSuite\Staff\SafetyAuditController;
+use App\Http\Controllers\AppSuite\Staff\ReportIncidentController;
 use App\Http\Controllers\AppSuite\VBAppCustomersController;
+use App\Http\Controllers\AppSuite\Staff\ConstructionSiteIssueController;
+use App\Http\Controllers\AppSuite\Staff\ConstructionSiteRequirementController;
+use App\Http\Controllers\AppSuite\Staff\ConstructionSiteNoticeController;
+use App\Http\Controllers\AppSuite\Staff\ConstructionSiteSafetyChecklistController;
+use App\Http\Controllers\AppSuite\Staff\ConstructionSiteGalleryController;
 use App\Http\Controllers\TrackMaster\OnboardingAnalyticsController;
 use App\Http\Controllers\v1\ProductsController;
 use App\Http\Controllers\AppSuite\Staff\StaffChatController;
@@ -56,6 +70,13 @@ use App\Http\Controllers\VisionTrack\AnalyticsController;
 use App\Http\Controllers\VisionTrack\DevicesController;
 use App\Http\Controllers\VisionTrack\VenueDetectionActivityController;
 use App\Http\Controllers\VisionTrack\VtClientsController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BBMenusController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BBSliderController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbSimilarProductsController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCartSuggestionProductsController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\CurrencyController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentMethodsController;
+use App\Http\Controllers\v1\VbStoreAttributeController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -142,6 +163,12 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
             Route::get('/{product_id}/{product_url}', [BbProductsController::class, 'singleProduct']);
             Route::get('/variant', [BbProductsController::class, 'changeProductVariant']);
         });
+
+        
+       Route::post('similar-products', [BbSimilarProductsController::class, 'getSimilarProducts']);
+
+       Route::post('cart-suggestions', [BbCartSuggestionProductsController::class, 'getCartSuggestionProducts']);
+
     });
 
 
@@ -255,6 +282,7 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::post('/checkout', 'App\Http\Controllers\v1\OrdersController@retailOrder');
         Route::post('/validate-coupon', 'App\Http\Controllers\v1\OrdersController@validateCoupon');
         Route::post('/validate-mm-coupon', 'App\Http\Controllers\v1\OrdersController@validateMMCoupon');
+        Route::post('/validate-discount', 'App\Http\Controllers\v1\OrdersController@validateDiscount');
     });
 
     Route::prefix('web-stripe-connected')->group(function () {
@@ -380,7 +408,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::prefix('do-sync')->group(function() {
                 Route::post('/price', [AlphaSyncController::class, 'syncPriceAlpha']); // api documented
                 Route::post('/sku', [AlphaSyncController::class, 'syncSkuAlpha']);
-                Route::post('/stock', [AlphaSyncController::class, 'syncStockAlpha']);
+                Route::post('/stocks', [AlphaSyncController::class, 'syncStockAlpha']);
                 Route::post('/calculate-stock', [AlphaSyncController::class, 'calculateStock']);
             });
         });
@@ -651,6 +679,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::get('/store-settings', 'App\Http\Controllers\v1\RetailController@show');
             Route::post('/store-settings', 'App\Http\Controllers\v1\RetailController@cuStoreSettings');
             Route::get('/orders/{id}', 'App\Http\Controllers\v1\OrdersController@retailOrderDetails');
+            Route::get('/customers-search', 'App\Http\Controllers\v1\RetailController@getSearchCustomers');
             Route::get('/customers', 'App\Http\Controllers\v1\RetailController@getCustomers');
             Route::patch('/orders/{id}/status', 'App\Http\Controllers\v1\OrdersController@changeOrderStatus');
             Route::get('/revenue', 'App\Http\Controllers\v1\RetailController@fetchRevenueData');
@@ -810,8 +839,11 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::get('/delivery', 'App\Http\Controllers\v1\OrdersController@getDeliveryOrders');
             Route::get('/delivery/{id}', 'App\Http\Controllers\v1\OrdersController@deliveryOrderDetails');
             Route::patch('/delivery/{id}/status', 'App\Http\Controllers\v1\OrdersController@changeOrderDeliveryStatus');
+            Route::patch('/delivery/{id}/leave-note', 'App\Http\Controllers\v1\OrdersController@leaveOrderNote');
+            Route::patch('/delivery/{id}/billing', 'App\Http\Controllers\v1\OrdersController@updateBilling');
             Route::get('/pickup', 'App\Http\Controllers\v1\OrdersController@getPickupOrders');
             Route::get('/{id}', 'App\Http\Controllers\v1\OrdersController@show');
+            Route::delete('/destroy/{id}', 'App\Http\Controllers\v1\OrdersController@destroy');
             Route::get('/tracking/details/{id}', 'App\Http\Controllers\v1\OrdersController@getTracking')->withoutMiddleware(['admin_api_key', 'jwt']);
             Route::post('finalize-order', 'App\Http\Controllers\v1\OrdersController@finalizeOrder');
             Route::post('create-customer', 'App\Http\Controllers\v1\OrdersController@createCustomer');
@@ -858,21 +890,43 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::post('create', 'App\Http\Controllers\v1\ProductsController@createMenu');
             Route::post('generate-digital', 'App\Http\Controllers\v1\ProductsController@generateDigitalMenu');
 
+
+
+        Route::group(['prefix' => 'similar-products'], function () {
+           Route::get('/{bybest_id}', 'App\Http\Controllers\v1\SimilarProductController@getSimilarProducts');
+           Route::post('/', 'App\Http\Controllers\v1\SimilarProductController@updateOrcreatesimilarProducts');
+          });
+
+
+          Route::group(['prefix' => 'cart-sugesstion'], function () {
+            Route::get('/{bybest_id}', 'App\Http\Controllers\v1\CartSuggestionController@getCartSuggestion');
+            Route::post('/', 'App\Http\Controllers\v1\CartSuggestionController@upateOrcreateCartSuggestion');
+           });
+
+
+            Route::get('/collections', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCollectionsController@getCollections');
             Route::get('/categories', 'App\Http\Controllers\v1\CategoriesController@get');
             Route::post('/categories', 'App\Http\Controllers\v1\CategoriesController@store');
             Route::delete('/categories/{id}', 'App\Http\Controllers\v1\CategoriesController@delete');
 
+            Route::get('/products-search', 'App\Http\Controllers\v1\ProductsController@getSearch');
+
             Route::get('/products', 'App\Http\Controllers\v1\ProductsController@get');
             Route::get('/products/{id}', 'App\Http\Controllers\v1\ProductsController@getOne');
+            Route::patch('/products/{id}', 'App\Http\Controllers\v1\ProductsController@updateProduct');
             Route::get('/products/sku/{sku}', 'App\Http\Controllers\v1\ProductsController@getOneBySku');
             Route::post('/products', 'App\Http\Controllers\v1\ProductsController@store');
             Route::post('/products/store-after-scanning', 'App\Http\Controllers\v1\ProductsController@storeAfterScanning');
             Route::delete('/products/{id}', 'App\Http\Controllers\v1\ProductsController@delete');
+            Route::get('/products/filters/{attribute}', 'App\Http\Controllers\v1\ProductsController@getProductAttributes');
             Route::post('/upload-photo', 'App\Http\Controllers\v1\ProductsController@uploadPhoto');
+            Route::delete('/product-gallery/{id}', 'App\Http\Controllers\v1\ProductsController@deletePhoto');
             Route::post('/retail-inventory', 'App\Http\Controllers\v1\ProductsController@createOrUpdateRetailProductInventory');
             Route::get('/inventories', 'App\Http\Controllers\v1\ProductsController@getRetailProductInventories');
             Route::get('/inventory-activity/{id}', 'App\Http\Controllers\v1\ProductsController@getRetailProductInventoryActivity');
+            Route::get('/product-attributes/list', 'App\Http\Controllers\v1\ProductsController@getProductAttributesList');
             Route::post('/product-attributes', 'App\Http\Controllers\v1\ProductsController@createAndAssignToProduct');
+            Route::put('/product-attributes/{id}', 'App\Http\Controllers\v1\ProductsController@updateProductAttribute');
             Route::delete('/product-attributes/{id}', 'App\Http\Controllers\v1\ProductsController@deleteProductAttribute');
             Route::get('/product-att-variations/{id}', 'App\Http\Controllers\v1\ProductsController@getProductAttributesForVariations');
             Route::post('/product-variations', 'App\Http\Controllers\v1\ProductsController@createUpdateVariationsForProduct');
@@ -880,10 +934,24 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::post('/products/bulk-import', 'App\Http\Controllers\v1\ProductsController@bulkImportProducts');
             Route::post('/products/try-home-product', 'App\Http\Controllers\v1\ProductsController@tryHomeProduct');
 
+            Route::apiResource('vb-store-attributes', VbStoreAttributeController::class);
 
+            Route::get('/attributes-options/{id}', 'App\Http\Controllers\v1\VbStoreAttributeController@getAttributesOptions');
+            Route::patch('/update-attributes-options', 'App\Http\Controllers\v1\VbStoreAttributeController@updateAttributeOptions');
+            Route::delete('/delete-attributes-options/{id}', 'App\Http\Controllers\v1\VbStoreAttributeController@deleteAttributeOption');
+            
+             
             Route::group(['prefix' => 'inventory-management'], function () {
                 Route::get('/summery', 'App\Http\Controllers\v1\ProductsController@getProductInventoriesSummery');
                 Route::get('/cross-location-inventory-balance', 'App\Http\Controllers\v1\ProductsController@getCrossLocationInventoryBalance');
+
+                Route::group(['prefix' => 'reports'], function (){
+                    Route::get('/{id}', 'App\Http\Controllers\v1\InventoryReportController@show');
+                    Route::get('/', 'App\Http\Controllers\v1\InventoryReportController@index');
+                    Route::post('/generate', 'App\Http\Controllers\v1\InventoryReportController@create');
+                    Route::put('/update/{id}', 'App\Http\Controllers\v1\InventoryReportController@update');
+                    Route::delete('/{id}', 'App\Http\Controllers\v1\InventoryReportController@destroy');
+                });
             });
 
             Route::group(['prefix' => 'sales-metrics'], function () {
@@ -891,18 +959,26 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::get('/by-ecomstore', 'App\Http\Controllers\v1\ProductsController@getSalesByEcomStore');
             });
 
-            Route::resource('bb-menu', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BbMenusController');
-            Route::resource('bb-slider', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BbSliderController');
-            Route::post('bb-menu/{id}', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BbMenusController@update');
+
+            Route::resource('bb-menu', BBMenusController::class);
+            Route::post('bb-menu/{id}', [BBMenusController::class , 'update']);
+
+            Route::resource('bb-slider', BBSliderController::class);
+            Route::post('bb-slider/{id}', [BBSliderController::class , 'update']);
+
+            Route::resource('currencies', CurrencyController::class);
+
+            Route::resource('payment-methods', PaymentMethodsController::class);
 
         });
-
+        
         Route::group(['prefix' => 'staff'], function () {
             Route::get('employees', 'App\Http\Controllers\v1\EmployeeController@index');
             Route::get('employees-staff', 'App\Http\Controllers\v1\EmployeeController@getHousekeepingStaff');
             Route::post('employees', 'App\Http\Controllers\v1\EmployeeController@store');
             Route::put('/employees/{id}', 'App\Http\Controllers\v1\EmployeeController@update');
             Route::get('/employees/{id}', 'App\Http\Controllers\v1\EmployeeController@show');
+            Route::delete('/employees/destroy/{id}', 'App\Http\Controllers\v1\EmployeeController@destroy');
             Route::get('roles', 'App\Http\Controllers\v1\RolePermissionController@index');
             Route::post('generate-paycheck', 'App\Http\Controllers\v1\PayrollController@generatePaycheck');
             Route::post('payroll', 'App\Http\Controllers\v1\PayrollController@index');
@@ -1307,14 +1383,65 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     // todo: add comment section at task details
 
                 });
-
-
-
+                
                 Route::group(['prefix' => 'shifts'], function () {
                     Route::get('/calendar', [ShiftController::class, 'getCalendarEvents']);
                     Route::post('/schedule', [ShiftController::class, 'createSchedule']);
                 });
 
+                Route::group(['prefix' => 'construction-site'], function () {
+                    Route::post('/', [ConstructionSiteController::class, 'store']);
+                    Route::get('/', [ConstructionSiteController::class, 'index']);
+                    Route::get('/{id}', [ConstructionSiteController::class, 'show']);
+
+                    Route::group(['prefix' => 'issues'], function () {
+                        Route::get('/{constructionSiteId}', [ConstructionSiteIssueController::class, 'index']);
+                        Route::post('/{constructionSiteId}', [ConstructionSiteIssueController::class, 'create']);
+                        Route::put('/{id}', [ConstructionSiteIssueController::class, 'update']);
+                        Route::delete('/{id}', [ConstructionSiteIssueController::class, 'destroy']);
+                    });
+
+                    Route::group(['prefix' => 'requirements'], function () {
+                        Route::get('/{constructionSiteId}', [ConstructionSiteRequirementController::class, 'index']);
+                        Route::post('/{constructionSiteId}', [ConstructionSiteRequirementController::class, 'create']);
+                        Route::put('/{id}', [ConstructionSiteRequirementController::class, 'update']);
+                        Route::delete('/{id}', [ConstructionSiteRequirementController::class, 'destroy']);
+                    });
+
+                    Route::group(['prefix' => 'notices'], function () {
+                        Route::get('/{constructionSiteId}', [ConstructionSiteNoticeController::class, 'index']);
+                        Route::post('/{constructionSiteId}', [ConstructionSiteNoticeController::class, 'create']);
+                        Route::post('/update/{id}', [ConstructionSiteNoticeController::class, 'update']);
+                        Route::delete('/{id}', [ConstructionSiteNoticeController::class, 'destroy']);
+                    });
+
+                    Route::group(['prefix' => 'checklists'], function () {
+                        Route::get('/{constructionSiteId}', [ConstructionSiteSafetyChecklistController::class, 'index']);
+                        Route::post('/{constructionSiteId}', [ConstructionSiteSafetyChecklistController::class, 'create']);
+                        Route::put('/{id}', [ConstructionSiteSafetyChecklistController::class, 'update']);
+                        Route::delete('/{id}', [ConstructionSiteSafetyChecklistController::class, 'destroy']);
+                    });
+
+                    Route::group(['prefix' => 'checklist-items'], function () {
+                        Route::put('/{checkListId}/{id}', [ConstructionSiteSafetyChecklistController::class, 'updateItemStatus']);
+                    });
+
+                });
+
+                Route::group(['prefix' => 'equipment'], function () {
+                    Route::get('/', [EmployeeEquipmentController::class, 'index']);
+                    Route::post('/', [EmployeeEquipmentController::class, 'store']);
+                    Route::put('/{id}', [EmployeeEquipmentController::class, 'update']);
+                });
+
+                Route::group(['prefix' => 'osha-compliance'], function () {
+                    Route::get('/', [OshaComplianceEquipmentController::class, 'index']);
+                    Route::post('/', [OshaComplianceEquipmentController::class, 'store']);
+                });
+
+                Route::group(['prefix' => 'safety-audit'], function () {
+                    Route::get('/', [SafetyAuditController::class, 'getReportByVenue']);
+                });
             });
         });
     });
@@ -1663,6 +1790,84 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     Route::get('projects', [EmployeeProjectController::class, 'index']);
                     Route::get('projects/{id}', [EmployeeProjectController::class, 'show']);
 
+
+                    Route::get('/service-list', [EmployeeServiceTicketController::class, 'getServiceList'])->name('service-list.index');
+
+                    Route::prefix('projects/{projectId}')->group(function () {
+                        Route::get('/checklists', [EmployeeCheckListController::class, 'index'])->name('checklists.index');
+                        Route::post('/checklists', [EmployeeCheckListController::class, 'store'])->name('checklists.store');
+                        Route::put('/checklists/{id}', [EmployeeCheckListController::class, 'update'])->name('checklists.update');
+                        Route::delete('/checklists/{id}', [EmployeeCheckListController::class, 'destroy'])->name('checklists.destroy');
+
+                        Route::post('/checklists-item/{checklistId}', [EmployeeCheckListController::class, 'addCheckListItem'])->name('checklists-item.store');
+                        Route::put('/checklists-item/{checklistId}/{itemId}/mark-as-completed-uncompleted', [EmployeeCheckListController::class, 'markAsCompletedUnCompleted'])->name('checklists-item.markAsCompletedUnCompleted');
+
+                        
+                        Route::get('/service-ticket', [EmployeeServiceTicketController::class, 'index'])->name('service-ticket.index');
+                        Route::post('/service-ticket', [EmployeeServiceTicketController::class, 'store'])->name('service-ticket.store');
+
+                        Route::get('/equipment', [EmployeeEquipmentController::class, 'index'])->name('equipment.index');
+                        Route::post('/equipment', [EmployeeEquipmentController::class, 'store'])->name('equipment.store');
+
+                        Route::post('/equipment-check-in-check-out/{equipmentId}', [EmployeeEquipmentCheckInCheckOutController::class, 'store'])->name('equipment-check-in-check-out.store');
+
+                        Route::post('/quality-inspections-construction', [QualityInspectionsConstructionController::class, 'store'])->name('quality-inspections-construction.store');
+                        Route::get('/quality-inspections-construction', [QualityInspectionsConstructionController::class, 'index'])->name('quality-inspections-construction.index');
+                    });
+
+                    Route::prefix('construction-site')->group(function () {
+                        Route::get('/', [ConstructionSiteController::class, 'index'])->name('construction-site.index');
+                        Route::get('{constructionSiteId}/check-in-exists', [ConstructionSiteController::class, 'checkInExists'])->name('construction-site.check-in-exists');
+                        Route::post('{constructionSiteId}/check-in', [ConstructionSiteController::class, 'checkIn'])->name('construction-site.check-in');
+                        Route::post('{constructionSiteId}/check-out/{checkInId}', [ConstructionSiteController::class, 'checkOut'])->name('construction-site.check-out');
+
+                        Route::get('/report-incident', [ReportIncidentController::class, 'index'])->name('report-incident.index');
+
+                        Route::prefix('/{constructionSiteId}/report-incident')->group(function () {
+                            Route::post('/', [ReportIncidentController::class, 'store'])->name('report-incident.store');    
+                        });
+
+                        Route::prefix('/safety-audit/{constructionSiteId}')->group(function () {
+                            Route::get('/', [SafetyAuditController::class, 'index'])->name('safety-audit.index');
+                            Route::post('/', [SafetyAuditController::class, 'store'])->name('safety-audit.store');
+                        });
+
+                        Route::group(['prefix' => 'osha-compliance'], function () {
+                            Route::get('/', [OshaComplianceEquipmentController::class, 'index']);
+                        });
+
+                        Route::prefix('issues')->group(function () {
+                            Route::post('/{constructionSiteId}/', [ConstructionSiteIssueController::class, 'create']);
+                            Route::get('/{constructionSiteId}/', [ConstructionSiteIssueController::class, 'index']);
+
+                            Route::prefix('/{issueId}/comments')->group(function () {
+                                Route::get('/', [CommentController::class, 'getCommentsForIssue']);
+                                Route::post('/', [CommentController::class, 'addCommentToIssue']);
+                                Route::delete('/{id}', [CommentController::class, 'deleteCommentFromIssue']);
+                            });
+                        });
+
+                        Route::group(['prefix' => 'requirements'], function () {
+                            Route::get('/{constructionSiteId}', [ConstructionSiteRequirementController::class, 'index']);
+                        });
+
+                        Route::group(['prefix' => 'notices'], function () {
+                            Route::get('/{constructionSiteId}', [ConstructionSiteNoticeController::class, 'index']);
+                        });
+
+                        Route::group(['prefix' => 'checklists'], function () {
+                            Route::get('/{constructionSiteId}', [ConstructionSiteSafetyChecklistController::class, 'index']);
+                            Route::put('/{checkListId}/{id}', [ConstructionSiteSafetyChecklistController::class, 'updateItemStatus']);
+                        });
+
+                        Route::group(['prefix' => 'galleries'], function () {
+                            Route::get('/{constructionSiteId}', [ConstructionSiteGalleryController::class, 'index']);
+                            Route::post('/{constructionSiteId}', [ConstructionSiteGalleryController::class, 'create']);
+                            Route::delete('/{id}', [ConstructionSiteGalleryController::class, 'destroy']);
+                        });
+                    });
+
+                    
                     Route::get('tasks', [EmployeeTaskController::class, 'index']);
                     Route::get('tasks/{id}', [EmployeeTaskController::class, 'show']);
                      Route::put('tasks/{id}/status', [EmployeeTaskController::class, 'updateStatus']);
@@ -1841,6 +2046,9 @@ Route::get('api/v1/calendar/{obfuscatedId}/{token}.ics', [CalendarConnectionCont
 
 
 Route::get('api/v1/end-user/messages/{chatId}', 'App\Http\Controllers\v1\EndUserChatController@getMessages');
+
+
+
 
 
 // OLD Routes -- Keep here, maybe delete on the future

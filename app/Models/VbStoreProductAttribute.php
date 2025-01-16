@@ -23,11 +23,12 @@ class VbStoreProductAttribute extends Model
         return $this->belongsTo(VbStoreAttribute::class, 'attribute_id');
     }
 
-    public function products(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function products(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
-        return $this->belongsToMany(Product::class, 'vb_store_product_attributes', 'attribute_id', 'product_id')
-            ->withPivot('venue_id')
-            ->withTimestamps();
+        return $this->belongsTo(Product::class, 'product_id');
+        // return $this->belongsToMany(Product::class, 'vb_store_product_attributes', 'attribute_id', 'product_id')
+        //     ->withPivot('venue_id')
+        //     ->withTimestamps();
     }
 
     public function option() {

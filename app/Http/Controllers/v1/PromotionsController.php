@@ -80,6 +80,7 @@ class PromotionsController extends Controller
      */
     public function index(): JsonResponse
     {
+        
         if (!auth()->user()->restaurants->count()) {
             return response()->json(['error' => 'User not eligible for making this API call'], 400);
         }
@@ -216,8 +217,7 @@ class PromotionsController extends Controller
                     $query->whereNull('promotion_id')
                         ->where('end_time', '>=', now());
                 })
-                ->first();
-
+                ->first();  
 
             if (!$discount) {
                 return response()->json(['error' => 'Invalid or inactive discount provided'], 400);
@@ -370,6 +370,8 @@ class PromotionsController extends Controller
             'value' => 'required|numeric|min:0',
             'start_time' => 'required|date',
             'end_time' => 'required|date|after_or_equal:start_time',
+            'usage_limit_per_coupon'=>'nullable|integer',
+            'minimum_spent'=>'nullable|integer',
         ]);
 
 
@@ -378,8 +380,8 @@ class PromotionsController extends Controller
         }
 
         $product = null;
-        if ($request->has('product_id')) {
-            $product = Product::where('id', $request->input('product_id'))
+        if ($request->has('selected_product')) {
+            $product = Product::where('id', $request->input('selected_product'))
                 ->where('restaurant_id', $venue->id)
                 ->first();
 
@@ -429,6 +431,12 @@ class PromotionsController extends Controller
             'product_ids' => $product_ids ?? null,
             'reservation_count' => $request->input('reservation_count') ?? 0,
             'type' => $request->input('type'),
+            'usage_limit_per_coupon' => $request->input('usage_limit_per_coupon') ?? null,
+            'usage_limit_per_customer' => $request->input('usage_limit_per_customer') ?? null,
+            'minimum_spent' => $request->input('minimum_spent') ?? null,
+            'coupon_use' => $request->input('coupon_use') ?? 0,
+            'user_id'=> $request->input('selected_customer') ?? null,
+            'selected_product'=> $request->input('selected_product') ?? mull,
             'value' => $request->input('value'),
             'start_time' => $request->input('start_time'),
             'end_time' => $request->input('end_time'),
@@ -494,6 +502,7 @@ class PromotionsController extends Controller
         $discounts->load('product');
         $discounts->load('category');
         $discounts->load('rental_unit');
+        $discounts->load('selectedProduct');
 
         // Get currency setting for the venue
         $storeSetting = StoreSetting::where('venue_id', $venue->id)->first();
@@ -503,6 +512,8 @@ class PromotionsController extends Controller
         foreach ($discounts as $discount) {
             $discount->currency = $currency;
             $discount->product_original_price = $discount->product ? $discount->product->price : null;
+            $discount->selected_customer = $discount->user_id ? $discount->user : null;
+            $discount->selected_product = $discount->selected_product ? $discount->product : null;
             // discount value can be also percentage
             if ($discount->type === 'percentage') {
                 $discount->price_with_discount = $discount->product ? $discount->product->price - ($discount->product->price * $discount->value / 100) : null;
@@ -1021,7 +1032,6 @@ class PromotionsController extends Controller
             return response()->json(['error' => 'Venue not found'], 404);
         }
 
-
         $validator = Validator::make($request->all(), [
             'id' => 'required|exists:discounts,id',
 //            'product_id' => 'exists:products,id',
@@ -1031,6 +1041,8 @@ class PromotionsController extends Controller
             'value' => 'required|numeric|min:0',
             'start_time' => 'required|date',
             'end_time' => 'required|date|after:start_time',
+            'usage_limit_per_coupon'=>'nullable|integer',
+            'minimum_spent'=>'nullable|integer',
         ]);
 
         if ($validator->fails()) {
@@ -1113,6 +1125,14 @@ class PromotionsController extends Controller
         $discount->value = $request->value;
         $discount->start_time = $request->start_time;
         $discount->end_time = $request->end_time;
+
+
+        $discount->selected_product = $request->selected_product ? $request->selected_product : null;
+        $discount->usage_limit_per_coupon = $request->usage_limit_per_coupon ? $request->usage_limit_per_coupon : null;
+        $discount->usage_limit_per_customer = $request->usage_limit_per_customer ? $request->usage_limit_per_customer : null;
+        $discount->coupon_use = $request->coupon_use ? $request->coupon_use : 0;
+        $discount->user_id = $request->selected_customer ? $request->selected_customer : null;
+        $discount->minimum_spent = $request->minimum_spent ? $request->minimum_spent : null;
 
         $discount->save();
 
@@ -1416,7 +1436,6 @@ class PromotionsController extends Controller
         }
 
         $code = $request->input('code') ? strtoupper($request->input('code')) : $this->generateCouponCode();
-
         $coupon = Coupon::create([
             'code' => $code,
             'description' => $request->input('description'),
@@ -1427,6 +1446,10 @@ class PromotionsController extends Controller
             'expiry_time' => $request->input('expiry_time'),
             'minimum_spent' => $request->input('minimum_spent'),
             'maximum_spent' => $request->input('maximum_spent'),
+            'selected_product' => $request->input('selected_product'),
+            'selected_customer' => $request->input('selected_customer'),
+            'product_id' => $request->input('selected_product'),
+            'user_id' => $request->input('selected_customer'),
             'usage_limit_per_coupon' => $request->input('usage_limit_per_coupon'),
             'usage_limit_per_customer' => $request->input('usage_limit_per_customer'),
         ]);
@@ -1465,10 +1488,13 @@ class PromotionsController extends Controller
         // add currency for each coupon
         foreach ($coupons as $coupon) {
             $coupon->currency = $currency;
+            $coupon->selected_customer_name = $coupon->user ?? null;
+            $coupon->selected_product_name = $coupon->product ?? null;
         }
 
         return response()->json(['message' => 'Coupons retrieved successfully', 'data' => $coupons], 200);
     }
+
 
     public function showCoupon($id): JsonResponse
     {
@@ -1502,11 +1528,11 @@ class PromotionsController extends Controller
 
     public function updateCouponStatus(Request $request): JsonResponse
     {
+
         $validator = Validator::make($request->all(), [
             'coupon_id' => 'required|exists:coupons,id',
             'status' => 'required|in:0,1',
         ]);
-
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 400);
         }
@@ -1568,6 +1594,7 @@ class PromotionsController extends Controller
         }
 
         $validator = Validator::make($request->all(), [
+            'code' => 'nullable|string|unique:coupons,code,' . $request->input('id'),
             'id' => 'required|exists:coupons,id',
             'description' => 'nullable|string',
             'discount_type' => 'required|in:fixed_cart_discount,percentage_cart_discount',
@@ -1577,17 +1604,16 @@ class PromotionsController extends Controller
             'minimum_spent' => 'nullable|numeric|min:0',
             'maximum_spent' => ['nullable', 'numeric', 'min:0', new MaxSpentRule($request->input('minimum_spent'))],
             'usage_limit_per_coupon' => 'nullable|integer',
-            'usage_limit_per_customer' => 'nullable|integer'
+            'usage_limit_per_customer' => 'nullable|integer',
         ]);
-
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 400);
         }
-
+        
         $coupon = Coupon::where('id', $request->id)
-            ->where('venue_id', $venue->id)
-            ->first();
-
+        ->where('venue_id', $venue->id)
+        ->first();
+        
         $coupon->code = $request->input('code', $coupon->code);
         $coupon->description = $request->input('description', $coupon->description);
         $coupon->discount_type = $request->input('discount_type', $coupon->discount_type);
@@ -1596,10 +1622,13 @@ class PromotionsController extends Controller
         $coupon->expiry_time = $request->input('expiry_time', $coupon->expiry_time);
         $coupon->minimum_spent = $request->input('minimum_spent', $coupon->minimum_spent);
         $coupon->maximum_spent = $request->input('maximum_spent', $coupon->maximum_spent);
+        $coupon->product_id = $request->input('selected_product', $coupon->product_id);
+        $coupon->user_id = $request->input('selected_customer', $coupon->user_id);
         $coupon->usage_limit_per_coupon = $request->input('usage_limit_per_coupon', $coupon->usage_limit_per_coupon);
         $coupon->usage_limit_per_customer = $request->input('usage_limit_per_customer', $coupon->usage_limit_per_customer);
-
+        
         $coupon->save();
+ 
 
         $coupon->load('promotion');
 

@@ -132,7 +132,7 @@ class InventorySyncController extends Controller
         $venue_id = $venue->id;
 
         // Sync attribute types first
-        $this->syncAttributeTypes();
+        // $this->syncAttributeTypes();
 
         $page = 1;
         $totalPages = 10;
@@ -325,62 +325,65 @@ class InventorySyncController extends Controller
 
     private function syncInventoryRetail($bybest_product, $product_id, $venue_id): void
     {
-        // Find existing inventory record by SKU and Venue
-        $existing_inventory = InventoryRetail::where('sku', $bybest_product['product_sku'] ?? '')
-            ->where('venue_id', $venue_id)
-            ->first();
+        try {
+                    // Find existing inventory record by SKU and Venue
+            $existing_inventory = InventoryRetail::where('sku', $bybest_product['product_sku'] ?? '')
+                ->where('venue_id', $venue_id)
+                ->first();
+            $new_stock_quantity = $bybest_product['product_stock']['stock_quantity'] ?? 0;
 
-        $new_stock_quantity = $bybest_product['product_stock']['stock_quantity'] ?? 0;
-
-        $inventory_data = [
-            'venue_id' => $venue_id,
-            'product_id' => $product_id,
-            'sku' => $bybest_product['product_sku'] ?? null,
-            'stock_quantity' => $new_stock_quantity,
-            'manage_stock' => $bybest_product['enable_stock'] ?? false,
-            'low_stock_threshold' => $bybest_product['low_quantity'] ?? null,
-            'sold_individually' => $bybest_product['sold_invidually'] ?? false,
-            'article_no' => $bybest_product['article_no'] ?? null,
-            'currency_alpha' => $bybest_product['currency_alpha'] ?? null,
-            'currency' => $bybest_product['currency'] ?? null,
-            'sku_alpha' => $bybest_product['sku_alpha'] ?? null,
-            'unit_code_alpha' => $bybest_product['unit_code_alpha'] ?? null,
-            'unit_code' => $bybest_product['unit_code'] ?? null,
-            'tax_code_alpha' => $bybest_product['tax_code_alpha'] ?? null,
-            'warehouse_alpha' => $bybest_product['warehouse_alpha'] ?? null,
-            'last_synchronization' => now(),
-            'synced_method' => 'api_cronjob',
-            'product_stock_status' => $bybest_product['product_stock_status'] ?? null,
-        ];
-
-        if ($existing_inventory) {
-            // Update existing record
-            $inventory_data['updated_at'] = now();
-            $inventory = InventoryRetail::where('id', $existing_inventory->id)
-                ->update($inventory_data);
-        } else {
-            // Create new record
-            $inventory_data['created_at'] = now();
-            $inventory_data['updated_at'] = now();
-            $inventory = InventoryRetail::create($inventory_data);
-        }
-
-        // Create activity log if quantity has changed
-        if (!$existing_inventory || $existing_inventory->stock_quantity != $new_stock_quantity) {
-            $old_quantity = $existing_inventory ? $existing_inventory->stock_quantity : 0;
-            $quantity_change = $new_stock_quantity - $old_quantity;
-
-            ActivityRetail::create([
+            $inventory_data = [
                 'venue_id' => $venue_id,
-                'inventory_retail_id' => $inventory->id,
-                'activity_type' => 'sync',
-                'description' => "Stock quantity updated via API sync",
-                'data' => json_encode([
-                    'old_quantity' => $old_quantity,
-                    'new_quantity' => $new_stock_quantity,
-                    'change' => $quantity_change
-                ])
-            ]);
+                'product_id' => $product_id,
+                'sku' => $bybest_product['product_sku'] ?? null,
+                'stock_quantity' => $new_stock_quantity,
+                'manage_stock' => $bybest_product['enable_stock'] ?? false,
+                'low_stock_threshold' => $bybest_product['low_quantity'] ?? null,
+                'sold_individually' => $bybest_product['sold_invidually'] ?? false,
+                'article_no' => $bybest_product['article_no'] ?? null,
+                'currency_alpha' => $bybest_product['currency_alpha'] ?? null,
+                'currency' => $bybest_product['currency'] ?? null,
+                'sku_alpha' => $bybest_product['sku_alpha'] ?? null,
+                'unit_code_alpha' => $bybest_product['unit_code_alpha'] ?? null,
+                'unit_code' => $bybest_product['unit_code'] ?? null,
+                'tax_code_alpha' => $bybest_product['tax_code_alpha'] ?? null,
+                'warehouse_alpha' => $bybest_product['warehouse_alpha'] ?? null,
+                'last_synchronization' => now(),
+                'synced_method' => 'api_cronjob',
+                'product_stock_status' => $bybest_product['product_stock_status'] ?? 'available',
+            ];
+
+            if ($existing_inventory) {
+                // Update existing record
+                $inventory_data['updated_at'] = now();
+                InventoryRetail::where('id', $existing_inventory->id)
+                    ->update($inventory_data);
+                $inventory = $existing_inventory;
+            } else {
+                // Create new record
+                $inventory_data['created_at'] = now();
+                $inventory_data['updated_at'] = now();
+                $inventory = InventoryRetail::create($inventory_data);
+            }
+            // Create activity log if quantity has changed
+            if (!$existing_inventory || $existing_inventory->stock_quantity != $new_stock_quantity) {
+                $old_quantity = $existing_inventory ? $existing_inventory->stock_quantity : 0;
+                $quantity_change = $new_stock_quantity - $old_quantity;
+
+                ActivityRetail::create([
+                    'venue_id' => $venue_id,
+                    'inventory_retail_id' => $inventory->id,
+                    'activity_type' => 'sync',
+                    'description' => "Stock quantity updated via API sync",
+                    'data' => json_encode([
+                        'old_quantity' => $old_quantity,
+                        'new_quantity' => $new_stock_quantity,
+                        'change' => $quantity_change
+                    ])
+                ]);
+            }
+        } catch (\Throwable $th) {
+            dd($th);
         }
     }
 
@@ -647,7 +650,7 @@ class InventorySyncController extends Controller
                                         'product_id' => $synced_product->id,
                                         'photo_url' => $item['product_image'],
                                     ]);
-                                    // UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
+                                    UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
                                 }
                                 $processedCount++;
                                 DB::commit();
@@ -1032,14 +1035,14 @@ class InventorySyncController extends Controller
                                 );
 
                                 // Dispatch job for photo upload
-                                // if ($item['photo']) {
-                                //     \Log::info('Dispatching UploadPhotoJob', [
-                                //         'cat_id' => $synced_category->id,
-                                //         'photo_url' => $item['photo'],
-                                //     ]);
+                                if ($item['photo']) {
+                                    \Log::info('Dispatching UploadPhotoJob', [
+                                        'cat_id' => $synced_category->id,
+                                        'photo_url' => $item['photo'],
+                                    ]);
 
-                                //     UploadPhotoJob::dispatch($synced_category, 'https://admin.bybest.shop/storage/categories/' . $item['photo'], 'photo', $venue);
-                                // }
+                                    UploadPhotoJob::dispatch($synced_category, 'https://admin.bybest.shop/storage/categories/' . $item['photo'], 'photo', $venue);
+                                }
 
 
                                 $processedCount++;
@@ -1338,7 +1341,7 @@ class InventorySyncController extends Controller
                                         'photo_url' => $item['option_photo'],
                                     ]);
 
-                                    // UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/options/' . $item['option_photo'], 'option_photo', $venue);
+                                    UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/options/' . $item['option_photo'], 'option_photo', $venue);
                                 }
                                 $processedCount++;
                                 DB::commit();
@@ -1491,7 +1494,7 @@ class InventorySyncController extends Controller
                                     'photo_url' => $item['variation_image'],
                                 ]);
 
-                                // UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/products/' . $item['variation_image'], 'variation_image', $venue);
+                                UploadPhotoJob::dispatch($attrOption, 'https://admin.bybest.shop/storage/products/' . $item['variation_image'], 'variation_image', $venue);
                             }
                             $processedCount++;
                             DB::commit();
@@ -2181,7 +2184,7 @@ class InventorySyncController extends Controller
                                         'product_gallery_id' => $productGallery->id,
                                         'photo_url' => $item['photo_name'],
                                     ]);
-                                    // UploadPhotoJob::dispatch($productGallery, 'https://admin.bybest.shop/storage/products/' . $item['photo_name'], 'photo_name', $venue);
+                                    UploadPhotoJob::dispatch($productGallery, 'https://admin.bybest.shop/storage/products/' . $item['photo_name'], 'photo_name', $venue);
                                 }
 
                                 $processedCount++;

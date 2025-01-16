@@ -599,6 +599,7 @@ class EmployeeController extends Controller
             }
         }
 
+        $employee->venue = ["id" => $venue->id, 'name' => $venue->name];
         return response()->json(
             [
                 'data' => $employee,
@@ -612,5 +613,18 @@ class EmployeeController extends Controller
                 'owner_employees' => $employee->ownerEmployees,
                 'employees' => $employee->employees
             ]);
+    }
+
+
+    public function destroy($id)
+    {
+        $employee = Employee::findOrFail($id);
+
+        if (!$employee) {
+            return response()->json(['message' => 'Employee not found'], 404);
+        }
+
+        $employee->delete();
+        return response()->json(['message' => 'Employee deleted successfully'], 200);
     }
 }

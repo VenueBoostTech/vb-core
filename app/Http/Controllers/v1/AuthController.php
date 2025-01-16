@@ -108,9 +108,13 @@ class AuthController extends Controller
         $sourceApp = $request->input('source_app');
         $visionTrack = false;
         $allow_clockinout = false;
-
+        $for_field_workers = false;
         if ($credentials['email'] === 'ggerveni+teamleader@gmail.com' && $credentials['password'] === 'Test12345!') {
             $allow_clockinout = true;
+        }
+
+        if ($credentials['email'] === 'ggerveni+teamleaderoriginal@gmail.com' && $credentials['password'] === 'Test12345!') {
+            $for_field_workers = true;
         }
 
         if ($credentials['email'] === 'vt-test-camera@venueboost.io' && $credentials['password'] === 'VB2232!$-') {
@@ -144,7 +148,7 @@ class AuthController extends Controller
         }
 
 
-        return $this->respondWithToken($token, $sourceApp, $visionTrack, $allow_clockinout);
+        return $this->respondWithToken($token, $sourceApp, $visionTrack, $allow_clockinout, $for_field_workers);
     }
 
 
@@ -237,7 +241,7 @@ class AuthController extends Controller
      *
      * @return JsonResponse
      */
-    protected function respondWithToken(string $token, ?string $sourceApp = null, $visionTrack, $allow_clockinout): JsonResponse
+    protected function respondWithToken(string $token, ?string $sourceApp = null, $visionTrack, $allow_clockinout, $for_field_workers): JsonResponse
     {
         $ttl = auth()->guard('api')->factory()->getTTL() * 600;
         $refreshTtl = $ttl * 8; // Refresh token TTL (3x longer)
@@ -408,6 +412,7 @@ class AuthController extends Controller
                     'employee' => $employee,
                     'has_app_access' => $hasAppAccess,
                     'allow_clockinout' => $allow_clockinout,
+                    'for_field_workers' => $for_field_workers,
                     'is_vision_track' => $visionTrack,
                 ],
                 'access_token' => $token,

@@ -11,10 +11,15 @@ class ChecklistItem extends Model
     use HasFactory;
     use SoftDeletes;
 
-    protected $fillable = ['hygiene_check_id', 'item', 'notes', 'is_completed'];
+    protected $fillable = ['hygiene_check_id', 'item', 'notes', 'is_completed','name', 'checklist_id', 'assigned_to'];
 
     public function hygieneCheck(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(HygieneCheck::class);
+    }
+
+    public function assignedTo(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'assigned_to');
     }
 }

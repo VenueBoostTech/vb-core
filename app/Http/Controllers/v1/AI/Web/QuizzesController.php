@@ -188,6 +188,7 @@ class QuizzesController extends Controller
 
     public function suggestQuizMetroshop(Request $request): \Illuminate\Http\JsonResponse
     {
+        
 
         $validator = Validator::make($request->all(), [
             'blog_title' => 'required|string',
@@ -196,16 +197,16 @@ class QuizzesController extends Controller
             'blog_id' => 'required|integer',
         ]);
 
-
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 400);
         }
-
-
+        
+        
+      
         $blogRequestId = $request->get('blog_id');
 
         $existingBlog = Blog::where('id', $blogRequestId)->first();
-
+ 
         if (!$existingBlog) {
             return response()->json(['error' => 'Blog not found'], 404);
         }
@@ -216,32 +217,35 @@ class QuizzesController extends Controller
 
 
         // check if there is a configuration for this venue_id
-        $configuration = QuizConfiguration::where('venue_id', $existingBlog->venue_id)->first();
 
+        $configuration = QuizConfiguration::where('venue_id', $existingBlog->venue_id)->first();
 
         // $existingBlogShowQuiz =  $existingBlog?->show_quiz;
         // todo only for testing purpose
         $existingBlogShowQuiz =  true;
-
+        
         $canShowQuiz = true;
-//        $canShowQuiz =
-//            $existingBlogShowQuiz
-//            && $configuration
-//            && $request->get('blog_word_count') >= $configuration?->wordcount;
-
+        //        $canShowQuiz =
+        //            $existingBlogShowQuiz
+        //            && $configuration
+        //            && $request->get('blog_word_count') >= $configuration?->wordcount;
+        
         $existingQuiz = Quiz::with(['questions.answers'])->where('blog_id', $blogId)->first();
+        
 
         $venue = $existingBlog->restaurant;
         if ($existingQuiz) {
+  
             return response()->json(
                 [
                     'quiz' => $canShowQuiz ? $existingQuiz : null,
                     'credits_per_correct_answer' => $configuration->earn_per_correct_answer,
                     'max_earn' => $configuration->max_earn,
                     'can_show_quiz' => $canShowQuiz,
-
+                    
                 ], 200);
-        }
+            }
+            
 
         $data = [
             "blog_title" => $request->get('blog_title'),

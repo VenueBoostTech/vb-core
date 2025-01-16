@@ -13,6 +13,9 @@ use App\Models\Address;
 use App\Models\Coupon;
 use App\Models\Customer;
 use App\Models\Chat;
+use App\Models\State;
+use App\Models\City;
+use App\Models\Postal;
 use App\Models\CustomerAddress;
 use App\Models\DeliveryProvider;
 use App\Models\DeliveryProviderRestaurant;
@@ -590,16 +593,38 @@ class OrdersController extends Controller
             return response()->json(['error' => 'Venue not found'], 404);
         }
 
+        /**
+         *  ->whereNotNull('order_number')->whereNotNull('status')->where('status', '!=', '1')
+         * This 3 condition are added due to sync the order_number are getting null and status are getting null
+         */
         $orders = Order::where('restaurant_id', $venue->id)
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->whereNotNull('order_number')
+            ->whereNotNull('status')
+            ->where('status', '!=', '1')
+            ->orderBy('created_at', 'desc');
 
+
+         if($request->has('start_date') || $request->has('end_date')){
+            $orders = $orders->whereBetween('created_at', [$request->get('start_date'), $request->get('end_date')]);
+         }
+
+         if($request->has('status') && $request->get('status') != 'all'){
+            $orders = $orders->where('status', $request->get('status'));
+         }
+
+        if($request->has('city') && $request->get('city') != 'all'){
+            $orders = $orders->where('bb_shipping_city', $request->get('city'))->orWhere('shipping_city', $request->get('city'));
+        }
+
+
+        $orders = $orders->orderBy('created_at', 'desc')->get();
         $orders->load('customer');
 
         $transformedOrders = $orders->map(function ($order) {
             return [
                 'order_number' => $order->order_number,
                 'id' => $order->id,
+                'ip'=> $order->ip,
                 'customer_full_name' => $order->customer->name ?? '',
                 'total_amount' => $order->total_amount,
                 'status' => $order->status,
@@ -637,21 +662,30 @@ class OrdersController extends Controller
 
 
     public function getTracking($id){
-        $order = OrderStatusChange::where('order_id', $id)->first();
-        if(!$order){
+
+        // get order by order number
+        $orderWithOrderNumber = Order::where('order_number', $id)->first();
+        if(!$orderWithOrderNumber){
             return response()->json(['error' => 'Order not found'], 404);
         }
+        $order = OrderStatusChange::where('order_id', $orderWithOrderNumber->id)->orderBy('changed_at', 'desc')->first();
+
+        // if there is no order status change
+        // status should be 'unknown' and changed at now
+
+        if(!$order){
+            return response()->json([
+                'order_status' => 'unknown',
+                'order_last_update' => Carbon::now(),
+                'message' => 'Order status retrieved successfully'
+            ]);
+        }
+
+        // return recent order status and last update
         return response()->json([
-            'order_id' => $order->order->order_number,
             'order_status' => $order->new_status,
             'order_last_update' => $order->changed_at,
-            'customer'=> $order->order->customer->name,
-            'reservation_id'=> $order->order->reservation_id,
-            'total_amount'=> $order->order->total_amount,
-            'discount_total'=> $order->order->discount_total,
-            'delivery_fee'=> $order->order->delivery_fee,
-            'payment_method'=> $order->order->paymentMethod->name,
-            'message' => 'Order retrieved successfully'
+            'message' => 'Order status retrieved successfully'
         ]);
     }
 
@@ -2349,6 +2383,38 @@ class OrdersController extends Controller
         if (!$coupon) {
             return response()->json(['error' => 'Invalid coupon code'], 404);
         }
+ 
+         
+        if($coupon->user_id){
+            if(!$request->user_id){
+                return response()->json(['error' => 'Invalid coupon code'], 404);
+            }
+            elseif ($coupon->user_id !== $request->user_id) {
+                 return response()->json(['error' => 'Invalid coupon code'], 404);
+            }
+        }
+         
+        if($coupon->product_id){
+            if(!$request->product_id){
+                return response()->json(['error' => 'Invalid product'], 404);
+            }
+            elseif ($coupon->product_id !== $request->product_id) {
+                return response()->json(['error' => 'Invalid product'], 404);
+            }
+        }
+
+        if ($coupon->minimum_spent >  $request->subtotal) {
+            return response()->json(['error' => 'Invalid minimum spent'], 404);
+        }
+        
+        if($coupon->usage_limit_per_coupon){
+            if($coupon->coupon_use >= $coupon->usage_limit_per_coupon){
+                return response()->json(['error' => 'Coupon limit reached'], 404);
+            }else{
+                $coupon->coupon_use = $coupon->coupon_use + 1;
+                $coupon->save();
+            }
+        }
 
         // Check if the coupon is expired or not started yet
         $currentDate = now();
@@ -2363,11 +2429,12 @@ class OrdersController extends Controller
         } elseif ($coupon->discount_type === 'fixed_cart_discount') {
             $discountValue = $coupon->discount_amount;
         }
-
+         
         // Ensure the discount does not exceed the subtotal
         $discountValue = min($discountValue, $request->subtotal);
 
         return response()->json(['discount_value' => $discountValue, 'coupon' => [
+                'coupon' => $coupon,
                 'expiry_time' => $coupon->expiry_time,
                 'discount_amount' => $coupon->discount_amount,
                 'discount_type' => $coupon->discount_type,
@@ -2451,11 +2518,23 @@ class OrdersController extends Controller
             }
 
             $orderAddress = new StdClass();
-            $orderAddress->address_line1 = $order->address->address_line1 ?? null;
-            $orderAddress->address_line2 = $order->address->address_line2 ?? null;
-            $orderAddress->state = $order->address->state ?? null;
-            $orderAddress->city = $order->address->city ?? null;
-            $orderAddress->postcode = $order->address->postcode ?? null;
+            if($order->address){
+                $orderAddress->address_line1 = $order->address->address_line1 ?? null;
+                $orderAddress->address_line2 = $order->address->address_line2 ?? null;
+                $orderAddress->state = $order->address->state ?? null;
+                $orderAddress->city = $order->address->city ?? null;
+                $orderAddress->postcode = $order->address->postcode ?? null;
+            }else{
+                $orderAddress->address_line1 = $order->shipping_address;
+
+                $state = State::where('id', $order->bb_shipping_state)->first();
+                $orderAddress->state = $state ? $state-> name : null;
+
+                $city = City::where('id', $order->bb_shipping_city)->first();
+                $orderAddress->city = $city ? $city->name : null;
+
+                $orderAddress->postcode = $order->shipping_postal_code ?? null;
+            }
 
             // Get currency setting for the venue
             $storeSetting = StoreSetting::where('venue_id', $venue->id)->first();
@@ -2478,6 +2557,7 @@ class OrdersController extends Controller
                 ],
                 'status' => $order->status,
                 'order_items' => $orderItems,
+                'internal_note' => $order->internal_note,
                 'order_summary' => [
                     'discount_value' => $order->discount_total,
                     'total_amount' => $order->total_amount,
@@ -2486,12 +2566,14 @@ class OrdersController extends Controller
                     'payment_method' => $order->paymentMethod?->name,
                     'delivery_fee' => $order->delivery_fee,
                     'created_at' => $order->created_at->format('F d, Y h:i A'),
+                    'ip'=> $order->ip
                 ],
                 'currency' => $currency,
                 'order_number' => $order->order_number,
                 'order_for' => $order->is_for_self ? 'Self' : $order->other_person_name,
                 'is_for_self' => $order->is_for_self ?? null,
                 'hospital_room_id' => $order->hospital_room_id ?? null,
+                'order_address_id' => $order->address_id,
                 'chat' => $chat ? $chat : null
             ];
 
@@ -2590,6 +2672,22 @@ class OrdersController extends Controller
             \Sentry\captureException($e);
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+
+
+    public function destroy($id){
+
+        $order = Order::find($id);
+
+        if (!$order) {
+            return response()->json(['error' => 'Order not found'], 404);
+        }
+
+         $order->delete();
+
+        return response()->json(['message' => 'Order deleted successfully'], 200);
+
     }
 
     public function webProductDetails($id)
@@ -2921,6 +3019,104 @@ class OrdersController extends Controller
         return response()->json(['message' => 'Order status updated successfully'], 200);
     }
 
+
+    public function leaveOrderNote(Request $request, $orderId): \Illuminate\Http\JsonResponse
+    {
+        // Ensure user has access to modify orders.
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        // Retrieve the order based on order id.
+        $order = Order::where('restaurant_id', $venue->id)
+            ->findOrFail($orderId);
+        if (!$order) {
+            return response()->json(['error' => 'Order not found'], 404);
+        }
+        $internal_note = $request->input('internal_note');
+        $order->internal_note = $internal_note;
+        $order->save();
+
+        return response()->json(['message' => 'Note saved successfully'], 200);
+    }
+
+    public function updateBilling(Request $request, $orderId): \Illuminate\Http\JsonResponse
+    {
+        // Ensure user has access to modify orders.
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        // add validator here
+        $validator = Validator::make($request->all(), [
+            'address_line1' => 'required|string|max:255',
+            'address_line2' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:255',
+            'postcode' => 'required|string|max:255',
+            'name' => 'required|string|max:255',
+            'phone' => 'required|string|max:255',
+            'email' => 'required|email',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        // Retrieve the order based on order id.
+        $order = Order::with('address')->where('restaurant_id', $venue->id)
+            ->findOrFail($orderId);
+        if (!$order) {
+            return response()->json(['error' => 'Order not found'], 404);
+        }
+
+        if($order->address){
+            $address = Address::where('id', $order->address->id)->first();
+            $address->address_line1 = $request->input('address_line1');
+            $address->address_line2 = $request->input('address_line2');
+            $address->city = $request->input('city');
+            $address->postcode = $request->input('postcode');
+            $address->save();
+        } else {
+            $address = Address::create([
+                'address_line1' => $request->input('address_line1'),
+                'address_line2' => $request->input('address_line2'),
+                'city' => $request->input('city'),
+                'postcode' => $request->input('postcode'),
+            ]);
+            $order->address_id = $address->id;
+        }
+
+        $customer = Customer::where('id', $order->customer_id)->first();
+        if($customer){
+            $customer->name = $request->input('name');
+            $customer->phone = $request->input('phone');
+            $customer->email = $request->input('email');
+            $customer->save();
+        }       
+
+        return response()->json(['message' => 'Order billing updated successfully'], 200);
+    }
+
     public function isStatusTransitionValid($currentStatus, $newStatus): bool
     {
         $allowedTransitions = [
@@ -2968,6 +3164,33 @@ class OrdersController extends Controller
         return $statusMap[$statusValue] ?? $statusValue;
     }
 
+
+    public function validateDiscount(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $apiCallVenueAppKey = request()->get('venue_app_key');
+        if (!$apiCallVenueAppKey) {
+            return response()->json(['error' => 'Venue app key is required'], 400);
+        }
+
+        $venue = Restaurant::where('app_key', $apiCallVenueAppKey)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $now = Carbon::now(); // Get the current time
+        
+        $discount = Discount::where('venue_id', $venue->id)
+                            ->where('start_time', '<=', $now)
+                            ->where('end_time', '>=', $now)
+                            ->whereNotNull('usage_limit_per_coupon')  // Ensure usage_limit is not null
+                            ->whereColumn('coupon_use', '<', 'usage_limit_per_coupon')
+                            ->get();
+
+        return response()->json(['coupon' => [
+                'discount' => $discount,
+            ]
+        ]);
+    }
 }
 
 

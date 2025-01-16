@@ -144,9 +144,10 @@ class MemberController extends Controller
 
         $perPage = $request->get('per_page', 15);
         $page = $request->get('page', 1);
-
+            
         $members = Member::where('venue_id', $venue->id)
             ->with('preferredBrand')
+            ->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
         $formattedMembers = $members->map(function ($member) {
@@ -157,12 +158,14 @@ class MemberController extends Controller
                 'email' => $member->email,
                 'phone_number' => $member->phone_number,
                 'birthday' => $member->birthday ? $member->birthday->format('F d, Y') : null,
+                'birthday1' => $member->birthday,
                 'city' => $member->city,
                 'address' => $member->address,
                 'preferred_brand' => $member->preferredBrand ? $member->preferredBrand->title : null,
                 'accept_terms' => $member->accept_terms,
                 'registration_source' => $member->registration_source,
                 'approval_status' => $this->getApprovalStatus($member),
+                'old_platform_member_code'=> $member->old_platform_member_code,
                 'applied_at' => $member->created_at->format('F d, Y h:i A'),
             ];
         });
@@ -207,7 +210,7 @@ class MemberController extends Controller
         $member = Member::where('id', $request->input('member_id'))
             ->where('venue_id', $venue->id)
             ->first();
-
+       
         if (!$member) {
             return response()->json(['error' => 'Member not found'], 404);
         }
@@ -215,24 +218,31 @@ class MemberController extends Controller
         // Generate a random password
         $password = Str::random(8);
 
-        // Create a new user
-        $user = User::create([
-            'name' => $member->first_name . ' ' . $member->last_name,
-            'email' => $member->email,
-            'password' => Hash::make($password),
-            'country_code' => 'AL',
-            'enduser' => true
-        ]);
-
+        // fixed below code
+        $user = User::where('email', $member->email)->first();
+        
+        if (!$user) {
+            $user = User::create([
+                'name' => $member->first_name . ' ' . $member->last_name,
+                'email' => $member->email,
+                'password' => Hash::make($password),
+                'country_code' => 'AL',
+                'enduser' => true
+            ]);
+        }
+        $customer = Customer::where('user_id', $user->id)->first();
+        if(!$customer){
+            $customer = Customer::create([
+                'user_id' => $user->id,
+                'venue_id' => $venue->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $member->phone_number ?? '-',
+                'address' => $member->address ?? '-',
+            ]);
+        }
         // Create a new customer
-        $customer = Customer::create([
-            'user_id' => $user->id,
-            'venue_id' => $venue->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'phone' => $member->phone_number ?? '-',
-            'address' => $member->address ?? '-',
-        ]);
+
 
         // Send email to new user
         Mail::to($member->email)->send(new NewUserFromMemberWelcomeEmail($user, $password));
@@ -240,11 +250,15 @@ class MemberController extends Controller
         // Update the member
         $member->user_id = $user->id;
         $member->accepted_at = now();
+        if($member->old_platform_member_code == null){
+            $member->old_platform_member_code = str_pad(random_int(0, 9999999999), 13, '0', STR_PAD_LEFT);
+        }
         $member->is_rejected = false;
         $member->rejection_reason = null;
         $member->rejected_at = null;
         $member->save();
 
+        $user->old_platform_member_code = $member->old_platform_member_code;
         return response()->json(['message' => 'Member accepted and user created successfully',
             'data' => [
                 'user' => $user,

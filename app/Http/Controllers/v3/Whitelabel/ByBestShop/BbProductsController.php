@@ -7,6 +7,7 @@ use App\Models\AccountingFinance\Currency;
 use App\Models\Product;
 use App\Models\VbStoreProductVariant;
 use App\Models\Brand;
+use App\Models\SimilarProduct;
 use App\Models\City;
 use App\Models\Country;
 use App\Models\Member;
@@ -41,7 +42,7 @@ class BbProductsController extends Controller
 
             $currency = Currency::where('is_primary', '=', true)->first();
             $brand = Brand::where('id', '=', $product->brand_id)->first();
-            $bb_memebers = Member::first();
+            $bb_members = Member::first();
 
             $related_products = Product
                 ::where('products.title', 'LIKE', '%' . substr($product->title, 0, strlen($product->title) / 2) . '%')
@@ -329,18 +330,29 @@ class BbProductsController extends Controller
                         })
                     ];
                 });
+          
 
+                $similarProducts = SimilarProduct::where('bybest_id', '=', $product_id)->get();
 
-            $response_data = [
-                'currency' => $currency,
-                'product' => $product,
-                'brand' => $brand,
-                'bb_members' => $bb_memebers,
-                'countries' => $countries,
-                'atributes' => $atributes,
-                'related_products' => $related_products
-                //'cities' => $cities,
-            ];
+                $allSimilarProducts = $similarProducts->map(function ($similarProduct) {
+                    $similarProductIds = json_decode($similarProduct->similar_products);
+                    return Product::whereIn('id', $similarProductIds)->get();
+                })->flatten();     
+
+      
+                // Ensuring variable names are correct
+                $response_data = [
+                    'currency' => $currency,
+                    'product' => $product,
+                    'brand' => $brand,
+                    'bb_members' => $bb_members ?? [], // Corrected typo
+                    'countries' => $countries,
+                    'atributes' => $atributes,
+                    'related_products' => $related_products,
+                    'similar_products' => $allSimilarProducts, // Corrected variable name
+                    //'cities' => $cities,
+                ];
+                
 
             return response()->json($response_data);
         } catch (\Throwable $th) {

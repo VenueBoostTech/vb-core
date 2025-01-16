@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\v3;
 
 use App\Http\Controllers\Controller;
-
 use App\Models\CustomerAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -17,15 +16,100 @@ use Illuminate\Support\Facades\DB;
 
 class GeneralSyncController extends Controller
 {
+    // Helper function to validate dates
+    private function validateDate($date, $type = 'regular', $fallbackDate = null) {
+        // Early return if empty and it's a birthday (should be null)
+        if ($type === 'birthday' && (empty($date) || $date === '0000-00-00 00:00:00')) {
+            return null;
+        }
+
+        // For regular dates, check if it's the zero date
+        if ($date === '0000-00-00 00:00:00') {
+            return $fallbackDate ?? now();
+        }
+
+        try {
+            $dateObj = new \DateTime($date);
+
+            // For birthdays, if it's a valid date, return it regardless of year
+            if ($type === 'birthday' && $dateObj) {
+                return $dateObj;
+            }
+
+            // For other dates, validate year is after 1970
+            if ($dateObj->format('Y') > 1970) {
+                return $dateObj;
+            }
+
+            // If date is invalid, return fallback or now()
+            return $fallbackDate ?? now();
+        } catch (\Exception $e) {
+            if ($type === 'birthday') {
+                return null;
+            }
+            return $fallbackDate ?? now();
+        }
+    }
+
     public function syncUsersFromBB(Request $request): \Illuminate\Http\JsonResponse
     {
-        $page = 1;
-        $perPage = 100;
-        $skippedUsers = 0;
-        $skippedCustomers = 0;
-        $syncedUsers = 0;
+        try {
+            DB::beginTransaction();
 
-        do {
+            // 1. Get users to delete
+            $usersToDelete = User::where(function($query) {
+                $query->whereNotNull('old_platform_user_id')
+                    ->orWhereHas('member', function($q) {
+                        $q->whereNotNull('old_platform_member_code');
+                    });
+            })->pluck('id');
+
+            // 2. Get customers to delete
+            $customersToDelete = Customer::whereIn('user_id', $usersToDelete)->pluck('id');
+
+            // 3. Delete chats first
+            DB::table('chats')->whereIn('sender_id', $usersToDelete)
+                ->orWhereIn('receiver_id', $usersToDelete)
+                ->delete();
+
+            // 4. Delete orders and related data
+            $ordersToDelete = DB::table('orders')
+                ->whereIn('customer_id', $customersToDelete)
+                ->pluck('id');
+
+            DB::table('order_coupons')->whereIn('order_id', $ordersToDelete)->delete();
+            DB::table('order_discounts')->whereIn('order_id', $ordersToDelete)->delete();
+            DB::table('order_products')->whereIn('order_id', $ordersToDelete)->delete();
+            DB::table('order_deliveries')->whereIn('order_id', $ordersToDelete)->delete();
+            DB::table('orders')->whereIn('id', $ordersToDelete)->delete();
+
+            // 5. Delete addresses
+            CustomerAddress::whereIn('customer_id', $customersToDelete)->delete();
+            Address::whereIn('id', function($query) use ($customersToDelete) {
+                $query->select('address_id')
+                    ->from('customer_addresses')
+                    ->whereIn('customer_id', $customersToDelete);
+            })->delete();
+
+            // 6. Finally delete customers, members and users
+            Customer::whereIn('id', $customersToDelete)->delete();
+            Member::whereIn('user_id', $usersToDelete)->delete();
+            User::whereIn('id', $usersToDelete)->delete();
+
+            DB::commit();
+
+            // Initialize error arrays
+            $duplicateErrors = [];
+            $otherErrors = [];
+
+            // SYNC PHASE
+            $page = 1;
+            $perPage = 100;
+            $syncedCount = 0;
+            $skippedCount = 0;
+            $memberCount = 0;
+
+            // Get first page to get total
             $response = Http::withHeaders([
                 'X-App-Key' => 'sync.venueboost.io',
             ])->get('https://bybest.shop/api/V1/sync-for-vb', [
@@ -33,81 +117,135 @@ class GeneralSyncController extends Controller
                 'per_page' => $perPage,
             ]);
 
-            if ($response->successful()) {
-                $userData = $response->json('data');
-                foreach ($userData as $oldUser) {
-                    DB::transaction(function () use ($oldUser, &$skippedUsers, &$skippedCustomers, &$syncedUsers) {
-                        // Check if user exists
-                        $existingUser = User::where('email', $oldUser['email'])->first();
-                        if ($existingUser) {
-                            $skippedUsers++;
-                            $user = $existingUser;
-                        } else {
-                            $user = $this->syncUser($oldUser);
-                            $syncedUsers++;
-                        }
+            if (!$response->successful()) {
+                throw new \Exception('Failed to fetch data from old system');
+            }
 
-                        // Sync Customer
-                        $existingCustomer = Customer::where('email', $user->email)->first();
-                        if ($existingCustomer) {
-                            $skippedCustomers++;
-                            $customer = $existingCustomer;
-                        } else {
-                            $customer = $this->syncCustomer($user, $oldUser);
-                        }
+            $totalUsers = $response->json('total');
+            $totalPages = ceil($totalUsers / $perPage);
 
-                        // Sync Address
-                        $this->syncAddress($customer, $oldUser);
+            while ($page <= $totalPages) {
+                if ($page > 1) {
+                    $response = Http::withHeaders([
+                        'X-App-Key' => 'sync.venueboost.io',
+                    ])->get('https://bybest.shop/api/V1/sync-for-vb', [
+                        'page' => $page,
+                        'per_page' => $perPage,
+                    ]);
 
-                        // Sync Member
-                        if (isset($oldUser['bb_member_code']) && $oldUser['bb_member_code'] != null && $oldUser['bb_member_code'] != '') {
-                            $this->syncMember($user, $oldUser);
-                        }
-                    });
+                    if (!$response->successful()) {
+                        throw new \Exception("Failed to fetch data from old system on page $page");
+                    }
                 }
 
-                $page++;
-            } else {
-                return response()->json(['message' => 'Failed to fetch data from old system'], 500);
-            }
-        } while (count($userData) == $perPage);
+                $userData = $response->json('data');
+                if (empty($userData)) {
+                    \Log::warning("Empty data received on page $page");
+                    break;
+                }
 
-        return response()->json([
-            'message' => 'Sync completed successfully',
-            'synced_users' => $syncedUsers,
-            'skipped_users' => $skippedUsers,
-            'skipped_customers' => $skippedCustomers
-        ]);
+                foreach ($userData as $oldUser) {
+                    DB::beginTransaction();
+                    try {
+                        // Check if user exists by email
+                        $existingUser = User::where('email', $oldUser['email'])->first();
+
+                        if ($existingUser) {
+                            $skippedCount++;
+                            DB::commit();
+                            continue;
+                        }
+
+                        // Create user
+                        $user = $this->syncUser($oldUser);
+
+                        // Create customer
+                        $customer = $this->syncCustomer($user, $oldUser);
+
+                        // Create member if applicable
+                        if ($oldUser['bb_member_code'] !== '') {
+                            $this->syncMember($user, $oldUser);
+                            $memberCount++;
+                        }
+
+                        $syncedCount++;
+                        DB::commit();
+
+                    } catch (\Exception $e) {
+                        DB::rollBack();
+                        $errorData = [
+                            'email' => $oldUser['email'] ?? 'unknown',
+                            'old_user_id' => $oldUser['id'] ?? 'unknown',
+                            'message' => $e->getMessage(),
+                            'trace' => $e->getTraceAsString()
+                        ];
+
+                        if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                            $duplicateErrors[] = array_merge($errorData, ['type' => 'duplicate_constraint']);
+                        } else {
+                            $otherErrors[] = array_merge($errorData, ['type' => 'sync_error']);
+                        }
+
+                        \Log::error('Error syncing user', $errorData);
+                    }
+                }
+
+                \Log::info("Processed page $page of $totalPages. Progress: " . round(($page/$totalPages) * 100, 2) . "%");
+                $page++;
+            }
+
+            return response()->json([
+                'message' => 'Sync completed successfully',
+                'total_users' => $totalUsers,
+                'total_pages' => $totalPages,
+                'pages_processed' => $page - 1,
+                'deleted_users' => count($usersToDelete),
+                'synced_users' => $syncedCount,
+                'skipped_users' => $skippedCount,
+                'errors' => [
+                    'duplicate_errors' => [
+                        'count' => count($duplicateErrors),
+                        'details' => $duplicateErrors
+                    ],
+                    'other_errors' => [
+                        'count' => count($otherErrors),
+                        'details' => $otherErrors
+                    ]
+                ],
+                'synced_members' => $memberCount,
+                'total_processed' => $syncedCount + $skippedCount + count($duplicateErrors) + count($otherErrors)
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Sync failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json([
+                'message' => 'Sync failed: ' . $e->getMessage(),
+                'type' => 'system_error'
+            ], 500);
+        }
     }
 
     private function syncUser($oldUser)
     {
+        $user = new User;
+        $user->timestamps = false;
+
         $gender = $oldUser['gender_en'] ?? null;
         $status = $oldUser['status_id'] == 3 ? 1 : 0;
 
-        // Validate and sanitize email_verified_at
-        $emailVerifiedAt = null;
-        if (!empty($oldUser['email_verified_at'])) {
-            try {
-                $emailVerifiedAt = new \DateTime($oldUser['email_verified_at']);
-                if ($emailVerifiedAt->format('Y') < 1970) {
-                    $emailVerifiedAt = null;
-                }
-            } catch (\Exception $e) {
-                // Invalid date, keep it null
-            }
-        }
+        // For created_at, use updated_at as fallback if created_at is zero
+        $updatedAt = $this->validateDate($oldUser['updated_at']);
+        $createdAt = $this->validateDate($oldUser['created_at'], 'regular', $updatedAt);
 
-        // Check if user with this email already exists
-        $existingUser = User::where('email', $oldUser['email'])->first();
-        if ($existingUser) {
-            // If user exists, update the old_platform_user_id and return
-            $existingUser->update(['old_platform_user_id' => $oldUser['id']]);
-            return $existingUser;
-        }
+        // Other dates
+        $deletedAt = !empty($oldUser['deleted_at']) ? $this->validateDate($oldUser['deleted_at']) : null;
+        $emailVerifiedAt = !empty($oldUser['email_verified_at']) ? $this->validateDate($oldUser['email_verified_at']) : null;
 
-        // If user doesn't exist, create a new one
-        return User::create([
+        $user->fill([
             'old_platform_user_id' => $oldUser['id'],
             'first_name' => $oldUser['name'],
             'last_name' => $oldUser['surname'],
@@ -124,110 +262,74 @@ class GeneralSyncController extends Controller
             'company_name' => $oldUser['company_name'] ?? null,
             'company_vat' => $oldUser['company_vat'] ?? null,
             'status' => $status,
-            'deleted_at' => $oldUser['deleted_at'],
-            'created_at' => $oldUser['created_at'],
+            'deleted_at' => $deletedAt,
+            'created_at' => $createdAt,
+            'updated_at' => $updatedAt
         ]);
+
+        $user->save();
+        return $user;
     }
 
     private function syncCustomer($user, $oldUser)
     {
-        // Check if a customer with this email already exists
-        $existingCustomer = Customer::where('email', $user->email)->first();
+        $customer = new Customer;
+        $customer->timestamps = false;
 
-        if ($existingCustomer) {
-            // If customer exists, update the user_id if it's different and return
-            if ($existingCustomer->user_id !== $user->id) {
-                $existingCustomer->update(['user_id' => $user->id]);
-            }
-            return $existingCustomer;
-        }
+        // Use updated_at as fallback for created_at if needed
+        $updatedAt = $this->validateDate($oldUser['updated_at']);
+        $createdAt = $this->validateDate($oldUser['created_at'], 'regular', $updatedAt);
 
-        // If customer doesn't exist, create a new one
-        return Customer::create([
+        $customer->fill([
             'user_id' => $user->id,
             'name' => $user->name,
             'email' => $user->email,
             'address' => '-',
             'phone' => $oldUser['phone_number'] ?? '-',
-            'venue_id' => 58, // or whatever default venue_id you want to use
+            'venue_id' => 58,
+            'created_at' => $createdAt,
+            'updated_at' => $updatedAt
         ]);
-    }
 
-    private function syncAddress($customer, $oldUser)
-    {
-        try {
-            $country = Country::where('name', 'Albania')->first();
-
-            // Assuming the city name in the old system matches the 'name' field in the new system
-            $city = City::where('name', $oldUser['city_en'])->first();
-
-            // If city is not found, try to find it in the name_translations
-            if (!$city) {
-                $city = City::whereRaw("JSON_EXTRACT(name_translations, '$.en') = ?", [$oldUser['city_en']])->first();
-            }
-
-            $state = $city ? $city->state : null;
-
-            // Provide default values if city or state is missing
-            $cityName = $city ? $city->name : ($oldUser['city_en'] ?? '-');
-            $stateName = $state ? $state->name : '-';
-
-            // Create or update the address
-            $address = Address::updateOrCreate(
-                [
-                    'customer_id' => $customer->id,
-                ],
-                [
-                    'city' => $cityName,
-                    'state' => $stateName,
-                    'country' => $country ? $country->name : 'Albania',
-                    'address_line1' => $oldUser['address'] ?? '-',
-                    'postcode' => $oldUser['zip_code'] ?? '-',
-                    'is_for_retail' => true,
-                    'city_id' => $city ? $city->id : null,
-                    'state_id' => $state ? $state->id : null,
-                    'country_id' => $country ? $country->id : null,
-                    'active' => true,
-                ]
-            );
-
-            // Link the address to the customer
-            CustomerAddress::updateOrCreate(
-                ['customer_id' => $customer->id],
-                ['address_id' => $address->id]
-            );
-        } catch (\Exception $e) {
-            \Log::error('Error syncing address for customer ' . $customer->id . ': ' . $e->getMessage());
-            \Log::error('Old user data: ' . json_encode($oldUser));
-            // You might want to throw the exception here, or handle it in some other way
-            // throw $e;
-        }
+        $customer->save();
+        return $customer;
     }
 
     private function syncMember($user, $oldUser)
     {
         $status = $oldUser['bb_member_status'] == 'Aktiv' ? 'accepted' : 'rejected';
-        $statusDate = $status == 'accepted' ? 'accepted_at' : 'rejected_at';
+        $member = new Member;
+        $member->timestamps = false;
 
-        Member::updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
-                'email' => $user->email,
-                'phone_number' => $oldUser['bb_member_contact'] ?? '-',
-                'birthday' => $oldUser['bb_member_birthday'],
-                'city' => $oldUser['bb_member_city'],
-                'address' => $oldUser['bb_member_address'],
-                'venue_id' => 58,
-                'old_platform_member_code' => $oldUser['bb_member_code'],
-                $statusDate => now(),
-                'is_rejected' => $status == 'rejected',
-            ]
-        );
+        // Use updated_at as fallback for created_at if needed
+        $updatedAt = $this->validateDate($oldUser['updated_at']);
+        $createdAt = $this->validateDate($oldUser['created_at'], 'regular', $updatedAt);
+
+        // Birthday handling - will return null if invalid
+        $birthday = !empty($oldUser['bb_member_birthday']) ?
+            $this->validateDate($oldUser['bb_member_birthday'], 'birthday') : null;
+
+        $member->fill([
+            'user_id' => $user->id,
+            'first_name' => $user->first_name,
+            'last_name' => $user->last_name,
+            'email' => $user->email,
+            'phone_number' => $oldUser['bb_member_contact'] ?? '-',
+            'birthday' => $birthday,
+            'city' => $oldUser['bb_member_city'],
+            'address' => $oldUser['bb_member_address'],
+            'venue_id' => 58,
+            'old_platform_member_code' => $oldUser['bb_member_code'],
+            'accepted_at' => $status == 'accepted' ? now() : null,
+            'rejected_at' => $status == 'rejected' ? now() : null,
+            'is_rejected' => $status == 'rejected',
+            'created_at' => $createdAt,
+            'updated_at' => $updatedAt
+        ]);
+
+        $member->save();
+        return $member;
     }
-
-    // count jobs and failed jobs
 
     public function countJobs(): \Illuminate\Http\JsonResponse
     {
@@ -240,12 +342,9 @@ class GeneralSyncController extends Controller
         ]);
     }
 
-    // list entities from group table
-
     public function listGroups(): \Illuminate\Http\JsonResponse
     {
         $groups = DB::table('groups')->get();
-
         return response()->json($groups);
     }
 }

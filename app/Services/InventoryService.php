@@ -44,6 +44,7 @@ class InventoryService
 
             // 2. Get and update retail stock
             $retailStock = InventoryRetail::where('product_id', $product->id)->first();
+              
             if (!$retailStock || $retailStock->stock_quantity < $quantity) {
                 throw new \Exception('Insufficient stock');
             }

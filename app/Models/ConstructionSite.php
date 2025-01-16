@@ -13,6 +13,8 @@ class ConstructionSite extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $table = 'construction_site';
+
     protected $fillable = [
         'venue_id',
         'name',
@@ -23,15 +25,29 @@ class ConstructionSite extends Model
         'weather_config',
         'site_manager',
         'access_requirements',
-        'safety_requirements'
+        'safety_requirements',
+        'type',
+        'site_manager_email',
+        'site_manager_phone',
+        'start_date',
+        'end_date',
+        'no_of_workers',
+        'app_project_id'
     ];
 
     protected $casts = [
         'specifications' => 'array',
         'weather_config' => 'array',
         'access_requirements' => 'array',
-        'safety_requirements' => 'array'
+        'safety_requirements' => 'array',
+        'start_date' => 'date',
+        'end_date' => 'date'
     ];
+
+    public function appProject(): BelongsTo
+    {
+        return $this->belongsTo(AppProject::class);
+    }
 
     public function ownable(): MorphTo
     {

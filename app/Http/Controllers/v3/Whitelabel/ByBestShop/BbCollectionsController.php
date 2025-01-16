@@ -16,6 +16,36 @@ use App\Models\VbStoreAttribute;
 
 class BbCollectionsController extends Controller
 {
+   
+    public function getCollections(): \Illuminate\Http\JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        try {
+
+            $collections = Collection::where('venue_id', $venue->id)
+                ->orderBy('created_at', 'DESC')
+                ->get();
+            return response()->json(['message' => 'Collections retrieved successfully', 'Collections' => $collections], 200);
+        } catch (\Exception $e) {
+            \Sentry\captureException($e);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+  
+
     // Return collection products
     public function collectionProducts(Request $request, string $collection_url): \Illuminate\Http\JsonResponse
     {

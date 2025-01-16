@@ -57,8 +57,9 @@ class BlogsController extends Controller
      *     )
      * )
      */
-    public function index()
+    public function index(Request $request)
     {
+       
         if (!auth()->user()->restaurants->count()) {
             return response()->json(['error' => 'User not eligible for making this API call'], 400);
         }
@@ -78,8 +79,16 @@ class BlogsController extends Controller
                     ::join('blog_blog_category', 'blog_blog_category.blog_id', '=', 'blogs.id')
                     ->join('blog_categories', 'blog_blog_category.blog_category_id', '=', 'blog_categories.id')
                     ->where('blogs.restaurant_id', $venue->id)
-                    ->select('blogs.*', DB::raw('blog_categories.id as category'), DB::raw('blog_categories.name as category_text'))
-                    ->paginate($perPage);
+                    ->select('blogs.*', DB::raw('blog_categories.id as category'), DB::raw('blog_categories.name as category_text'));
+                    
+        
+
+        if($request->has('search')) {
+            $blogs = $blogs->where('title', 'like', '%' . $request->get('search') . '%')->orWhere('title_al', 'like', '%' . $request->get('search') . '%');
+        }
+       
+        $blogs = $blogs->orderBy('created_at', 'desc')->paginate($perPage);
+
         $updatedBlogs = $blogs->map(function ($blog) {
             if ($blog->image !== null) {
                 // Generate the new path and update the image_path attribute
@@ -164,6 +173,8 @@ class BlogsController extends Controller
         $data['title'] = $request->input('title');
         $data['content'] = $request->input('content');
         $data['is_active'] = $request->input('is_active');
+        $data['title_al'] = $request->input('title_al');
+        $data['content_al'] = $request->input('content_al');
         $data['tags'] =  $request->input('tags');
         $data['slug'] = Str::slug($request->input('title'));
         $data['slug_related'] = "/blog/{$data['slug']}";
@@ -324,6 +335,7 @@ class BlogsController extends Controller
             'title' => 'required|string',
             'content' => 'required|string',
             'category' => 'required|integer',
+             'created_at'=>'required|date',
         ]);
 
         if ($validator->fails()) {
@@ -341,6 +353,7 @@ class BlogsController extends Controller
         $blog->tags =  $request->input('tags');
         $blog->slug = Str::slug($request->input('title'));
         $blog->slug_related = "/blog/{$blog->slug}";
+        $blog->created_at =  $request->input('created_at');
 
         $path = null;
         if ($request->file('image')) {
@@ -476,7 +489,7 @@ class BlogsController extends Controller
         return response()->json(['message' => 'Category updated successfully', 'category' => $category]);
     }
 
-    public function listBlogCategories(): \Illuminate\Http\JsonResponse
+    public function listBlogCategories(Request $request): \Illuminate\Http\JsonResponse
     {
         if (!auth()->user()->restaurants->count()) {
             return response()->json(['error' => 'User not eligible for making this API call'], 400);
@@ -493,8 +506,12 @@ class BlogsController extends Controller
         }
 
         $perPage = request()->get('per_page', 15); // Default to 15 items per page
-        $categories = BlogCategory::where('venue_id', $venue->id)->paginate($perPage);
+        $categories = BlogCategory::where('venue_id', $venue->id);
 
+        if($request->has('search')) {
+            $categories = $categories->where('name','like' , '%'.$request->get('search').'%');
+        }
+          $categories = $categories->paginate($perPage);
         return response()->json([
             'categories' => $categories,
             'pagination' => [
@@ -720,7 +737,7 @@ class BlogsController extends Controller
         $page = $request->input('page', 1);
 
         $blogs = $query->orderBy('created_at', 'desc')
-            ->paginate($perPage, ['id', 'title', 'slug', 'slug_related', 'created_at', 'image', 'tags', 'body', 'read_time', 'show_quiz'], 'page', $page);
+            ->paginate($perPage, ['id', 'title','title_al', 'slug', 'slug_related', 'created_at', 'image', 'tags', 'body', 'read_time', 'show_quiz'], 'page', $page);
         $blogs->getCollection()->transform(function ($blog) {
             return [
                 'id' => $blog->id,
@@ -773,7 +790,7 @@ class BlogsController extends Controller
             'title_al' => $blog->title_al,
             'slug' => $blog->slug,
             'slug_related' => $blog->slug_related,
-            'date' => $blog->created_at ? $blog->created_at->format('F j, Y') : '-',
+            'date' => $blog->created_at ? $blog->created_at->format('d-m-Y') : '-',
             'image' => $this->getImageUrl($blog),
             'tags' => $blog->tags,
             // 'body' => $blog->body,

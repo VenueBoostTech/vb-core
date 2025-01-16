@@ -96,16 +96,15 @@
             Shop dhe të eksploroni veçoritë tona. Për çdo problem ose pyetje, na
             kontaktoni në
             <a
-                href="mailto:contact@bybest.shop"
+                href="mailto:customerservice@bybest.shop"
                 style="color: #3498db; text-decoration: none"
-            >contact@bybest.shop</a
+            >customerservice@bybest.shop</a
             >.
         </p>
         <p
             style="color: #666666; font-size: 16px; line-height: 24px; margin: 0"
         >
-            Faleminderit që zgjodhët ByBest Shop. Ne presim me padurim të
-            mbështesim suksesin e biznesit tuaj.
+            Faleminderit që zgjodhët ByBest Shop!
         </p>
     </div>
 </div>

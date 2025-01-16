@@ -25,6 +25,7 @@ use App\Models\PlanFeature;
 use App\Models\Product;
 use App\Models\ProductCategory;
 use App\Models\ProductCollection;
+use App\Models\ProductGallery;
 use App\Models\ProductGroup;
 use App\Models\InventoryWarehouse;
 use App\Models\InventorySynchronization;
@@ -33,12 +34,16 @@ use App\Models\OrderProduct;
 use App\Models\ProductAttribute;
 use App\Models\Restaurant;
 use App\Models\ScanActivity;
+use App\Models\ProductAttributeValue;
 use App\Models\StoreSetting;
 use App\Models\Subscription;
 use App\Models\Supplier;
 use App\Models\TakeHomeProduct;
 use App\Models\Variation;
 use App\Models\Brand;
+use App\Models\VbStoreProductAttribute;
+use App\Models\VbStoreProductVariant;
+use App\Models\VbStoreProductVariantAttribute;
 use App\Rules\NumericRangeRule;
 use App\Services\ApiUsageLogger;
 use App\Services\VenueService;
@@ -90,6 +95,7 @@ class ProductsController extends Controller
         $this->apiUsageLogger = $apiUsageLogger;
         $this->venueService = $venueService;
     }
+    
 
     /**
      * @OA\Get(
@@ -132,98 +138,103 @@ class ProductsController extends Controller
         if (!auth()->user()->restaurants->count()) {
             return response()->json(['error' => 'User not eligible for making this API call'], 400);
         }
-
+    
         $apiCallVenueShortCode = request()->get('venue_short_code');
         if (!$apiCallVenueShortCode) {
             return response()->json(['error' => 'Venue short code is required'], 400);
         }
-
+    
         $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
         if (!$venue) {
             return response()->json(['error' => 'Venue not found'], 404);
         }
-
+    
         $validator = Validator::make($request->all(), [
             'category' => 'integer',
             'search' => 'string',
             'page' => 'integer|min:1',
             'per_page' => 'integer|min:1|max:100',
         ]);
-
+    
         if ($validator->fails()) {
             return response()->json(['message' => $validator->errors()->first()], 400);
         }
-
+    
         try {
             $category_id = $request->input('category');
             $search = $request->input('search');
-
+    
+            // Set the default values for page and per_page
             $page = $request->input('page', 1);
             $perPage = $request->input('per_page', 15);
+    
             $products = Product::with('takeHome')->where('restaurant_id', $venue->id);
+            
+            if ($request->brand_id) {
+                $products = $products->where('brand_id', $request->brand_id);
+            }
+    
             if ($category_id) {
-                $products = $products->whereRaw("
-                    (
-                        id IN
-                        (
+                $products = $products->whereRaw("(
+                        id IN (
                             SELECT product_id
                             FROM product_category
                             WHERE category_id = ?
                         )
-                    )
-                    ", [$category_id]);
+                    )", [$category_id]);
             }
-
-            error_log("category_id $category_id");
-
+    
             if ($search) {
                 $products = $products->whereRaw('LOWER(title) LIKE ?', ["%" . strtolower($search) . "%"]);
             }
-
-            $products = $products->orderBy('created_at', 'DESC')->paginate($perPage);
-
-
+    
+            // If pagination is requested, apply pagination, otherwise fetch all results
+            if ($request->has('per_page') && $request->has('page')) {
+                $products = $products->orderBy('created_at', 'DESC')->paginate($perPage);
+            } else {
+                // If no pagination is requested, retrieve all products
+                $products = $products->orderBy('created_at', 'DESC')->get();
+            }
+    
             // Get currency setting for the venue
             $storeSetting = StoreSetting::where('venue_id', $venue->id)->first();
             $currency = $storeSetting ? $storeSetting->currency : ($venue->currency ? $venue->currency : null);
-
-
+    
             $updatedProducts = $products->map(function ($product) use ($currency) {
-                // if ($product->image_path !== null) {
-                //     // Generate the new path and update the image_path attribute
-                //     $newPath = Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes');
-                //     $product->image_path = $newPath;
-                // }
                 $product->currency = $currency ?? 'USD';
-                 $product->brand_name = $product->brand->title ?? null;
+                $product->brand_name = $product->brand->title ?? null;
                 $product->try_at_home = $product?->takeHome ?? null;
                 return $product;
             });
-
-            $products->setCollection($updatedProducts);
-
-            // determine if venues has used all credits for the feature for the month
-
+    
+            if ($request->has('per_page') && $request->has('page')) {
+                $products->setCollection($updatedProducts);
+            } else {
+                // If no pagination, we don't need to adjust the collection
+                $products = $updatedProducts;
+            }
+    
+            // Determine if venues has used all credits for the feature for the month
             $hasUsedAllCredits = false;
             try {
-
                 $featureName = FeatureNaming::items_food;
                 if ($venue->venueType->definition === 'accommodation') {
                     $featureName = FeatureNaming::items_accommodation;
                 }
-
+    
                 if ($venue->venueType->definition === 'accommodation' || $venue->venueType->definition === 'sport_entertainment') {
                     $featureName = FeatureNaming::items_sport_entertainment;
                 }
-
+    
                 if ($venue->venueType->definition === 'retail') {
                     $featureName = FeatureNaming::items_retail;
                 }
+    
                 $featureId = Feature::where('name', $featureName)
                     ->where('active', 1)
                     ->where('feature_category', $venue->venueType->definition)->first()->id;
                 $subFeatureId = null;
-
+    
                 $activeSubscription = Subscription::with(['subscriptionItems.pricingPlanPrice', 'pricingPlan'])
                     ->where('venue_id', $venue->id)
                     ->where(function ($query) {
@@ -234,39 +245,89 @@ class ProductsController extends Controller
                     ->first();
                 $planName = $activeSubscription?->pricingPlan->name;
                 $planId = $activeSubscription?->pricing_plan_id;
+    
                 if ($planName === 'Discover') {
-                    // Check Count of the product used on FeatureUsageCreditHistory with feature_id
                     $featureUsageCreditHistoryCount = FeatureUsageCreditHistory::where('feature_id', $featureId)->get();
-                    // get usage credit for this feature
                     $featureUsageCredit = PlanFeature::where('feature_id', $featureId)->where('plan_id', $planId)->first()->usage_credit;
-                    // if count is same as usage credit
+    
                     if ($featureUsageCreditHistoryCount->count() >= $featureUsageCredit) {
                         $hasUsedAllCredits = true;
                     }
-
                 }
-
+    
                 $this->apiUsageLogger->log($featureId, $venue->id, 'List Products - GET', $subFeatureId);
             } catch (\Exception $e) {
                 // do nothing
             }
-
-            return response()->json([
+    
+            $response = [
                 'message' => 'Products retrieved successfully',
-                'products' => $products->items(),
+                'products' => $products,
                 'hasUsedAllCredits' => $hasUsedAllCredits,
-                'pagination' => [
+            ];
+    
+            // Only include pagination if the per_page and page parameters are provided
+            if ($request->has('per_page') && $request->has('page')) {
+                $response['pagination'] = [
                     'current_page' => $products->currentPage(),
                     'per_page' => $products->perPage(),
                     'total' => $products->total(),
                     'last_page' => $products->lastPage(),
-                ],
-            ], 200);
+                ];
+            }
+    
+            return response()->json($response, 200);
         } catch (\Exception $e) {
             \Sentry\captureException($e);
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
+    
+    public function getSearch(Request $request): \Illuminate\Http\JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+    
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+    
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+    
+        $validator = Validator::make($request->all(), [
+            'search' => 'string',
+        ]);
+    
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 400);
+        }
+    
+        try {
+           
+            $search = $request->input('search');
+            $products = Product::where('restaurant_id', $venue->id);
+            if ($search) {
+                $products = $products->whereRaw('LOWER(title) LIKE ?', ["%" . strtolower($search) . "%"]);
+            }
+            $products = $products->select('id', 'title')->get()->toArray();
+            $response = [
+                'message' => 'Products retrieved successfully',
+                'products' => $products,
+            ];
+    
+    
+            return response()->json($response, 200);
+        } catch (\Exception $e) {
+            \Sentry\captureException($e);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
 
     /**
      * @OA\Get(
@@ -330,7 +391,9 @@ class ProductsController extends Controller
         }
 
         try {
-            $product = Product::where('restaurant_id', $venue->id)->with(['variants.attribute', 'variants.value'])->find($id);
+            // $product = Product::where('restaurant_id', $venue->id)->with(['variants.attribute', 'variants.value'])->find($id);
+            $product = Product::where('restaurant_id', $venue->id)->with(['attribute.option'])->find($id);
+
             if (!$product) {
                 return response()->json(['message' => 'Not found product'], 404);
             }
@@ -340,16 +403,27 @@ class ProductsController extends Controller
 
             // $product->image_path = $product->image_path ? Storage::disk('s3')->temporaryUrl($product->image_path, '+5 minutes') : null;
 
-            // check if it has parent category
-            $productParentCategoryRelationship = DB::table('product_category')->where('product_id', $product->id)->where('is_parent', true)->first();
-            if ($productParentCategoryRelationship) {
-                $productParentCategory =  new StdClass;
-                $productParentCategory->id = $productParentCategoryRelationship->category_id;
-                $productParentCategory->title = DB::table('categories')->where('id', $productParentCategoryRelationship->category_id)->first()->title;
+            $productParentCategoryRelationships = DB::table('product_category')
+            ->where('product_id', $product->id)
+            ->where('is_parent', true)
+            ->get();
+        
+            if ($productParentCategoryRelationships->isNotEmpty()) {
+            $categories = DB::table('categories')
+                ->whereIn('id', $productParentCategoryRelationships->pluck('category_id'))
+                ->select('id')
+                ->get();
+        
+            $product->parent = $categories->map(function ($category) {
+                return (object) [
+                    'id' => $category->id,
+                ];
+            });
+          }
+        
+      
 
-                $product->parent = $productParentCategory;
-            }
-
+         
             // check if it has sub category
             $productCategoryRelationship = DB::table('product_category')->where('product_id', $product->id)->where('is_parent', false)->first();
             if ($productCategoryRelationship) {
@@ -360,12 +434,13 @@ class ProductsController extends Controller
                 $product->category = $productCategory;
             }
 
-            $galleryProduct = Gallery::where('product_id',  $product->id)->get();
+            $galleryProduct = ProductGallery::where('product_id',  $product->id)->get();
 
             $managedGallery = $galleryProduct->map(function ($item) {
                 return [
-                    'photo_id' => $item->photo_id,
-                    'photo_path' =>  Storage::disk('s3')->temporaryUrl($item->photo->image_path, '+5 minutes'),
+                    'title' => $item->photo_description,
+                    'product_gallery_id' => $item->id,
+                    'photo_path' =>  $item->photo_name,
                 ];
             });
 
@@ -373,70 +448,103 @@ class ProductsController extends Controller
             $product->inventory_retail = $product->inventoryRetail ?: null;
 
             // $variationsOutput = $product->variations->map(function ($variation) {
-            $variationsOutput = $product->variants->map(function ($variation) {
-                return [
-                    'id' => $variation->id,
-                    'attribute' => [
-                        'name' => $variation->attribute->name,
-                        'id' => $variation->attribute->id,
-                    ],
-                    'value' => [
-                        'name' => $variation->value->value,  // Assuming the name of the attribute value is stored in 'value' column.
-                        'id' => $variation->value->id,
-                    ],
-                    'price' => $variation->price,
-                ];
-            })->toArray();
-
+            //     // $variationsOutput = $product->variants->map(function ($variation) {
+            //         return [
+            //             'id' => $variation->id,
+            //             'attribute' => [
+            //                 'name' => $variation->attribute->name,
+            //                 'id' => $variation->attribute->id,
+            //             ],
+            //         'value' => [
+            //             'name' => $variation->value->value,  // Assuming the name of the attribute value is stored in 'value' column.
+            //             'id' => $variation->value->id,
+            //         ],
+            //         'price' => $variation->price,
+            //     ];
+            // })->toArray();
             // Step 2: Convert the Eloquent model to an array
             $productArray = $product->toArray();
+        
+            // $attributes = DB::table('product_attribute_value')
+            // ->join('attribute_values', 'product_attribute_value.attribute_value_id', '=', 'attribute_values.id')
+            // ->join('product_attributes', 'attribute_values.attribute_id', '=', 'product_attributes.id')
+            // ->where('product_attribute_value.product_id', $product->id)
+            // ->select(
+            //     'product_attributes.name as attribute_name',
+            //     'attribute_values.value as attribute_value',
+            //     'product_attributes.id as attribute_id',
+            //     'product_attribute_value.visible_on_product_page as visible_on_product_page',
+            //     'product_attribute_value.used_for_variations as used_for_variations'
+            // )
+            // ->get(); 
 
-            $attributes = DB::table('product_attribute_value')
-                // ->join('attribute_values', 'product_attribute_value.attribute_value_id', '=', 'attribute_values.id')
-                // ->join('product_attributes', 'attribute_values.attribute_id', '=', 'product_attributes.id')
-                ->where('product_attribute_value.product_id', $product->id)
-                ->select(
-                    // 'product_attributes.name as attribute_name',
-                    // 'attribute_values.value as attribute_value',
-                    // 'product_attributes.id as attribute_id',
-                    'product_attribute_value.visible_on_product_page as visible_on_product_page',
-                    'product_attribute_value.used_for_variations as used_for_variations'
-                )
-                ->get();
+            // $groupedAttributes = [];
 
-            $groupedAttributes = [];
+            // foreach ($attributes as $attribute) {
+            //     if (!isset($groupedAttributes[$attribute->attribute_id])) {
+            //         $groupedAttributes[$attribute->attribute_id] = [
+            //             'id' => $attribute->attribute_id,
+            //             'name' => $attribute->attribute_name,
+            //             'visible_on_product_page' => $attribute->visible_on_product_page,
+            //             'used_for_variations' => $attribute->used_for_variations,
+            //             'values' => [],
+            //         ];
+            //     }
 
-            foreach ($attributes as $attribute) {
-                if (!isset($groupedAttributes[$attribute->attribute_id])) {
-                    $groupedAttributes[$attribute->attribute_id] = [
-                        'id' => $attribute->attribute_id,
-                        'name' => $attribute->attribute_name,
-                        'visible_on_product_page' => $attribute->visible_on_product_page,
-                        'used_for_variations' => $attribute->used_for_variations,
-                        'values' => [],
-                    ];
-                }
+            //     $groupedAttributes[$attribute->attribute_id]['values'][] = $attribute->attribute_value;
+            // }
 
-                $groupedAttributes[$attribute->attribute_id]['values'][] = $attribute->attribute_value;
-            }
+            // $attributesFinal = [];
+            // foreach ($groupedAttributes as $attribute) {
+            //     $attribute['values'] = implode(', ', $attribute['values']);
+            //     $attributesFinal[] = $attribute;
+            // }
 
-            $attributesFinal = [];
-            foreach ($groupedAttributes as $attribute) {
-                $attribute['values'] = implode(', ', $attribute['values']);
-                $attributesFinal[] = $attribute;
-            }
-
-
+            $varientsId = VbStoreProductVariant::where('product_id', $product->id)->pluck('id');
+            $variations = VbStoreProductVariantAttribute::with(['attributeOption'])->whereIn('variant_id', $varientsId)->get()->map(function ($variation) {
+                $variation->variant = VbStoreProductVariant::find($variation->variant_id);
+                return $variation;
+            });
+          
             // Step 3: Overwrite the 'attributes' key
-            $productArray['attributes'] = $attributesFinal;
-            $productArray['variations'] = $variationsOutput;
+            // $productArray['attributes'] = $product->attribute;
+            $productArray['variations'] = $variations;
             $productArray['currency'] =  $venue->storeSettings()->first()?->currency ?: $venue->currency;
+       
             return response()->json(['message' => 'Product retrieved successfully',
                 'product' => $productArray, 'options' => $options, 'additions' => $additions], 200);
         } catch (\Exception $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
+
+     public function deletePhoto($id){
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+
+        $product_gallery = ProductGallery::find($id);
+
+        if (!$product_gallery) {
+            return response()->json(['message' => 'Not found product Image'], 404);
+        }
+        Storage::disk('s3')->delete($product_gallery->photo_name);
+        $product_gallery->delete();
+        return response()->json(['message' => 'Product photo deleted successfully'], 200);
+     }
+
+
 
     public function getOneBySku($sku)
     {
@@ -597,6 +705,7 @@ class ProductsController extends Controller
         $rules = [
             'title' => 'required|string|max:255',
             'price' => ['required', 'numeric', new NumericRangeRule()],
+            'dimensions' => 'nullable|json',
         ];
 
         if ($request->input('is_for_retail')) {
@@ -625,26 +734,25 @@ class ProductsController extends Controller
             $requestType = 'product';
 
             $path = null;
-            // check if product image is uploaded
+
             if ($request->file('image')) {
-
-
                 $productImage = $request->file('image');
-
-                // Decode base64 image data
-                $photoFile = $productImage;
-                $filename = Str::random(20) . '.' . $photoFile->getClientOriginalExtension();
-
+            
+                // Generate a unique filename
+                $filename = Str::random(20) . '.' . $productImage->getClientOriginalExtension();
+            
+                // Generate a relative path for the file in S3
+                $filePath = 'venue_gallery_photos/' . $venue->venueType->short_name . '/' . $requestType . '/' . strtolower(str_replace(' ', '-', $venue->name . '-' . $venue->short_code)) . '/' . $filename;
+            
                 // Upload photo to AWS S3
-                $path = Storage::disk('s3')->putFileAs('venue_gallery_photos/' . $venue->venueType->short_name . '/' . $requestType . '/' . strtolower(str_replace(' ', '-', $venue->name . '-' . $venue->short_code)), $photoFile, $filename);
-
-                // Save photo record in the database
+                $path = Storage::disk('s3')->putFileAs($filePath, $productImage, $filename);
+            
+                // Save photo record in the database (relative path, not full URL)
                 $photo = new Photo();
                 $photo->venue_id = $venue->id;
-                $photo->image_path = $path;
+                $photo->image_path = $filePath;  // Store relative path, not the full URL
                 $photo->type = $requestType;
                 $photo->save();
-
             }
 
             if ($product_id) {
@@ -657,7 +765,10 @@ class ProductsController extends Controller
             }
 
 
-            $product->image_path = $path ?? $product->image_path;
+            if($path){
+                $product->image_path = $path;
+            }     
+
             $product->image_thumbnail_path = null;
             $product->title = $title;
             $product->description = $description;
@@ -671,10 +782,15 @@ class ProductsController extends Controller
             $product->restaurant_id = $venue->id;
             $product->short_description = $request->input('short_description') ?? $product->short_description;
             $product->is_for_retail = $request->input('is_for_retail') ?? $product->is_for_retail ?? false;
-            $product->product_url = '';
+            $product->product_url = strtolower(str_replace(' ', '-', $title));
             $product->brand_id = $brand_id;
             $product->unit_measure = $unit_measure;
             $product->scan_time = Carbon::now();
+            $product->collection = $request->input('collection');
+            $product->tags = $request->input('tags');
+            $product->parent = $request->input('parent');
+            $product->dimensions = $request->input('dimensions');
+            $product->is_best_seller = $request->input('is_best_seller');
             $product->save();
 
             if ($request->input('quantity')) {
@@ -722,35 +838,42 @@ class ProductsController extends Controller
             }
 
             if ($request->input('parent_category_id')) {
-
-                $requestParentCategoryId = $request->input('parent_category_id');
-                // check if category exist
-                $doesParentCategoryExist = Category::where('id', $requestParentCategoryId)->first();
-                if (!$doesParentCategoryExist) {
-                    return response()->json(['error' => 'Not found parent category'], 400);
+                // Parse the input (stringified array) into an actual PHP array
+                $parentCategoryIds = json_decode($request->input('parent_category_id'), true);
+            
+                // Ensure it's a valid array
+                if (!is_array($parentCategoryIds)) {
+                    return response()->json(['error' => 'Invalid input for parent_category_id'], 400);
                 }
-
-
-                // check if product parent category exist
-                $doesProductParentCategoryExist = DB::table('product_category')->where('product_id', $product->id)->where('is_parent', true)->first();
-
-                if ($doesProductParentCategoryExist) {
-                    if ($doesProductParentCategoryExist->category_id !== intval($requestParentCategoryId)) {
-
-                        DB::table('product_category')
-                            ->where('product_id', $product->id)
-                            ->where('is_parent', true)
-                            ->update(['category_id' => intval($requestParentCategoryId)]);
+            
+          
+                foreach ($parentCategoryIds as $parentCategoryId) {
+                    // Ensure the category ID is an integer
+                    $parentCategoryId = intval($parentCategoryId);
+            
+                    // Check if the category exists
+                    $doesParentCategoryExist = Category::where('id', $parentCategoryId)->first();
+                    if (!$doesParentCategoryExist) {
+                        return response()->json(['error' => "Parent category with ID $parentCategoryId not found"], 400);
+                    }
+            
+                    // Check if the product's parent category exists
+                    $doesProductParentCategoryExist = DB::table('product_category')
+                        ->where('product_id', $product->id)
+                        ->where('is_parent', true)
+                        ->where('category_id', $parentCategoryId)
+                        ->first();
+                    if ($doesProductParentCategoryExist == null) {
+                        // Insert the new parent category
+                        DB::table('product_category')->insert([
+                            'category_id' => $parentCategoryId,
+                            'product_id' => $product->id,
+                            'is_parent' => true,
+                        ]);
                     }
                 }
-                else {
-                    DB::table('product_category')->insert([
-                        'category_id' => intval($requestParentCategoryId),
-                        'product_id' => $product->id,
-                        'is_parent' => true,
-                    ]);
-                }
             }
+            
 
             DB::table('product_options')->where('product_id', $product->id)->delete();
 
@@ -849,6 +972,72 @@ class ProductsController extends Controller
         }
     }
 
+
+    public function updateProduct(Request $request, $id){
+
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        try {
+            $product = Product::find($id);
+            
+            if (!$product) {
+                return response()->json(['message' => 'Not found product'], 404);
+            }
+
+            $rules = [
+                'title' => 'required|string|max:255',
+                'price' => ['required', 'numeric', new NumericRangeRule()],
+                'dimensions' => 'nullable|json',
+            ];
+             
+            if ($request->input('is_for_retail')) { 
+                $rules['short_description'] = 'required|string';
+            }
+
+            $validator = Validator::make($request->all(), $rules);
+            if ($validator->fails()) {
+                return response()->json(['message' => $validator->errors()->first()], 400);
+            }
+           
+            $product->title = $request->input('title');
+            $product->price = $request->input('price');
+            $product->short_description = $request->input('short_description');
+            $product->is_for_retail = $request->input('is_for_retail');
+            $product->collection = $request->input('collection');
+            $product->tags = $request->input('tags');
+            $product->parent = $request->input('parent');
+            $product->dimensions = $request->input('dimensions');
+            $product->is_best_seller = $request->input('is_best_seller');
+            $product->product_url = strtolower(str_replace(' ', '-', $request->input('title')));
+            $product->save();
+
+            return response()->json(['message' => 'Product is updated successfully'], 200);
+        } catch (\Exception $e) {
+            
+            \Sentry\captureException($e);
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    
+        
+    }
+
+
+
+
+
     public function storeAfterScanning(Request $request): \Illuminate\Http\JsonResponse
     {
         if (!auth()->user()->restaurants->count()) {
@@ -938,6 +1127,9 @@ class ProductsController extends Controller
             $product->brand_id = $brand_id;
             $product->unit_measure = $unit_measure;
             $product->scan_time = Carbon::now();
+            $product->collection = $request->input('collection');
+            $product->tags = $request->input('tags');
+            $product->parent = $request->input('parent');
             $product->save();
 
             if ($request->input('quantity')) {
@@ -2226,18 +2418,12 @@ class ProductsController extends Controller
             $path = Storage::disk('s3')->putFileAs('venue_gallery_photos/' . $venue->venueType->short_name . '/' . $request->type . '/' . strtolower(str_replace(' ', '-', $venue->name . '-' . $venue->short_code)), $photoFile, $filename);
 
             // Save photo record in the database
-            $photo = new Photo();
-            $photo->venue_id = $venue->id;
-            $photo->image_path = $path;
-            $photo->type = $request->type;
+            $photo = new ProductGallery();
+            $photo->bybest_id = $product->bybest_id;
+            $photo->photo_name = $path;
+            $photo->product_id = $product->id;
+            $photo->photo_description = $product->title;
             $photo->save();
-
-            $gallery = new Gallery();
-            $gallery->venue_id = $venue->id;
-            $gallery->photo_id = $photo->id;
-            $gallery->product_id = $request->product_id;
-
-            $gallery->save();
 
             return response()->json(['message' => 'Photo uploaded successfully']);
         }
@@ -2324,12 +2510,12 @@ class ProductsController extends Controller
                 ]);
             }
 
-            $warehouseInventory = InventoryWarehouseProduct::firstOrNew([
-                'inventory_warehouse_id' => $request->warehouse_id,
-                'product_id' => $request->input('product_id'),
-            ]);
-            $warehouseInventory->quantity = $request->input('stock_quantity');
-            $warehouseInventory->save();
+            // $warehouseInventory = InventoryWarehouseProduct::firstOrNew([
+            //     'inventory_warehouse_id' => $request->warehouse_id,
+            //     'product_id' => $request->input('product_id'),
+            // ]);
+            // $warehouseInventory->quantity = $request->input('stock_quantity');
+            // $warehouseInventory->save();
 
             $inventoryRetail->fill([
                 'venue_id' => $venue->id,
@@ -2393,6 +2579,9 @@ class ProductsController extends Controller
         // Get paginated inventories
         $inventories = InventoryRetail::with(['product', 'supplier'])
             ->where('venue_id', $venue->id)
+            ->whereHas('product', function ($query) {
+                $query->whereNull('deleted_at'); // Ensure product is not soft deleted
+            })
             ->when(request()->get('search'), function ($query, $searchTerm) {
                 $searchTerm = '%' . $searchTerm . '%';
                 $query->whereHas('product', function ($query) use ($searchTerm) {
@@ -2593,6 +2782,54 @@ class ProductsController extends Controller
         ], 200);
     }
 
+
+    public function getProductAttributesList(){
+        
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+        
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+        
+          // Set default values for pagination
+          $perPage = (int) request()->get('per_page', 10); // Default to 10 items per page
+          $page = (int) request()->get('page', 1); // Default to page 1
+          
+          // Fetch product attributes for the venue
+          $productAttributes = VbStoreProductAttribute::with(['products', 'option'])
+                                ->where('venue_id', $venue->id)
+                                ->whereHas('products')
+                                ->paginate($perPage, ['*'], 'page', $page);
+
+        // Fetch product attributes for the venue
+        // $productAttributes = ProductAttribute::where('venue_id', $venue->id)->get();
+        
+        // Fetch product attribute values linked to the attributes
+        // $productAttributeValues = DB::table('product_attribute_value')
+        //     ->whereIn('attribute_value_id', $productAttributes->pluck('id')) // Use pluck to extract IDs
+        //     ->get();
+        
+        return response()->json([
+            'success' => true,
+            'data' => $productAttributes,
+            // 'product_attribute_values' => $productAttributeValues,
+        ], 200);
+        
+
+    }
+
+
+
+
     public function getRetailProductInventoryActivity($inventory_id): JsonResponse|\Illuminate\Support\Collection
     {
         if (!auth()->user()->restaurants->count()) {
@@ -2688,7 +2925,6 @@ class ProductsController extends Controller
                     'product_id' => $product->id,
                 ]
             );
-
             // Save attribute values
             foreach ($attributeData['values'] as $value) {
 
@@ -2711,6 +2947,88 @@ class ProductsController extends Controller
 
         return response()->json(['message' => 'Attributes created and assigned to product successfully'], 200);
     }
+
+
+    public function updateProductAttribute(Request $request, $attributeId): JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+    
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+    
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+    
+        // Validate the incoming request
+        $validator = Validator::make($request->all(), [
+            'product_id' => 'required|integer',
+            'attributes' => 'required|array',
+            'attributes.*.name' => 'required|string',
+            'attributes.*.values' => 'required|array',
+            'attributes.*.visible_on_product_page' => 'required|boolean',
+            'attributes.*.used_for_variations' => 'required|boolean',
+        ]);
+    
+        if ($validator->fails()) {
+            return response()->json(['message' => $validator->errors()->first()], 400);
+        }
+    
+        // Validate the product exists
+        $product = Product::where('id', $request->input('product_id'))->where('restaurant_id', $venue->id)->first();
+        if (!$product) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+    
+        foreach ($request->input('attributes') as $attributeData) {
+            // Check if the attribute exists or create a new one
+            $attribute = $product->productAttribute()->updateOrCreate(
+                ['id' => $attributeId], // Match the existing attribute by its ID
+                [
+                    'name' => $attributeData['name'],
+                    'venue_id' => $venue->id,
+                    'product_id' => $product->id,
+                ]
+            );
+            // Save attribute values
+            foreach ($attributeData['values'] as $value) {
+                // Ensure that the attribute_id and value are used as the unique key
+                $attributeValue = $attribute->values()->updateOrCreate(
+                    [
+                        'value' => $value,
+                        'attribute_id' => $attribute->id,  // Ensure the correct attribute_id is matched
+                    ],
+                    [
+                        'product_id' => $product->id,
+                    ]
+                );
+            
+                $attributeValueId = $attributeValue->id;
+            
+                $product->ProductAttributeValue()->updateOrCreate(
+                    [
+                        'product_id' => $product->id,
+                        'attribute_value_id' => $attributeValueId, // Use the attributeValue id safely
+                    ],
+                    [
+                        'visible_on_product_page' => $attributeData['visible_on_product_page'],
+                        'used_for_variations' => $attributeData['used_for_variations'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]
+                );
+            }
+            
+        }
+    
+        return response()->json(['message' => 'Attributes updated and assigned to product successfully'], 200);
+    }
+    
 
     public function deleteProductAttribute(Request $request, $attributeId): JsonResponse
     {
@@ -2739,6 +3057,7 @@ class ProductsController extends Controller
         }
 
         // Validate the product exists
+
         $product = Product::where('id', $request->input('product_id'))->where('restaurant_id', $venue->id)->first();
         if (!$product) {
             return response()->json(['message' => 'Product not found'], 404);
@@ -2749,7 +3068,6 @@ class ProductsController extends Controller
         if (!$attribute) {
             return response()->json(['message' => 'Attribute not found'], 404);
         }
-
         // Detach the relation from the pivot table
         $product->attributeValues()->detach($attribute->values->pluck('id')->toArray());
 
@@ -2925,6 +3243,10 @@ class ProductsController extends Controller
         return response()->json(['message' => 'Variation deleted successfully'], 200);
     }
 
+
+
+    
+
     public function syncWarehouseInventory()
     {
         $warehouses = InventoryWarehouse::all();
@@ -2991,7 +3313,6 @@ class ProductsController extends Controller
 
         return response()->json(['message' => 'Retail inventory synced successfully']);
     }
-
 
 
 }

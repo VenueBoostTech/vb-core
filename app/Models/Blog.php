@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 
 class Blog extends Model
 {
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     protected $fillable = [
         'title',
@@ -50,7 +51,10 @@ class Blog extends Model
         'body_de',
         'body_pt',
         'is_featured',
-        'is_draft'
+        'is_draft',
+        'created_at',
+        'updated_at',
+        'deleted_at',
     ];
 
     public function restaurant()
