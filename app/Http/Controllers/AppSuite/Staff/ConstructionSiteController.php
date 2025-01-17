@@ -10,15 +10,17 @@ use Illuminate\Http\JsonResponse;
 use App\Models\ConstructionSite;
 use App\Models\ConstructionSiteCheckInOut;
 use App\Models\Address;
+use App\Services\AppNotificationService;
 
 class ConstructionSiteController extends Controller
 {
 
     protected VenueService $venueService;
-
-    public function __construct(VenueService $venueService)
+    protected AppNotificationService $notificationService;
+    public function __construct(VenueService $venueService, AppNotificationService $notificationService)
     {
         $this->venueService = $venueService;
+        $this->notificationService = $notificationService;
     }
     /**
      * List all construction sites
@@ -33,7 +35,7 @@ class ConstructionSiteController extends Controller
         $perPage = $request->query('per_page', 10);
         $page = $request->query('page', 1); 
         try {
-            $sites = ConstructionSite:: with(['address'])
+            $sites = ConstructionSite:: with(['address', 'manager'])
                                         ->where('venue_id', $authEmployee->restaurant_id)
                                         ->orderBy('created_at', 'desc')
                                         ->paginate($perPage, ['*'], 'page', $page);
@@ -82,9 +84,7 @@ class ConstructionSiteController extends Controller
                 'address' => 'required|string',
                 'latitude' => 'required|numeric',
                 'longitude' => 'required|numeric',
-                'site_manager' => 'required|string',
-                'site_manager_email' => 'required|email',
-                'site_manager_phone' => 'required|string',
+                'manager' => 'required|exists:employees,id',
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
                 'no_of_workers' => 'required|integer',
@@ -99,10 +99,21 @@ class ConstructionSiteController extends Controller
             unset($validated['address'], $validated['latitude'], $validated['longitude']);
 
             $validated['venue_id'] = $authEmployee->restaurant_id;
-            $validated['site_manager'] = $authEmployee->id;
             $validated['address_id'] = $address->id;
             $site = ConstructionSite::create($validated);
 
+            if($site->manager){
+                $employee = Employee::find($site->manager);
+                $notification = $this->notificationService->sendNotification($employee, 'new_construction_site_assigned', 'You have been assigned to a new construction site: ' . $site->name);
+                if($notification){
+                    $this->notificationService->sendPushNotificationToUser($employee, 'new_construction_site_assigned', 'You have been assigned to a new construction site: ' . $site->name, [
+                            'construction_site_id' => (string)$site->id,
+                            'venue_id' => (string)$authEmployee->restaurant_id,
+                            'click_action' => 'construction_site_details',
+                            'priority' => 'high'
+                        ], $notification);
+                }
+            }
             return response()->json([
                 'message' => 'Construction site created successfully',
                 'data' => $site
@@ -212,7 +223,7 @@ class ConstructionSiteController extends Controller
         if ($authEmployee instanceof JsonResponse) return $authEmployee;
        
         try {
-            $site = ConstructionSite::with(['address'])
+            $site = ConstructionSite::with(['address', 'manager'])
                                         ->where('id', $id)
                                         ->where('venue_id', $authEmployee->restaurant_id)
                                         ->firstOrFail();

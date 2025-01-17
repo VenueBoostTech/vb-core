@@ -46,5 +46,16 @@ class FirebaseService
             return ['valid' => false, 'error' => $e->getMessage()];
         }
     }
+
+    public static function getFirebaseInstance($project)
+    {
+        $config = config("firebase.projects.$project");
+
+        if (!$config || !isset($config['credentials']['file'])) {
+            throw new \Exception("Firebase project [$project] configuration is missing or invalid.");
+        }
+
+        return (new Factory)->withServiceAccount($config['credentials']['file']);
+    }
 }
 

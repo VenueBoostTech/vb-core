@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use App\Models\Notification;
+use App\Models\User;
 
 class AdminProjectController extends Controller
 {
@@ -204,6 +206,17 @@ class AdminProjectController extends Controller
                         throw new \Exception('Employee with ID ' . $teamLeaderId . ' is not a Team Leader');
                     }
                     $project->teamLeaders()->attach($teamLeaderId);
+                    // Send notification to team leader
+                    $notification = $this->notificationService->sendNotification($employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name);
+                    if($notification){
+                        $this->notificationService->sendPushNotificationToUser(
+                            $employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name, [
+                                'project_id' => (string)$project->id,
+                                'venue_id' => (string)$venue->id,
+                                'click_action' => 'project_details',
+                            ], $notification);
+                    }
+                   
                 }
             }
 
@@ -215,6 +228,15 @@ class AdminProjectController extends Controller
                         throw new \Exception('Employee with ID ' . $operationsManagerId . ' is not an Operations Manager');
                     }
                     $project->operationsManagers()->attach($operationsManagerId);
+                    $notification = $this->notificationService->sendNotification($employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name);
+                    if($notification){
+                        $this->notificationService->sendPushNotificationToUser(
+                            $employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name, [
+                                'project_id' => (string)$project->id,
+                                'venue_id' => (string)$venue->id,
+                                'click_action' => 'project_details'
+                            ], $notification);
+                    }
                 }
             }
 

@@ -202,6 +202,7 @@ return [
         SimpleSoftwareIO\QrCode\QrCodeServiceProvider::class,
 
         App\Providers\LeaveManagementServiceProvider::class,
+        Kreait\Laravel\Firebase\ServiceProvider::class,
 
     ],
 

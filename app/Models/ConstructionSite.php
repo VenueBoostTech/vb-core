@@ -23,16 +23,14 @@ class ConstructionSite extends Model
         'address_id',
         'specifications',
         'weather_config',
-        'site_manager',
         'access_requirements',
         'safety_requirements',
         'type',
-        'site_manager_email',
-        'site_manager_phone',
         'start_date',
         'end_date',
         'no_of_workers',
-        'app_project_id'
+        'app_project_id',
+        'manager'
     ];
 
     protected $casts = [
@@ -47,6 +45,11 @@ class ConstructionSite extends Model
     public function appProject(): BelongsTo
     {
         return $this->belongsTo(AppProject::class);
+    }
+
+    public function manager(): BelongsTo
+    {
+        return $this->belongsTo(Employee::class, 'manager');
     }
 
     public function ownable(): MorphTo
