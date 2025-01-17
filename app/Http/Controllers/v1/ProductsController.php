@@ -9,6 +9,7 @@ use App\Models\ActivityRetail;
 use App\Models\Category;
 use App\Models\DigitalMenu;
 use App\Models\EcommercePlatform;
+use App\Models\VbStoreAttribute;
 use App\Models\Feature;
 use App\Models\FeatureUsageCredit;
 use App\Models\FeatureUsageCreditHistory;
@@ -392,8 +393,35 @@ class ProductsController extends Controller
 
         try {
             // $product = Product::where('restaurant_id', $venue->id)->with(['variants.attribute', 'variants.value'])->find($id);
-            $product = Product::where('restaurant_id', $venue->id)->with(['attribute.option'])->find($id);
+            $product = Product::where('restaurant_id', $venue->id)
+            ->with('attribute.option.attribute')
+            ->find($id);
+        
+            // $attrubutes = [];
+            // if ($product && $product->attribute) {
+            //     $product->attribute->each(function ($attribute) use (&$attrubutes) {
 
+            //         $collection = collect($attrubutes);
+            //         // Check if any object in the collection has the id of 2
+            //         $index = $collection->search(function ($item) {
+            //             dd($item);
+            //             return $item->option->attribute_id === $attribute->option->attribute_id;
+            //         });
+                    
+            //         if ($index !== false) {
+            //             $attrubutes[$index]['attribute_options'][] = $attribute->option;
+            //         } else {
+
+            //         $attrubutes[] = [
+            //             'attribute_id' => $attribute->option->attribute_id,
+            //             'attribute_name' => $attribute->option->attribute->title,
+            //             'attribute_options' => [$attribute->option]
+            //         ];
+            //         }
+            //     });
+            // }
+            
+        // $product->attrubutes = $attrubutes;
             if (!$product) {
                 return response()->json(['message' => 'Not found product'], 404);
             }
@@ -517,6 +545,50 @@ class ProductsController extends Controller
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
+
+
+    public function storeAttributesOptions(Request $request)
+    {
+       
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+         try {
+           
+            $request->validate([
+                'product_id' => 'required|exists:products,id',
+                'attribute_options'=> 'required|array',
+                'attribute_id'=>'required|exists:vb_store_attributes,id',
+            ]);
+
+
+            $product = Product::where('id', $request->product_id)->first();
+
+            if (!$product) {
+                return response()->json(['message' => 'Product not found'], 404);
+            }
+             
+           $product->attribute()->attach($request->attribute_id, [
+            'attribute_options' => json_encode($request->attribute_options)
+           ]);
+
+            return response()->json(['message' => 'Product attributes updated successfully'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
+
+
 
      public function deletePhoto($id){
         if (!auth()->user()->restaurants->count()) {
