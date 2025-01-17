@@ -85,10 +85,10 @@ class CheckoutController extends Controller
                 return response()->json(['message' => 'Product not found'], 404);
             }
 
-             // Add inventory check and update here
-            if (!$this->inventoryService->checkStockAvailability($product, 1)) {
-                throw new \Exception("Insufficient stock for product: {$product->title}");
-            }
+//             // Add inventory check and update here
+//            if (!$this->inventoryService->checkStockAvailability($product, 1)) {
+//                throw new \Exception("Insufficient stock for product: {$product->title}");
+//            }
 
             // Set default quantity to 1 for quick checkout
             // $product->quantity = 1;
@@ -413,6 +413,7 @@ class CheckoutController extends Controller
                     $outOfStockProducts[] = $product->title;
                 }
             }
+
             if(count($outOfStockProducts) > 0) {
                 return response()->json(['message' => 'Insufficient stock for products: ' . implode(', ', $outOfStockProducts)], 400);
             }
@@ -681,7 +682,7 @@ class CheckoutController extends Controller
                             } catch (\Exception $e) {
                                 \Sentry\captureException($e);
                             }
-                        }   
+                        }
                     }
                 } else {
                     $temp_email = $this->unique_code(10).'@temp.com';
@@ -738,11 +739,12 @@ class CheckoutController extends Controller
                     ->where('postal_id', '2')->first();
 
 
+
                 $orders = Order::create([
                     'customer_id' => $new_customer->id,
                     'shipping_id' => 2,
                     'tracking_number' => 'undefined',
-                    'status' => 1,
+                    'status' => 'new',
                     'payment_method_id' => 5,
                     'ip' => 'undefined',
                     'tracking_latitude' => 0,
@@ -778,7 +780,11 @@ class CheckoutController extends Controller
                     'billing_postal_code' => $request->zip ?? '0000',
                     'coupon_id' => $coupon ? $coupon->id : null,
                 ]);
+                $venuePrefix = strtoupper(substr($venue->name, 0, 2));
+                $randomFourDigits = str_pad(rand(0, 9999), 4, '0', STR_PAD_LEFT);
 
+                $orders->order_number = $venuePrefix . '-' . $orders->id . $randomFourDigits;
+                $orders->save();
                 $order_id = $orders->id;
 
                 foreach ($order_products as $productData) {
@@ -807,8 +813,8 @@ class CheckoutController extends Controller
                     $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $order_id);
 
 
-                }
 
+                }
             } else {
                 // Handle other payment methods
                 $result = $this->finalizeOrder($venue, $customer, $order_products, $total_price, null);
@@ -836,7 +842,7 @@ class CheckoutController extends Controller
                     'payment_data' => $paymentInfo['data']
                 ]);
             }
-          
+
 
             // if ($venue->email) {
             //     Mail::to($venue->email)->send(new NewOrderEmail($venue->name));

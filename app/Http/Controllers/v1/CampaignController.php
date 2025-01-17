@@ -40,7 +40,6 @@ class CampaignController extends Controller
         }
 
         $campaigns = Campaign::where('venue_id', $venue->id)->get();
-
         // Load the associated discounts for each promotion
         $campaigns->load('promotion');
 
@@ -188,11 +187,10 @@ class CampaignController extends Controller
         if (!$venue) {
             return response()->json(['error' => 'Venue not found'], 404);
         }
-
         $campaign = Campaign::where('id', $request->id)
-            ->where('venue_id', $venue->id)
-            ->first();
-
+        ->where('venue_id', $venue->id)
+        ->first();
+        
 
         if (!$campaign) {
             return response()->json(['error' => 'Campaign not found'], 404);
@@ -215,9 +213,9 @@ class CampaignController extends Controller
 
         $promotionId = $request->input('promotion_id');
 
-        if (!$promotionId && ! $request->input('target')) {
-            return response()->json(['error' => 'Target is required'], 400);
-        }
+        // if (!$promotionId && ! $request->input('target')) {
+        //     return response()->json(['error' => 'Target is required'], 400);
+        // }
 
         if ($promotionId) {
 

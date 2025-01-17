@@ -9,7 +9,7 @@ class Checklist extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['name', 'type', 'items'];
+    protected $fillable = ['name', 'type', 'items', 'project_id', 'venue_id'];
 
     protected $casts = [
         'items' => 'array',
@@ -23,5 +23,10 @@ class Checklist extends Model
     public function teams()
     {
         return $this->belongsToMany(Team::class);
+    }
+
+    public function checklistItems(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ChecklistItem::class);
     }
 }

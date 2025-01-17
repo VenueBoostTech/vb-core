@@ -7,7 +7,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
-class BbMenusController extends Controller
+class BBMenusController extends Controller
 {
     public function index()
     {
@@ -124,20 +124,20 @@ class BbMenusController extends Controller
         }
         if($request->has('group_id')){
             $menu->group_id = $request->group_id;
-        }       
+        }
 
         if($photo){
             $menu->photo = $photo;
         }
 
         $menu->save();
-            
+
         $photo = $menu->photo;
         if (strpos($photo, 'bb-main-menu/') === 0) {
             $photo = Storage::disk('s3')->temporaryUrl($photo, '+5 minutes');
         }
         $menu->photo = $photo;
-        return response()->json($menu); 
+        return response()->json($menu);
     }
 
     public function destroy($id)
@@ -159,5 +159,5 @@ class BbMenusController extends Controller
         }
         $menu->delete();
         return response()->json(['message' => 'Menu deleted successfully']);
-    }   
+    }
 }

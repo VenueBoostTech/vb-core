@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Model;
 
 class Order extends Model
 {
+    use HasFactory, SoftDeletes;
+
     protected $table = 'orders';
     protected $fillable = [
         'total_amount',
@@ -67,7 +70,11 @@ class Order extends Model
         'tracking_countryCode',
         'tracking_cityName',
         'internal_note',
-        'bb_coupon_id'
+        'bb_coupon_id',
+        'applied_discounts',
+        'created_at',
+        'updated_at',
+        'deleted_at',
     ];
 
     public function customer()
@@ -154,6 +161,11 @@ class Order extends Model
     public function chat(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(Chat::class);
+    }
+
+    public function discount(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->belongsTo(Discount::class);
     }
 
 }

@@ -34,6 +34,10 @@ use Twilio\Rest\Client;
 
 class BookingController extends Controller
 {
+
+    // Add static property to control mail/SMS sending
+    private static $activateMS = false;  // Set to false by default
+
     public function index(Request $request): \Illuminate\Http\JsonResponse
     {
         if (!auth()->user()->restaurants->count()) {
@@ -359,10 +363,10 @@ class BookingController extends Controller
 
             $venueLogo = $venue->logo ? Storage::disk('s3')->temporaryUrl($venue->logo, '+8000 minutes') : null;
             // send a new booking email to the venue
-            if ($venue->email) {
-                // send to ggerveni@gmail.com
-                 Mail::to('griseld.gerveni@yahoo.com')->send(new NewBookingEmail(
-                // Mail::to($venue->email)->send(new NewBookingEmail(
+            // Send new booking email
+            if (self::$activateMS && $venue->email) {
+                // Send to venue email if activateMS is true
+                Mail::to($venue->email)->send(new NewBookingEmail(
                     $venue->name,
                     $guest->name,
                     $rentalUnit->name,
@@ -372,35 +376,51 @@ class BookingController extends Controller
                 ));
             }
 
-            // send message to the guest
+            // Always send to specific email regardless of activateMS
+            Mail::to('griseld.gerveni@yahoo.com')->send(new NewBookingEmail(
+                $venue->name,
+                $guest->name,
+                $rentalUnit->name,
+                $booking->check_in_date,
+                $booking->check_out_date,
+                $venueLogo
+            ));
+
+            // Send SMS notification
             if ($venue->phone_number) {
-                // Twilio account information
                 $account_sid = env('TWILIO_ACCOUNT_SID');
                 $auth_token = env('TWILIO_AUTH_TOKEN');
                 $twilio_number = env('TWILIO_NUMBER');
 
                 $client = new Client($account_sid, $auth_token);
 
-                // Prepare the SMS body
                 $smsBody = "New Booking Notification from VenueBoost\n\n" .
                     "Guest: {$guest->name}\n" .
                     "Rental Unit: {$rentalUnit->name}\n" .
                     "Check-in: {$booking->check_in_date}\n" .
                     "Check-out: {$booking->check_out_date}";
 
-
                 try {
-                     //Send SMS message
+                    // Send to specific number regardless of activateMS
                     $client->messages->create(
                         '+306908654153',
-                        // $venue->phone_number,
                         array(
                             'from' => $twilio_number,
                             'body' => $smsBody
                         )
                     );
+
+                    // Send to venue phone if activateMS is true
+                    if (self::$activateMS) {
+                        $client->messages->create(
+                            $venue->phone_number,
+                            array(
+                                'from' => $twilio_number,
+                                'body' => $smsBody
+                            )
+                        );
+                    }
                 } catch (\Exception $e) {
-                    // do nothing
                     \Sentry\captureException($e);
                 }
             }
@@ -995,6 +1015,12 @@ class BookingController extends Controller
         $checkOut = Carbon::parse($booking->check_out_date);
         $nights = $checkIn->diffInDays($checkOut);
 
+
+        // Initialize an array to count occurrences of each bed type
+        $bedCount = [];
+        $roomsCount = RentalUnit::with('rooms.beds')->find($booking->rentalUnit->id)->rooms->count();
+
+
         return response()->json([
             'booking' => [
                 'id' => $booking->id,
@@ -1051,9 +1077,10 @@ class BookingController extends Controller
                     ],
                     'photos' => $gallery,
                     'details' => [
-                        'size' => $booking->rentalUnit->accommodation_detail->size ?? 'N/A',
+                        'size' => $booking->rentalUnit->accommodation_detail->square_metres ?? 'N/A',
                         'bedrooms' => $booking->rentalUnit->accommodation_detail->bedrooms ?? 0,
-                        'bathrooms' => $booking->rentalUnit->accommodation_detail->bathrooms ?? 0
+                        'rooms' => $roomsCount,
+                        'bathrooms' => $booking->rentalUnit->accommodation_detail->bathroom_count ?? 0
                     ]
                 ],
 

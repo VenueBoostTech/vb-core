@@ -24,7 +24,9 @@ class Equipment extends Model
         'last_maintenance_date',
         'next_maintenance_due',
         'maintenance_interval_days',
-        'specifications'
+        'specifications',
+        'assigned_to',
+        'location'
     ];
 
     protected $casts = [

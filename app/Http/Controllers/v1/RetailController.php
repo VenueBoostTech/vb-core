@@ -289,32 +289,88 @@ class RetailController extends Controller
 
         $perPage = $request->get('per_page', 15);
         $page = $request->get('page', 1);
+        $search = $request->input('search');
 
         $customers = Customer::where('venue_id', $venue->id)
             ->with(['customerAddresses.address', 'user.member'])
-            ->withCount('orders')
-            ->paginate($perPage);
+            ->withCount('orders');
+            
+            if($search) {
+                $customers = $customers->whereRaw('LOWER(name) LIKE ?', ["%" . strtolower($search) . "%"]);
+            }
+
+              // If pagination is requested, apply pagination, otherwise fetch all results
+            if ($request->has('per_page') && $request->has('page')) {
+                $customers = $customers->orderBy('created_at', 'desc')->paginate($perPage);
+            } else {
+                // If no pagination is requested, retrieve all products
+                $customers = $customers->orderBy('created_at', 'DESC')->get();
+            }
 
         $result = $customers->map(function ($customer) {
-
-
             return [
-                'register_date' => $customer->created_at->format('Y-m-d H:i:s'), // '2021-09-01 12:00:00
+                'first_order' => $customer->orders()->orderBy('created_at', 'asc')->first()?->created_at->format('F d, Y h:i A') ?? '-',
+                'register_date' => $customer->user && $customer->user->created_at ? $customer->user->created_at->format('F d, Y h:i A') : 'N/A',
+                'customer_register_date' => $customer->created_at->format('F d, Y h:i A'), // '2021-09-01 12:00:00
                 'name' => $customer->name,
                 'email' => $customer->email,
                 'phone' => $customer->phone,
+                'user' => $customer->user,
                 'is_member' => $customer->user && $customer->user->member ? true : false,
-                'total_orders' => $customer->orders_count
+                'total_orders' => $customer->orders_count,
             ];
         });
 
-        return response()->json([
+        // Only include pagination if the per_page and page parameters are provided
+        if ($request->has('per_page') && $request->has('page')) {
+            $response['pagination'] = [
+                'current_page' => $customers->currentPage(),
+                'last_page' => $customers->lastPage(),
+                'per_page' => $customers->perPage(),
+                'total' => $customers->total()
+            ];
+        }
+
+        $response = [
             'customers' => $result,
-            'current_page' => $customers->currentPage(),
-            'last_page' => $customers->lastPage(),
-            'per_page' => $customers->perPage(),
-            'total' => $customers->total()
-        ]);
+        ];
+
+        return response()->json($response, 200);
+    }
+
+    public function getSearchCustomers(Request $request): \Illuminate\Http\JsonResponse
+    {
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $search = $request->input('search');
+
+        $customers = Customer::where('venue_id', $venue->id)->with(['user' => function ($query) {
+            $query->select('id');
+        }]);
+            
+        if($search) {
+            $customers = $customers->whereRaw('LOWER(name) LIKE ?', ["%" . strtolower($search) . "%"]);
+        }
+
+        $customers = $customers->select('id', 'name', 'user_id')->orderBy('created_at', 'DESC')->get();
+
+        $response = [
+            'customers' => $customers,
+        ];
+
+        return response()->json($response, 200);
     }
 
 
@@ -515,27 +571,38 @@ class RetailController extends Controller
 
         // block Data
         $orders = Order::where('restaurant_id', $venue->id)
-            ->where('status', 'order_completed')
-            ->where('created_at', '>=', $startDate)
-            ->where('created_at', '<=', $endDate)
-            ->get();
-        $groupedOrders = $orders->groupBy('customer_id');
-        $nCustomers = count($groupedOrders);
+            ->where('status', 'order_completed');
 
-        $ordersLastMonth = Order::where('restaurant_id', $venue->id)
-            ->where('status', 'order_completed')
-            ->where('created_at', '>=', $startOfLastMonth)
-            ->where('created_at', '<=', $endOfLastMonth)
-            ->get();
-        $groupedOrdersLastMonth = $ordersLastMonth->groupBy('customer_id');
-        $nCustomersLastMonth = count($groupedOrdersLastMonth);
+         if($startDate && $endDate){
+            $orders->whereBetween('created_at', [$startDate, $endDate]);
+         }
+         $orders = $orders->get();
+         $groupedOrders = $orders->groupBy('customer_id');
+         $nCustomers = count($groupedOrders);
+
+         $ordersLastMonth = Order::where('restaurant_id', $venue->id)
+         ->where('status', 'order_completed')
+         ->whereNotNull('status')
+         ->whereNotNull('order_number')
+         ->where('created_at', '>=', $startOfLastMonth)
+         ->where('created_at', '<=', $endOfLastMonth)
+         ->get();
 
 
-        $salesAmount = Order::where('restaurant_id', $venue->id)
-            ->where('status', 'order_completed')
-            ->where('created_at', '>=', $startDate)
-            ->where('created_at', '<=', $endDate)
-            ->sum('total_amount');
+
+         $groupedOrdersLastMonth = $ordersLastMonth->groupBy('customer_id');
+         $nCustomersLastMonth = count($groupedOrdersLastMonth);
+
+
+         $salesAmount = Order::where('restaurant_id', $venue->id)
+         ->where('status', 'order_completed');
+
+        if($startDate && $endDate){
+            $salesAmount = $salesAmount->whereBetween('created_at', [$startDate, $endDate]);
+        }
+
+        $salesAmount = $salesAmount->sum('total_amount');
+
 
         $salesAmountLastMonth = Order::where('restaurant_id', $venue->id)
             ->where('status', 'order_completed')
@@ -543,51 +610,87 @@ class RetailController extends Controller
             ->where('created_at', '<=', $endOfLastMonth)
             ->sum('total_amount');
 
-        // revenue statistics
-        $revenueStatistics = [];
-        $weeks = $this->getWeeksInMonth(2024, 7);
-        foreach ($weeks as $key => $week) {
-            $amount = Order::where('restaurant_id', $venue->id)
+            // revenue statistics
+            $revenueStatistics = [];
+
+            $month = date('m', strtotime($startDate));
+            $year = date('Y', strtotime($startDate));
+            $weeks = $this->getWeeksInMonth( $year, $month);
+            foreach ($weeks as $key => $week) {
+                $amount = Order::where('restaurant_id', $venue->id)
                 ->where('status', 'order_completed')
+                ->whereNotNull('status')
+                ->whereNotNull('order_number')
                 ->where('created_at', '>=', $week['start'])
                 ->where('created_at', '<=', $week['end'])
                 ->sum('total_amount');
-            $revenueStatistics[] = [
-                'week' => 'Week' . ($key + 1),
-                'start' => $week['start'],
-                'end' => $week['end'],
-                'value' => $amount
-            ];
-        }
+                $revenueStatistics[] = [
+                    'week' => 'Week' . ($key + 1),
+                    'start' => $week['start'],
+                    'end' => $week['end'],
+                    'value' => $amount
+                ];
+            }
 
-        // orders by cities
-        $orders_city = Order::join('customer_addresses', 'customer_addresses.customer_id', '=', 'orders.customer_id')
-            ->join('addresses', 'addresses.id', '=', 'customer_addresses.address_id')
-            ->select('addresses.city', DB::raw('COUNT(*) as order_count'))
-            ->where('orders.restaurant_id', $venue->id)
-            ->where('orders.status', 'order_completed')
-            ->where('orders.created_at', '>=', $startDate)
-            ->where('orders.created_at', '<=', $endDate)
-            ->groupBy('addresses.city')
-            ->get();
+            // orders by cities
+            $orders_city = Order::join('addresses', 'addresses.id', '=', 'orders.address_id')
+                ->join('cities', 'cities.id', '=', 'addresses.city_id')
+                ->select('cities.name', DB::raw('COUNT(*) as order_count'))
+                ->where('orders.restaurant_id', $venue->id)
+                ->where('orders.status', 'order_completed');
 
-        // orders
-        $orders = Order::join('customers', 'customers.id', '=', 'orders.customer_id')
+            if($startDate && $endDate) {
+                $orders_city = $orders_city->whereBetween('orders.created_at', [$startDate, $endDate]);
+            }
+
+            $orders_city = $orders_city->groupBy('cities.name')->get();
+
+            // orders
+            $orders = Order::join('customers', 'customers.id', '=', 'orders.customer_id')
             ->join('payment_methods', 'payment_methods.id', '=', 'orders.payment_method_id' )
             ->select('orders.*', DB::raw('customers.name as customer_name'), 'payment_methods.name')
-            ->where('orders.restaurant_id', $venue->id)
-            ->where('orders.created_at', '>=', $startDate)
-            ->where('orders.created_at', '<=', $endDate)
-            ->get();
+            ->whereNotNull('orders.status')
+            ->where('status', '!=', '1')
+            ->whereNotNull('orders.order_number')
+            ->where('orders.restaurant_id', $venue->id);
 
-        // orders by date
-        $orders_by_date = Order::where('restaurant_id', $venue->id)
+
+            if($startDate && $endDate){
+                $orders = $orders->whereBetween('orders.created_at', [$startDate, $endDate]);
+            }
+
+            $orders = $orders->OrderBy('orders.created_at', 'desc')->get();
+
+            $orders = $orders->map(function ($order) {
+                return [
+                    'order_number' => $order->order_number,
+                    'id' => $order->id,
+                    'ip'=>$order->ip,
+                    'customer_full_name' => $order->customer->name ?? '',
+                    'total_amount' => $order->total_amount,
+                    'status' => $order->status,
+                    'currency' => $order->currency,
+                    'order_for' => $order->is_for_self ? 'Self' : $order->other_person_name,
+                    'stripe_payment_id' => $order->stripe_payment_id,
+                    'created_at' => $order->created_at->format('F d, Y h:i A'),
+                ];
+            });
+
+            // orders by date
+            $orders_by_date = Order::where('restaurant_id', $venue->id)
             ->where('status', 'order_completed')
-            ->where('orders.created_at', '>=', $startDate)
-            ->where('orders.created_at', '<=', $endDate)
+            ->whereNotNull('status')
+            ->whereNotNull('order_number')
             ->select(DB::raw('DATE(created_at) as date'), DB::raw('COUNT(*) as order_count'))
-            ->groupBy(DB::raw('DATE(created_at)'))
-            ->get();
+            ->groupBy(DB::raw('DATE(created_at)'));
+
+            if($startDate && $endDate){
+                $orders_by_date = $orders_by_date->whereBetween('created_at', [$startDate, $endDate]);
+            }
+
+            $orders_by_date = $orders_by_date->get();
+
+
 
         // best seller products
         $bestseller_products = DB::table('orders')
@@ -596,6 +699,9 @@ class RetailController extends Controller
             ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
             ->where('orders.status', 'order_completed')
             ->where('orders.restaurant_id', $venue->id)
+            ->whereNotNull('orders.status')
+            ->whereNotNull('orders.order_number')
+            // ->whereBetween('orders.created_at', [$startDate, $endDate])
             ->select('products.title', 'products.image_path', DB::raw('brands.title as brand_title'), DB::raw('COUNT(DISTINCT orders.id) as order_count'))
             ->groupBy('products.title', 'products.image_path', 'brand_title')
             ->orderBy('order_count', 'desc')
@@ -688,7 +794,7 @@ class RetailController extends Controller
 
             $add_quantity = InventoryActivity
                 ::leftJoin('products', 'inventory_activities.product_id', '=', 'products.id')
-                ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
+                ->leftJoin('brands', 'brands.bybest_id', '=', 'products.brand_id')
                 ->where('inventory_activities.created_at', '>=', $date_start)
                 ->where('inventory_activities.created_at', '<', $date_end)
                 ->where('activity_type', 'add');
@@ -700,7 +806,7 @@ class RetailController extends Controller
 
             $deduct_quantity = InventoryActivity
                 ::leftJoin('products', 'inventory_activities.product_id', '=', 'products.id')
-                ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
+                ->leftJoin('brands', 'brands.bybest_id', '=', 'products.brand_id')
                 ->where('inventory_activities.created_at', '>=', $date_start)
                 ->where('inventory_activities.created_at', '<', $date_end)
                 ->where('activity_type', 'deduct');
@@ -715,20 +821,21 @@ class RetailController extends Controller
 
         $lowStockProducts = InventoryRetail
             ::leftJoin('products', 'inventory_retail.product_id', '=', 'products.id')
-            ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
+            ->leftJoin('brands', 'brands.bybest_id', '=', 'products.brand_id')
             ->leftJoin('order_products', 'order_products.product_id', '=', 'products.id')
             ->leftJoin('orders', function($join) {
                 $join->on('order_products.order_id', '=', 'orders.id')
                      ->where('orders.status', '=', 'order_completed');
-            })
+                    })
             ->select(DB::raw('inventory_retail.stock_quantity as stock') , 'products.id', 'products.title', DB::raw('brands.title as brand_title'), DB::raw('orders.created_at as order_date'))
             ->where('inventory_retail.venue_id', $venue->id)
             ->orderBy('stock', 'ASC')
             ->limit(5)
             ->get();
+
         $topStockProducts = InventoryRetail
             ::leftJoin('products', 'inventory_retail.product_id', '=', 'products.id')
-            ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
+            ->leftJoin('brands', 'brands.bybest_id', '=', 'products.brand_id')
             ->leftJoin('order_products', 'order_products.product_id', '=', 'products.id')
             ->leftJoin('orders', function($join) {
                 $join->on('order_products.order_id', '=', 'orders.id')
@@ -741,7 +848,7 @@ class RetailController extends Controller
             ->get();
 
         $productDistributionBrand = Product
-            ::join('brands', 'brands.id', '=', 'products.brand_id')
+            ::join('brands', 'brands.bybest_id', '=', 'products.brand_id')
             ->where('brands.venue_id', $venue->id)
             ->select(DB::raw('brands.title as name'), DB::raw('COUNT(*) as value'))
             ->groupBy('name')
@@ -857,6 +964,7 @@ class RetailController extends Controller
         $endDate = $request->query('end');
 
         if (!$startDate || !$endDate) {
+            // current month start date
             $startDate = Carbon::now()->startOfMonth()->toDateString();
             $endDate = Carbon::now()->endOfMonth()->toDateString();
         }
@@ -1420,7 +1528,7 @@ class RetailController extends Controller
         return response()->json(['message' => 'Collection updated successfully', 'collection' => $collection]);
     }
 
-    public function listCollections(): \Illuminate\Http\JsonResponse
+    public function listCollections(Request $request): \Illuminate\Http\JsonResponse
     {
         if (!auth()->user()->restaurants->count()) {
             return response()->json(['error' => 'User not eligible for making this API call'], 400);
@@ -1437,7 +1545,19 @@ class RetailController extends Controller
         }
 
         $perPage = request()->get('per_page', 15); // Default to 15 items per page
-        $collections = Collection::where('venue_id', $venue->id)->paginate($perPage);
+        $collections = Collection::where('venue_id', $venue->id);
+        if ($request->has('search')) {
+            $search_item = '%' . $request->search . '%';  // Add wildcards for partial match
+
+            $collections = $collections->where(function ($query) use ($search_item) {
+                $query->where('name', 'like', $search_item)
+                      ->orWhere('name_al', 'like', $search_item);
+            });
+        }
+
+
+        $collections = $collections->paginate($perPage);
+
 
         $updatedCollections = $collections->map(function ($collection) {
             // if ($collection->logo_path !== null) {

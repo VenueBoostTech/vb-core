@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use App\Models\ConstructionSiteIssue;
 
 class CommentController extends Controller
 {
@@ -187,6 +188,158 @@ class CommentController extends Controller
             $comment,
             $comment->project
         );
+
+        $comment->delete();
+
+        return response()->json(['message' => 'Comment deleted successfully']);
+    }
+
+
+    public function addCommentToIssue(Request $request, $issueId): JsonResponse
+    {
+        $authEmployee = $this->venueService->employee();
+        if ($authEmployee instanceof JsonResponse) return $authEmployee;
+
+        $venue = Restaurant::where('id', $authEmployee->restaurant_id)->first();
+        if (!$venue instanceof Restaurant) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $issue = ConstructionSiteIssue::where('venue_id', $venue->id)->find($issueId);
+        if (!$issue) {
+            return response()->json(['error' => 'Issue not found'], 404);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'comment' => 'required|string',
+            'image' => 'nullable|image|max:10240', // 10MB max
+            'parent_id' => 'nullable|exists:comments,id'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Handle parent comment validation
+        if ($request->parent_id) {
+            $parentComment = Comment::find($request->parent_id);
+            if (!$parentComment || $parentComment->construction_site_issue_id != $issueId) {
+                return response()->json(['error' => 'Invalid parent comment'], 400);
+            }
+        }
+
+        $comment = new Comment();
+        $comment->construction_site_issue_id = $issueId;
+        $comment->employee_id = $authEmployee->id;
+        $comment->venue_id = $venue->id;
+        $comment->comment = $request->comment;
+        $comment->parent_id = $request->parent_id;
+
+        // Handle image upload if present
+        if ($request->hasFile('image')) {
+            $image = $request->file('image');
+            $filename = Str::random(20) . '.' . $image->getClientOriginalExtension();
+            $path = Storage::disk('s3')->putFileAs('construction_site_issue_comments', $image, $filename);
+            $comment->image_path = $path;
+        }
+
+        $comment->save();
+
+        // Format the response
+        $response = [
+            'id' => $comment->id,
+            'comment' => $comment->comment,
+            'time_ago' => $comment->time_ago,
+            'image' => $comment->image_path ? Storage::disk('s3')->temporaryUrl($comment->image_path, '+5 minutes') : null,
+            'employee' => [
+                'id' => $authEmployee->id,
+                'name' => $authEmployee->name,
+                'avatar' => $authEmployee->profile_picture
+                    ? Storage::disk('s3')->temporaryUrl($authEmployee->profile_picture, '+5 minutes')
+                    : null
+            ]
+        ];
+
+        return response()->json(['message' => 'Comment added successfully', 'comment' => $response], 201);
+    }
+
+    public function getCommentsForIssue(Request $request, $issueId): JsonResponse
+    {
+        $authEmployee = $this->venueService->employee();
+        if ($authEmployee instanceof JsonResponse) return $authEmployee;
+
+        $venue = Restaurant::where('id', $authEmployee->restaurant_id)->first();
+        if (!$venue instanceof Restaurant) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $issue = ConstructionSiteIssue::where('venue_id', $venue->id)->find($issueId);
+        if (!$issue) {
+            return response()->json(['error' => 'Issue not found'], 404);
+        }
+
+        $perPage = $request->input('per_page', 15);
+
+        $comments = Comment::where('construction_site_issue_id', $issueId)
+            ->whereNull('parent_id')
+            ->with(['employee', 'replies.employee'])
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+
+        $formattedComments = $comments->map(function ($comment) {
+            return [
+                'id' => $comment->id,
+                'comment' => $comment->comment,
+                'time_ago' => $comment->time_ago,
+                'image' => $comment->image_path ? Storage::disk('s3')->temporaryUrl($comment->image_path, '+5 minutes') : null,
+                'employee' => [
+                    'id' => $comment->employee->id,
+                    'name' => $comment->employee->name,
+                    'avatar' => $comment->employee->profile_picture
+                        ? Storage::disk('s3')->temporaryUrl($comment->employee->profile_picture, '+5 minutes')
+                        : null
+                ],
+                'replies' => $comment->replies->map(function ($reply) {
+                    return [
+                        'id' => $reply->id,
+                        'comment' => $reply->comment,
+                        'time_ago' => $reply->time_ago,
+                        'image' => $reply->image_path ? Storage::disk('s3')->temporaryUrl($reply->image_path, '+5 minutes') : null,
+                        'employee' => [
+                            'id' => $reply->employee->id,
+                            'name' => $reply->employee->name,
+                            'avatar' => $reply->employee->profile_picture
+                                ? Storage::disk('s3')->temporaryUrl($reply->employee->profile_picture, '+5 minutes')
+                                : null
+                        ]
+                    ];
+                })
+            ];
+        });
+
+        return response()->json([
+            'comments' => $formattedComments,
+            'current_page' => $comments->currentPage(),
+            'per_page' => $comments->perPage(),
+            'total' => $comments->total(),
+            'total_pages' => $comments->lastPage(),
+        ]);
+    }
+
+    public function deleteCommentFromIssue($issueId,$id): JsonResponse
+    {
+        $authEmployee = $this->venueService->employee();
+        if ($authEmployee instanceof JsonResponse) return $authEmployee;
+
+        $comment = Comment::where('employee_id', $authEmployee->id)->where('construction_site_issue_id', $issueId)->find($id);
+        if (!$comment) {
+            return response()->json(['error' => 'Comment not found or unauthorized'], 404);
+        }
+
+        // Delete image from storage if exists
+        if ($comment->image_path) {
+            Storage::disk('s3')->delete($comment->image_path);
+        }
 
         $comment->delete();
 

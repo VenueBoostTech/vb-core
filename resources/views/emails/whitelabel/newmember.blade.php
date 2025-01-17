@@ -48,9 +48,9 @@
     </div>
 
     <p style="font-size: 16px; line-height: 24px; color: #333">
-        Një anëtar i ri është regjistruar nga
+        {{ $source == 'landing_page' ? 'Një anëtar i ri është regjistruar nga ' : 'Një anëtar i ri u regjistrua në ' }}Një anëtar i ri është regjistruar nga
         <span style="color: #ed1c24; font-weight: bold"
-        >{{ $source == 'landing_page' ? 'Faqja Kryesore' : 'Klubi Im' }}</span
+        >{{ $source == 'landing_page' ? 'Faqja Kryesore' : 'Klubin e Klientëve' }}</span
         >.
     </p>
 

@@ -180,7 +180,7 @@ class HomePageController extends Controller
         $products = Product::with(['attribute.option', 'productImages'])
             ->join('product_groups', 'products.id', '=', 'product_groups.product_id')
             ->join('vb_store_products_variants as variants', 'products.id', '=', 'variants.product_id')
-            ->select("products.title", "products.title_al", 
+            ->select("products.*", 
                 DB::raw("MAX(variants.price) as max_regular_price"),
                 DB::raw("MIN(variants.price) as min_regular_price"),
                 DB::raw("COUNT(variants.currency_alpha) as count_currency_alpha")
@@ -200,6 +200,5 @@ class HomePageController extends Controller
             'products' => $products
         ]);
     }
-
 
 }

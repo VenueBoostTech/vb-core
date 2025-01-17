@@ -24,6 +24,12 @@ class Discount extends Model
         'apply_for',
         'category_id',  // Add category_id to $fillable
         'product_ids',  // Add product_ids to $fillable
+        'usage_limit_per_coupon',
+        'usage_limit_per_customer',
+        'coupon_use',
+        'user_id',
+        'minimum_spent',
+        'selected_product',
     ];
 
     public function venue(): \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -64,7 +70,19 @@ class Discount extends Model
     }
 
     public function bookings()
-{
-    return $this->hasMany(Booking::class);
-}
+    {
+        return $this->hasMany(Booking::class);
+    }
+
+    public function user(){
+        return $this->belongsTo(User::class);
+    }
+
+    public function selectedProduct(){
+        return $this->belongsTo(Product::class, 'selected_product');
+    }
+
+    public function order(){
+        return $this->hasMany(Order::class);
+    }
 }

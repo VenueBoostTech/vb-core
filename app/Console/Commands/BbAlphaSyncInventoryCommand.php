@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use App\Http\Controllers\v3\Synchronization\AlphaSyncController; // Change to AlphaSyncController
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class BbAlphaSyncInventoryCommand extends Command
 {
@@ -22,9 +23,10 @@ class BbAlphaSyncInventoryCommand extends Command
 
     public function handle()
     {
+        Log::info('bb-inventory-alpha:sync command started.');
         $this->info('Starting bb inventory with alpha sync...');
 
-        $venueId = 10;
+        $venueId = 58;
         $syncDate = Carbon::now()->subWeek()->format('Y-m-d');
         $request = new Request([
             'sync_date' => $syncDate,

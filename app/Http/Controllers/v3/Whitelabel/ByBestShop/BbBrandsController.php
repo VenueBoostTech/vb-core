@@ -61,6 +61,35 @@ class BbBrandsController extends Controller
                 ->whereNull('products.deleted_at')
                 ->orderBy('created_at', 'DESC');
 
+
+            if ($request->filled('filters')) {
+                $attributeOptionIds = explode(',', $request->filters);
+                $products_query->whereHas('attribute.option', function ($query) use ($attributeOptionIds) {
+                    $query->whereIn('attribute_id', $attributeOptionIds);
+                });
+            }
+
+            if($request->filled('collections')) {
+                $collectionIds = explode(',', $request->collections);
+                $products_query->join('product_collections', 'product_collections.product_id', '=', 'products.id')
+                    ->whereIn('product_collections.collection_id', $collectionIds);
+
+            }
+
+            if($request->filled('categories')) {
+                $categoriesIds = explode(',', $request->categories);
+                $products_query->join('product_category', 'product_category.product_id', '=', 'products.id')
+                    ->whereIn('product_category.category_id', $categoriesIds);   
+            }
+
+            if($request->filled('min_price')) {
+                $products_query->where('products.price', '>=', $request->min_price);
+            }
+
+            if($request->filled('max_price')) {
+                $products_query->where('products.price', '<=', $request->max_price);
+            }
+
             if ($request->filled('search')) {
                 $products_query->join('product_groups', 'product_groups.product_id', '=', 'products.id')
                     ->join('groups', 'groups.id', '=', 'product_groups.group_id')

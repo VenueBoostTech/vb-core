@@ -312,7 +312,13 @@ class AccommodationController extends Controller
         $nameAndLocation->about_guest_access = $rentalUnit->about_guest_access;
         $nameAndLocation->currency = $rentalUnit->currency;
 
-        $url = $rentalUnit->unit_code ? 'https://venueboost.io/rental/'.$rentalUnit->unit_code : null;
+
+        if($venue->id == 23){
+            $url = $rentalUnit->unit_code ? 'https://metrosuites.al/rental/'.$rentalUnit->unit_code : null;
+        } else {
+            $url = $rentalUnit->unit_code ? 'https://venueboost.io/rental/'.$rentalUnit->unit_code : null;
+        }
+
 
 
         $gallery = Gallery::where('rental_unit_id', $rentalUnit->id)->with('photo')->get();
@@ -965,6 +971,7 @@ class AccommodationController extends Controller
                    'unit_floor' => 'numeric',
                    'square_metres' => 'required|numeric',
                    'accommodation_type' => 'string',
+                    'bathroom_count' => 'nullable|numeric',
                 ]);
                 break;
 
@@ -1053,6 +1060,7 @@ class AccommodationController extends Controller
 
             } else {
                 $accommodationDetails->guest_limit = $request->guest_limit ?? $accommodationDetails->guest_limit;
+                $accommodationDetails->bathroom_count = $request->bathroom_count ?? $accommodationDetails->bathroom_count;
                 $accommodationDetails->square_metres = $request->square_metres ?? $accommodationDetails->square_metres;
                 $accommodationDetails->updated_at = Carbon::now();
             }
@@ -1891,7 +1899,7 @@ class AccommodationController extends Controller
         $headerSection->guests = $formattedGuestsList;
         // get only non expired and active one
 
-        
+
         $rentalUnitDiscount = Discount::where('rental_unit_id', $rentalUnit->id)->where('status', true)
             ->where('end_time', '>=', Carbon::now())
             ->select('id', 'type', 'value')

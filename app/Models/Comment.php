@@ -15,6 +15,7 @@ class Comment extends Model
     protected $fillable = [
         'project_id',
         'employee_id',
+        'construction_site_issue_id',
         'parent_id',
         'comment',
         'image_path',
@@ -28,6 +29,11 @@ class Comment extends Model
     public function getTimeAgoAttribute()
     {
         return $this->created_at->diffForHumans();
+    }
+
+    public function constructionSiteIssue(): BelongsTo
+    {
+        return $this->belongsTo(ConstructionSiteIssue::class);
     }
 
     public function project(): BelongsTo

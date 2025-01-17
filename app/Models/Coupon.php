@@ -20,6 +20,9 @@ class Coupon extends Model
         'discount_amount',
         'minimum_spent',
         'maximum_spent',
+        'product_id',
+        'user_id',
+        'coupon_use',
         'usage_limit_per_coupon',
         'usage_limit_per_customer'
     ];
@@ -37,5 +40,15 @@ class Coupon extends Model
     public function orderCoupons(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
         return $this->hasMany(OrderCoupon::class);
+    }
+    public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    
+    public function product(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Product::class);
     }
 }

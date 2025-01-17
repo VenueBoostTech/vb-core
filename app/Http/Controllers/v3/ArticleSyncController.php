@@ -85,7 +85,7 @@ class ArticleSyncController extends Controller
                                 $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
 
-                                BlogCategory::updateOrCreate(
+                                $blogCategory = BlogCategory::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
                                         'name' => $cat,
@@ -98,6 +98,10 @@ class ArticleSyncController extends Controller
                                         'updated_at' => $item['updated_at'],
                                     ]
                                 );
+
+                                $blogCategory->created_at = Carbon::parse($item['created_at'])->format('Y-m-d H:i:s');
+                                $blogCategory->updated_at = Carbon::parse($item['updated_at'])->format('Y-m-d H:i:s');
+                                $blogCategory->save();
 
                                 $processedCount++;
                                 DB::commit();
@@ -182,12 +186,9 @@ class ArticleSyncController extends Controller
                                 $json_desc = json_decode($item['article_content']);
 
                                 $title = (isset($json_name->en) && isset($json_name->en) != null) ? $json_name->en : '';
-                                $title_al = (isset($json_name->sq) && isset($json_name->sq) != null) ? $json_name->sq : '';
+                                $title_al = (isset($json_name->sq) && isset($json_name->sq) != null) ? $json_name->sq : ((isset($json_name->en) && isset($json_name->en) != null) ? $json_name->en : '');
                                 $content = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
-                                $content_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
-
-
-
+                                $content_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : ((isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '');
                                 $blog = Blog::updateOrCreate(
                                     ['bybest_id' => $item['id']],
                                     [
@@ -203,14 +204,17 @@ class ArticleSyncController extends Controller
                                         'author_designation' => '',
                                         'read_time' => (int)$item['time_to_read'],
                                         'tags' =>  $item['article_tags'],
-                                        'image' => 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'],
+                                        // 'image' => 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'],
                                         'bybest_id' => $item['id'],
                                         'created_at' => $item['created_at'],
                                         'updated_at' => $item['updated_at'],
                                     ]
                                 );
 
-
+                                $blog->created_at = $item['created_at'];
+                                $blog->updated_at = $item['updated_at'];
+                                $blog->deleted_at = $item['deleted_at'];
+                                $blog->save();
 
                                 $blogCategory = BlogCategory::where('bybest_id', $item['category_id'])->first();
 
@@ -232,7 +236,7 @@ class ArticleSyncController extends Controller
                                         'photo_url' => $item['article_featured_image'],
                                     ]);
 
-                                    // UploadPhotoJob::dispatch($blog, 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'], 'image', $venue);
+                                    UploadPhotoJob::dispatch($blog, 'https://admin.bybest.shop/storage/articles/' . $item['article_featured_image'], 'image', $venue);
                                 }
                                 $processedCount++;
                                 DB::commit();

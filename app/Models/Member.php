@@ -32,7 +32,9 @@ class Member extends Model
         'is_rejected',
         'rejection_reason',
         'rejected_at',
-        'old_platform_member_code'
+        'old_platform_member_code',
+        'created_at',
+        'updated_at'
     ];
 
     /**
