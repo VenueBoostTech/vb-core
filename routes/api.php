@@ -925,11 +925,11 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::get('/inventories', 'App\Http\Controllers\v1\ProductsController@getRetailProductInventories');
             Route::get('/inventory-activity/{id}', 'App\Http\Controllers\v1\ProductsController@getRetailProductInventoryActivity');
             Route::get('/product-attributes/list', 'App\Http\Controllers\v1\ProductsController@getProductAttributesList');
-            Route::post('/product-attributes', 'App\Http\Controllers\v1\ProductsController@createAndAssignToProduct');
+            Route::post('/product-attributes', 'App\Http\Controllers\v1\ProductsController@storeAttributesOptions');
             Route::put('/product-attributes/{id}', 'App\Http\Controllers\v1\ProductsController@updateProductAttribute');
-            Route::delete('/product-attributes/{id}', 'App\Http\Controllers\v1\ProductsController@deleteProductAttribute');
+            Route::delete('/product-attributes/{product_id}/{id}', 'App\Http\Controllers\v1\ProductsController@deleteAttributesOptions');
             Route::get('/product-att-variations/{id}', 'App\Http\Controllers\v1\ProductsController@getProductAttributesForVariations');
-            Route::post('/product-variations', 'App\Http\Controllers\v1\ProductsController@createUpdateVariationsForProduct');
+            Route::post('/product-variations/{product_id}/{option_id}', 'App\Http\Controllers\v1\ProductsController@addProductAttributeVariation');
             Route::delete('/product-variations/{id}', 'App\Http\Controllers\v1\ProductsController@deleteProductVariation');
             Route::post('/products/bulk-import', 'App\Http\Controllers\v1\ProductsController@bulkImportProducts');
             Route::post('/products/try-home-product', 'App\Http\Controllers\v1\ProductsController@tryHomeProduct');
