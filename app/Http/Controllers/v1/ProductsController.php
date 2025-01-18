@@ -396,32 +396,7 @@ class ProductsController extends Controller
             $product = Product::where('restaurant_id', $venue->id)
             ->with('attribute.option.attribute')
             ->find($id);
-        
-            // $attrubutes = [];
-            // if ($product && $product->attribute) {
-            //     $product->attribute->each(function ($attribute) use (&$attrubutes) {
-
-            //         $collection = collect($attrubutes);
-            //         // Check if any object in the collection has the id of 2
-            //         $index = $collection->search(function ($item) {
-            //             dd($item);
-            //             return $item->option->attribute_id === $attribute->option->attribute_id;
-            //         });
                     
-            //         if ($index !== false) {
-            //             $attrubutes[$index]['attribute_options'][] = $attribute->option;
-            //         } else {
-
-            //         $attrubutes[] = [
-            //             'attribute_id' => $attribute->option->attribute_id,
-            //             'attribute_name' => $attribute->option->attribute->title,
-            //             'attribute_options' => [$attribute->option]
-            //         ];
-            //         }
-            //     });
-            // }
-            
-        // $product->attrubutes = $attrubutes;
             if (!$product) {
                 return response()->json(['message' => 'Not found product'], 404);
             }
@@ -437,20 +412,50 @@ class ProductsController extends Controller
             ->get();
         
             if ($productParentCategoryRelationships->isNotEmpty()) {
-            $categories = DB::table('categories')
-                ->whereIn('id', $productParentCategoryRelationships->pluck('category_id'))
-                ->select('id')
-                ->get();
-        
-            $product->parent = $categories->map(function ($category) {
-                return (object) [
-                    'id' => $category->id,
-                ];
-            });
-          }
-        
-      
+                $categories = DB::table('categories')
+                    ->whereIn('id', $productParentCategoryRelationships->pluck('category_id'))
+                    ->select('id')
+                    ->get();
+            
+                $product->parent = $categories->map(function ($category) {
+                    return (object) [
+                        'id' => $category->id,
+                    ];
+                });
+            }
 
+            $attrubutes = [];
+            if ($product && $product->attribute) {
+                $product->attribute->each(function ($attribute) use (&$attrubutes) {
+
+                    $collection = collect($attrubutes);
+                    // Check if any object in the collection has the id of 2
+                    $index = $collection->search(function ($item) use ($attribute) {
+                        return $item['attribute_id'] === $attribute->option->attribute_id;
+                    });
+                    
+                    if ($index !== false) {
+                        $attrubutes[$index]['attribute_options'][] = [
+                            'id' => $attribute->option->id,
+                            'name' => $attribute->option->option_name,
+                            'product_option_id' => $attribute->id,
+                        ];
+                    } else {
+
+                    $attrubutes[] = [
+                        'attribute_id' => $attribute->option->attribute_id,
+                        'attribute_name' => $attribute->option->attribute->attr_name,
+                        'attribute_options' => [
+                            [
+                                'id' => $attribute->option->id,
+                                'name' => $attribute->option->option_name,
+                                'product_option_id' => $attribute->id,
+                            ]
+                        ]
+                    ];
+                    }
+                });
+            }
          
             // check if it has sub category
             $productCategoryRelationship = DB::table('product_category')->where('product_id', $product->id)->where('is_parent', false)->first();
@@ -538,7 +543,7 @@ class ProductsController extends Controller
             // $productArray['attributes'] = $product->attribute;
             $productArray['variations'] = $variations;
             $productArray['currency'] =  $venue->storeSettings()->first()?->currency ?: $venue->currency;
-       
+            $productArray['attribute'] = $attrubutes;
             return response()->json(['message' => 'Product retrieved successfully',
                 'product' => $productArray, 'options' => $options, 'additions' => $additions], 200);
         } catch (\Exception $e) {
@@ -570,17 +575,18 @@ class ProductsController extends Controller
                 'attribute_options'=> 'required|array',
                 'attribute_id'=>'required|exists:vb_store_attributes,id',
             ]);
-
-
+            
             $product = Product::where('id', $request->product_id)->first();
 
             if (!$product) {
                 return response()->json(['message' => 'Product not found'], 404);
             }
-             
-           $product->attribute()->attach($request->attribute_id, [
-            'attribute_options' => json_encode($request->attribute_options)
-           ]);
+        
+            foreach ($request->attribute_options as $option) {
+                $product->attributes()->attach($option, [
+                    'venue_id' => $venue->id,
+                ]);
+            }
 
             return response()->json(['message' => 'Product attributes updated successfully'], 200);
         } catch (\Exception $e) {
@@ -588,6 +594,91 @@ class ProductsController extends Controller
         }
     }
 
+    public function deleteAttributesOptions(Request $request, $product_id, $id){
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $product = Product::where('id', $product_id)->first();
+
+        if (!$product) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+
+        $productAttribute = VbStoreProductAttribute::where('product_id', $product_id)->where('id', $id)->first();
+        if (!$productAttribute) {
+            return response()->json(['message' => 'Product attribute not found'], 404);
+        }
+
+        $productAttribute->delete();
+
+        return response()->json(['message' => 'Product attributes deleted successfully'], 200);
+    }
+
+    public function addProductAttributeVariation(Request $request, $product_id, $option_id){
+        if (!auth()->user()->restaurants->count()) {
+            return response()->json(['error' => 'User not eligible for making this API call'], 400);
+        }
+
+        $apiCallVenueShortCode = request()->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = auth()->user()->restaurants->where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $product = Product::where('id', $product_id)->first();
+
+        if (!$product) {
+            return response()->json(['message' => 'Product not found'], 404);
+        }
+        
+        try {
+           
+            $request->validate([
+
+                'variation_sku' => 'required|string',
+                'article_no' => 'required|string',
+                'price' => 'required|numeric',
+                'sale_price' => 'required|numeric',
+                'shipping_class' => 'required|string',
+                'product_long_description' => 'required|string',
+            ]);
+
+            $varient = VbStoreProductVariant::create([
+                'product_id' => $product_id,
+                'variation_sku' => $request->variation_sku,
+                'article_no' => $request->article_no,
+                'price' => $request->price,
+                'sale_price' => $request->sale_price,
+                'shipping_class' => $request->shipping_class,
+                'product_long_description' => $request->product_long_description,
+                'venue_id' => $venue->id,
+            ]);
+
+            VbStoreProductVariantAttribute::create([
+                'variant_id' => $varient->id,
+                'attribute_id' => $option_id,
+                'venue_id' => $venue->id,
+            ]);
+            return response()->json(['message' => 'Product attributes variation added successfully'], 200);
+        } catch (\Exception $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
+    }
 
 
      public function deletePhoto($id){
