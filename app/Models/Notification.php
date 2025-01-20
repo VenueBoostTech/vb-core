@@ -15,6 +15,7 @@ class Notification extends Model
         'venue_id',
         'vb_app_id',
         'notification_type_id',
+        'content',
         'text',
         'sent_at',
         'read_at',
@@ -23,6 +24,7 @@ class Notification extends Model
     protected $casts = [
         'sent_at' => 'datetime',
         'read_at' => 'datetime',
+        'content' => 'json',
     ];
 
     public function employee(): \Illuminate\Database\Eloquent\Relations\BelongsTo

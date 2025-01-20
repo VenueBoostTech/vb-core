@@ -207,7 +207,10 @@ class AdminProjectController extends Controller
                     }
                     $project->teamLeaders()->attach($teamLeaderId);
                     // Send notification to team leader
-                    $notification = $this->notificationService->sendNotification($employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name);
+                    $content = [
+                        'project_id' => (string)$project->id,
+                    ];
+                    $notification = $this->notificationService->sendNotification($employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name, $content);
                     if($notification){
                         $this->notificationService->sendPushNotificationToUser(
                             $employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name, [
@@ -228,7 +231,10 @@ class AdminProjectController extends Controller
                         throw new \Exception('Employee with ID ' . $operationsManagerId . ' is not an Operations Manager');
                     }
                     $project->operationsManagers()->attach($operationsManagerId);
-                    $notification = $this->notificationService->sendNotification($employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name);
+                    $content = [
+                        'project_id' => (string)$project->id,
+                    ];
+                    $notification = $this->notificationService->sendNotification($employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name, $content);
                     if($notification){
                         $this->notificationService->sendPushNotificationToUser(
                             $employee, 'new_project_assigned', 'You have been assigned to a new project: ' . $project->name, [

@@ -1817,6 +1817,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
 
                     Route::prefix('construction-site')->group(function () {
                         Route::get('/', [ConstructionSiteController::class, 'index'])->name('construction-site.index');
+                        Route::get('/{id}', [ConstructionSiteController::class, 'show'])->name('construction-site.show');
                         Route::get('{constructionSiteId}/check-in-exists', [ConstructionSiteController::class, 'checkInExists'])->name('construction-site.check-in-exists');
                         Route::post('{constructionSiteId}/check-in', [ConstructionSiteController::class, 'checkIn'])->name('construction-site.check-in');
                         Route::post('{constructionSiteId}/check-out/{checkInId}', [ConstructionSiteController::class, 'checkOut'])->name('construction-site.check-out');
