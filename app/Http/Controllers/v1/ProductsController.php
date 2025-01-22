@@ -476,10 +476,8 @@ class ProductsController extends Controller
                     'photo_path' =>  $item->photo_name,
                 ];
             });
-
             $product->gallery = $managedGallery;
             $product->inventory_retail = $product->inventoryRetail ?: null;
-
             // $variationsOutput = $product->variations->map(function ($variation) {
             //     // $variationsOutput = $product->variants->map(function ($variation) {
             //         return [
@@ -931,7 +929,7 @@ class ProductsController extends Controller
             if($path){
                 $product->image_path = $path;
             }     
-
+        
             $product->image_thumbnail_path = null;
             $product->title = $title;
             $product->description = $description;
@@ -954,22 +952,39 @@ class ProductsController extends Controller
             $product->parent = $request->input('parent');
             $product->dimensions = $request->input('dimensions');
             $product->is_best_seller = $request->input('is_best_seller');
+            $product->stock_quantity = json_decode($request->input('inventory_retail') ?? $request->inventory_retail, true);
             $product->save();
-
-            if ($request->input('quantity')) {
-                // Reuse the logic from createOrUpdateRetailProductInventory here
+          
+            if ($request->input('inventory_retail') || $request->inventory_retail) {
+                // Decode the inventory data from the request
+                $data = json_decode($request->input('inventory_retail') ?? $request->inventory_retail, true);
+            
+                // Fetch or create the InventoryRetail record
                 $inventoryRetail = InventoryRetail::firstOrNew([
                     'product_id' => $product->id,
                     'venue_id' => $venue->id
                 ]);
-
-                $inventoryRetail->stock_quantity = $request->input('quantity');
+            
+                // Assign inventory data
+                $inventoryRetail->stock_quantity = $data['stock_quantity'];
+                $inventoryRetail->sku = $data['sku'];
+                $inventoryRetail->low_stock_threshold = $data['low_stock_threshold'];
+                $inventoryRetail->sold_individually = $data['sold_individually'];
+                $inventoryRetail->article_no = $data['article_no'];
+                $inventoryRetail->warehouse_id = $data['warehouse_id'];
                 $inventoryRetail->manage_stock = true;
                 $inventoryRetail->used_in_whitelabel = true;
                 $inventoryRetail->used_in_stores = [];
                 $inventoryRetail->used_in_ecommerces = [];
                 $inventoryRetail->save();
+            
+                // Ensure product's stock_quantity is updated
+                $product->stock_quantity = $inventoryRetail->stock_quantity; // Assign updated stock quantity
+                $product->save(); // Save product changes explicitly
             }
+            
+            
+          
 
             if ($request->input('category_id')) {
 
