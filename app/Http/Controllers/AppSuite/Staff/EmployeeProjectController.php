@@ -120,98 +120,109 @@ class EmployeeProjectController extends Controller
 
     public function show(Request $request, $id): JsonResponse
     {
-        $authEmployee = $this->venueService->employee();
-        if ($authEmployee instanceof JsonResponse) return $authEmployee;
+        try {
+            $authEmployee = $this->venueService->employee();
+            if ($authEmployee instanceof JsonResponse) return $authEmployee;
 
-        $venue = Restaurant::where('id', $authEmployee->restaurant_id)->first();
-        if (!$venue instanceof Restaurant) {
-            return response()->json(['error' => 'Project not found'], 404);
+            $venue = Restaurant::where('id', $authEmployee->restaurant_id)->first();
+            if (!$venue instanceof Restaurant) {
+                return response()->json(['error' => 'Project not found'], 404);
+            }
+
+            $project = AppProject::where('venue_id', $venue->id)->with([
+                                    'assignedEmployees:id,name,profile_picture',
+                                    'projectManager:id,name,profile_picture',
+                                    'teamLeaders:id,name,profile_picture',
+                                    'operationsManagers:id,name,profile_picture',
+                                    'timeEntries'
+                                ])
+                                ->find($id);
+            if (!$project) {
+                return response()->json(['error' => 'Project not found'], 404);
+            }
+
+            $employee = Employee::where('user_id', auth()->user()->id)->first();
+            if (!$employee) {
+                return response()->json(['error' => 'Employee not found'], 404);
+            }
+
+            // $project = $employee->assignedProjects()
+            //     ->with([
+            //         'assignedEmployees:id,name,profile_picture',
+            //         'projectManager:id,name,profile_picture',
+            //         'teamLeaders:id,name,profile_picture',
+            //         'operationsManagers:id,name,profile_picture',
+            //         'timeEntries'
+            //     ])
+            //     ->findOrFail($id);
+            
+            // Calculate completion percentage
+            $totalHours = $project->estimated_hours ?? 0;
+            $spentHours = $project->timeEntries->sum('hours');
+            $completionPercentage = $totalHours > 0
+                ? min(round(($spentHours / $totalHours) * 100), 100)
+                : 0;
+
+            // Get checklist statistics
+            $checklistStats = $this->getChecklistStatistics($project->id);
+
+            // Get comments count
+            $commentsCount = Comment::where('project_id', $project->id)
+                ->whereNull('parent_id')
+                ->count();
+
+            // Get chat conversations count
+            $chatCount = 0;
+
+            // Format project manager
+            $projectManager = $project->projectManager
+                ? $this->formatEmployeeData($project->projectManager, 'Project Manager')
+                : null;
+
+            // Format project team (without project manager)
+            $projectTeam = [
+                'team_leaders' => $project->teamLeaders->map(function ($leader) {
+                    return $this->formatEmployeeData($leader, 'Team Leader');
+                }),
+                'operations_managers' => $project->operationsManagers->map(function ($manager) {
+                    return $this->formatEmployeeData($manager, 'Operations Manager');
+                }),
+                'team_members' => $project->assignedEmployees->map(function ($member) {
+                    return $this->formatEmployeeData($member, 'Team Member', $member->pivot->assigned_at);
+                })
+            ];
+
+            // Build response
+            $response = [
+                'id' => $project->id,
+                'name' => $project->name,
+                'status' => $project->status,
+                'start_date' => $project->start_date ? $project->start_date->format('Y-m-d') : null,
+                'end_date' => $project->end_date ? $project->end_date->format('Y-m-d') : null,
+                'description' => $project->description,
+                'estimated_hours' => $project->estimated_hours,
+                'estimated_budget' => $project->estimated_budget,
+                'project_type' => $project->project_type,
+                'project_category' => $project->project_category,
+                'completion_percentage' => $completionPercentage,
+                'time_entries' => [
+                    'estimated_hours' => $totalHours,
+                    'spent_hours' => $spentHours
+                ],
+                'project_manager' => $projectManager,  // Put at root level
+                'team' => $projectTeam,  // Team without project manager
+                'shortcuts' => [
+                    'checklists' => $checklistStats['formatted'],
+                    'checklist_completion_percentage' => $checklistStats['percentage'],
+                    'comments' => $commentsCount,
+                    'chats' => $chatCount
+                ]
+            ];
+
+            return response()->json($response);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Error retrieving project', 'error' => $e->getMessage()], 500);
         }
-
-        $project = AppProject::where('venue_id', $venue->id)->find($id);
-        if (!$project) {
-            return response()->json(['error' => 'Project not found'], 404);
-        }
-
-        $employee = Employee::where('user_id', auth()->user()->id)->first();
-        if (!$employee) {
-            return response()->json(['error' => 'Employee not found'], 404);
-        }
-
-        $project = $employee->assignedProjects()
-            ->with([
-                'assignedEmployees:id,name,profile_picture',
-                'projectManager:id,name,profile_picture',
-                'teamLeaders:id,name,profile_picture',
-                'operationsManagers:id,name,profile_picture',
-                'timeEntries'
-            ])
-            ->findOrFail($id);
-
-        // Calculate completion percentage
-        $totalHours = $project->estimated_hours ?? 0;
-        $spentHours = $project->timeEntries->sum('hours');
-        $completionPercentage = $totalHours > 0
-            ? min(round(($spentHours / $totalHours) * 100), 100)
-            : 0;
-
-        // Get checklist statistics
-        $checklistStats = $this->getChecklistStatistics($project->id);
-
-        // Get comments count
-        $commentsCount = Comment::where('project_id', $project->id)
-            ->whereNull('parent_id')
-            ->count();
-
-        // Get chat conversations count
-        $chatCount = 0;
-
-        // Format project manager
-        $projectManager = $project->projectManager
-            ? $this->formatEmployeeData($project->projectManager, 'Project Manager')
-            : null;
-
-        // Format project team (without project manager)
-        $projectTeam = [
-            'team_leaders' => $project->teamLeaders->map(function ($leader) {
-                return $this->formatEmployeeData($leader, 'Team Leader');
-            }),
-            'operations_managers' => $project->operationsManagers->map(function ($manager) {
-                return $this->formatEmployeeData($manager, 'Operations Manager');
-            }),
-            'team_members' => $project->assignedEmployees->map(function ($member) {
-                return $this->formatEmployeeData($member, 'Team Member', $member->pivot->assigned_at);
-            })
-        ];
-
-        // Build response
-        $response = [
-            'id' => $project->id,
-            'name' => $project->name,
-            'status' => $project->status,
-            'start_date' => $project->start_date ? $project->start_date->format('Y-m-d') : null,
-            'end_date' => $project->end_date ? $project->end_date->format('Y-m-d') : null,
-            'description' => $project->description,
-            'estimated_hours' => $project->estimated_hours,
-            'estimated_budget' => $project->estimated_budget,
-            'project_type' => $project->project_type,
-            'project_category' => $project->project_category,
-            'completion_percentage' => $completionPercentage,
-            'time_entries' => [
-                'estimated_hours' => $totalHours,
-                'spent_hours' => $spentHours
-            ],
-            'project_manager' => $projectManager,  // Put at root level
-            'team' => $projectTeam,  // Team without project manager
-            'shortcuts' => [
-                'checklists' => $checklistStats['formatted'],
-                'checklist_completion_percentage' => $checklistStats['percentage'],
-                'comments' => $commentsCount,
-                'chats' => $chatCount
-            ]
-        ];
-
-        return response()->json($response);
     }
 
     private function getChecklistStatistics(int $projectId): array

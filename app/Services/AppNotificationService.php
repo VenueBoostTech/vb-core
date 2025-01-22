@@ -15,7 +15,7 @@ class AppNotificationService
 {
 
     
-    public function sendNotification(Employee $employee, string $notificationTypeName, string $message)
+    public function sendNotification(Employee $employee, string $notificationTypeName, string $message, array $content = [])
     {
         $notificationType = NotificationType::where('name', $notificationTypeName)->first();
 
@@ -36,6 +36,7 @@ class AppNotificationService
                 'notification_type_id' => $notificationType->id,
                 'text' => $message,
                 'sent_at' => now(),
+                'content' => $content,
             ]);
             return $notification;
         }
@@ -56,7 +57,7 @@ class AppNotificationService
             ->where('notification_type_id', $notificationType->id)
             ->first();
 
-            $user = User::find($employee->user_id);
+        $user = User::find($employee->user_id);
         if (!$notificationSetting || $notificationSetting->is_enabled) {
             if($user){
 
@@ -76,28 +77,27 @@ class AppNotificationService
                         'click_action' => 'team_details',
                         'priority' => 'high'
                     ]);
-                    $message = CloudMessage::new()
-                            ->withNotification([
-                                'title' => $notificationType->name,
-                                'body' => $message,
-                                'sound' => 'default'
-                            ])
-                            ->withData($data);
-
-                            foreach ($firebaseTokens as $token) {
-                                try {
-                                    $messaging->send(
-                                        $message->withChangedTarget('token', $token)
-                                    );
-                                } catch (\Exception $e) {
-                                    // If token is invalid, mark it as inactive
-                                    if (str_contains($e->getMessage(), 'invalid-registration-token')) {
-                                        FirebaseUserToken::where('firebase_token', $token)
-                                            ->update(['is_active' => false]);
-                                    }
-                                    \Log::error('Firebase notification failed: ' . $e->getMessage());
-                                }
+                    
+                    foreach ($firebaseTokens as $token) {
+                        try {
+                            $cloudMessage = CloudMessage::withTarget('token', $token)
+                                ->withNotification([
+                                    'title' => 'Staffluent',
+                                    'body' => $message,
+                                    'sound' => 'default'
+                                ])
+                                ->withData($data);
+                            $response = $messaging->send($cloudMessage);
+                            \Log::info('Firebase notification sent: ' . $response);
+                        } catch (\Exception $e) {
+                            // If token is invalid, mark it as inactive
+                            if (str_contains($e->getMessage(), 'invalid-registration-token')) {
+                                FirebaseUserToken::where('firebase_token', $token)
+                                    ->update(['is_active' => false]);
                             }
+                            \Log::error('Firebase notification failed: ' . $e->getMessage());
+                        }
+                    }
                 }
             }
         }

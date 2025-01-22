@@ -104,7 +104,10 @@ class ConstructionSiteController extends Controller
 
             if($site->manager){
                 $employee = Employee::find($site->manager);
-                $notification = $this->notificationService->sendNotification($employee, 'new_construction_site_assigned', 'You have been assigned to a new construction site: ' . $site->name);
+                $content = [
+                    'construction_site_id' => (string)$site->id,
+                ];
+                $notification = $this->notificationService->sendNotification($employee, 'new_construction_site_assigned', 'You have been assigned to a new construction site: ' . $site->name, $content);
                 if($notification){
                     $this->notificationService->sendPushNotificationToUser($employee, 'new_construction_site_assigned', 'You have been assigned to a new construction site: ' . $site->name, [
                             'construction_site_id' => (string)$site->id,

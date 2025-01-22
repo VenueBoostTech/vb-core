@@ -91,7 +91,7 @@ class ArticleSyncController extends Controller
                                         'name' => $cat,
                                         'name_al' => $cat_al,
                                         'description' => $desc,
-                                        'description_al' => $desc_al,   
+                                        'description_al' => $desc_al,
                                         'venue_id' => $venue->id,
                                         'bybest_id' => $item['id'],
                                         'created_at' => $item['created_at'],
@@ -131,8 +131,8 @@ class ArticleSyncController extends Controller
             'message' => 'articlecats sync completed successfully',
             'processed_count' => $processedCount,
             'skipped_count' => $skippedCount,
-            'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
-            'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
+            'total_pages' => $bybestData['total_pages'] ?? null,
+            'current_page' => $bybestData['current_page'] ?? null
         ], 200);
     }
 
