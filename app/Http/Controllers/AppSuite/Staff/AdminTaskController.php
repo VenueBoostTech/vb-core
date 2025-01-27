@@ -31,16 +31,20 @@ class AdminTaskController extends Controller
         if ($venue instanceof JsonResponse) return $venue;
 
         $perPage = $request->input('per_page', 15); // Default to 15 items per page
-
+        $constructionSiteId = $request->input('construction_site_id');
         $tasks = Task::where('venue_id', $venue->id)  // First filter by venue_id
         ->where(function ($query) {
             $query->whereHas('project')  // Then optionally filter by project existence
             ->orWhereDoesntHave('project');
         })
-            ->with(['assignedEmployees', 'project'])  // Eager load relations
-            ->orderBy('id', 'desc')
-            ->paginate($perPage);
+            ->with(['assignedEmployees', 'project']);
 
+        if($constructionSiteId){
+            $tasks = $tasks->where('construction_site_id', $constructionSiteId);
+        }
+
+        $tasks = $tasks->orderBy('id', 'desc')
+            ->paginate($perPage);
         // Format the tasks with the required fields
         $formattedTasks = $tasks->map(function ($task) {
             $isDueOverdue = $task->status !== 'done' &&
@@ -119,6 +123,7 @@ class AdminTaskController extends Controller
             'project_id' => 'nullable|exists:app_projects,id',
             'assigned_employee_ids' => 'nullable|array',
             'assigned_employee_ids.*' => 'exists:employees,id',
+            'construction_site_id' => 'nullable|exists:construction_site,id',
         ]);
 
         if ($validator->fails()) {
@@ -134,6 +139,11 @@ class AdminTaskController extends Controller
         // Create the task with the venue ID
         $taskData = array_merge($validatedData, ['venue_id' => $venue->id]);
         $task = Task::create($taskData);
+
+        if($taskData['construction_site_id']){
+            $task->construction_site_id = $taskData['construction_site_id'];
+            $task->save();
+        }
 
         // Handle employee assignments and notifications
         if (isset($taskData['assigned_employee_ids'])) {

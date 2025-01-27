@@ -71,4 +71,24 @@ class ConstructionSite extends Model
     {
         return $this->hasMany(SiteReport::class);
     }
+
+    public function reportIncidents(): HasMany
+    {
+        return $this->hasMany(ReportIncident::class);
+    }
+
+    public function teams(): HasMany
+    {
+        return $this->hasMany(ConstructionSiteTeam::class);
+    }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(Task::class);
+    }
+
+    public function equipmentAssignments(): HasMany
+    {
+        return $this->morphMany(EquipmentAssignment::class, 'assignable');
+    }
 }
