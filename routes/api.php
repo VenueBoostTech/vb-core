@@ -50,6 +50,7 @@ use App\Http\Controllers\AppSuite\Staff\ConstructionSiteRequirementController;
 use App\Http\Controllers\AppSuite\Staff\ConstructionSiteNoticeController;
 use App\Http\Controllers\AppSuite\Staff\ConstructionSiteSafetyChecklistController;
 use App\Http\Controllers\AppSuite\Staff\ConstructionSiteGalleryController;
+use App\Http\Controllers\AppSuite\Staff\EquipmentAssignmentController;
 use App\Http\Controllers\TrackMaster\OnboardingAnalyticsController;
 use App\Http\Controllers\v1\ProductsController;
 use App\Http\Controllers\AppSuite\Staff\StaffChatController;
@@ -1432,6 +1433,12 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     Route::get('/', [EmployeeEquipmentController::class, 'index']);
                     Route::post('/', [EmployeeEquipmentController::class, 'store']);
                     Route::put('/{id}', [EmployeeEquipmentController::class, 'update']);
+                });
+
+                Route::group(['prefix' => 'equipment-assignments'], function () {
+                    Route::get('/', [EquipmentAssignmentController::class, 'index']);
+                    Route::post('/', [EquipmentAssignmentController::class, 'store']);
+                    Route::put('/{id}', [EquipmentAssignmentController::class, 'update']);
                 });
 
                 Route::group(['prefix' => 'osha-compliance'], function () {

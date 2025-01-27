@@ -11,7 +11,9 @@ use App\Models\ConstructionSite;
 use App\Models\ConstructionSiteCheckInOut;
 use App\Models\Address;
 use App\Services\AppNotificationService;
-
+use App\Models\ConstructionSiteTeam;
+use Illuminate\Support\Facades\DB;
+use App\Models\Task;
 class ConstructionSiteController extends Controller
 {
 
@@ -88,19 +90,32 @@ class ConstructionSiteController extends Controller
                 'start_date' => 'required|date',
                 'end_date' => 'required|date',
                 'no_of_workers' => 'required|integer',
+                'team_id' => 'required|array|min:1',
+                'team_id.*' => 'exists:teams,id',
             ]);
 
-            $address = Address::create([
-                'address_line1' => $validated['address'],
-                'latitude' => $validated['latitude'],
-                'longitude' => $validated['longitude']
-            ]);
-        
-            unset($validated['address'], $validated['latitude'], $validated['longitude']);
+            $site = DB::transaction(function() use ($validated, $authEmployee) {
+                $address = Address::create([
+                    'address_line1' => $validated['address'],
+                    'latitude' => $validated['latitude'],
+                    'longitude' => $validated['longitude']
+                ]);
+            
+                unset($validated['address'], $validated['latitude'], $validated['longitude']);
 
-            $validated['venue_id'] = $authEmployee->restaurant_id;
-            $validated['address_id'] = $address->id;
-            $site = ConstructionSite::create($validated);
+                $validated['venue_id'] = $authEmployee->restaurant_id;
+                $validated['address_id'] = $address->id;
+                $site = ConstructionSite::create($validated);
+
+                foreach($validated['team_id'] as $teamId){
+                    ConstructionSiteTeam::create([
+                        'construction_site_id' => $site->id,
+                        'team_id' => $teamId
+                    ]);
+                }
+
+                return $site;
+            });
 
             if($site->manager){
                 $employee = Employee::find($site->manager);
@@ -224,14 +239,29 @@ class ConstructionSiteController extends Controller
     {
         $authEmployee = $this->venueService->employee();
         if ($authEmployee instanceof JsonResponse) return $authEmployee;
-       
         try {
             $site = ConstructionSite::with(['address', 'manager'])
                                         ->where('id', $id)
                                         ->where('venue_id', $authEmployee->restaurant_id)
                                         ->firstOrFail();
             
+            $site->report_incident_count = $site->reportIncidents()->count();
+            $site->team_member_count = $site->teams()->with('team.employees')->get()->sum(function($siteTeam) {
+                return $siteTeam->team->employees->count();
+            });
+
+            $site->task_count = $site->tasks()->count();
+            $site->task_completed_count = $site->tasks()->where('status', 'done')->count();
+
+            $employee = Employee::where('user_id', auth()->user()->id)->first();
             
+            $site->current_tasks = Task::whereHas('assignedEmployees', function($query) use ($employee) {
+                    $query->where('employee_id', $employee->id);
+                })
+                ->where('construction_site_id', $id)
+                ->orderBy('created_at', 'desc')
+                ->take(3)
+                ->get(['id', 'name', 'description', 'priority', 'status', 'due_date']);
             return response()->json([
                 'data' => $site,
                 'message' => 'Construction sites retrieved successfully'
