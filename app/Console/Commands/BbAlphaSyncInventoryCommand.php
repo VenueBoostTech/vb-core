@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use App\Http\Controllers\v3\Synchronization\AlphaSyncController; // Change to AlphaSyncController
+use App\Http\Controllers\v3\Synchronization\OmniGatewaySyncController;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -14,11 +15,13 @@ class BbAlphaSyncInventoryCommand extends Command
     protected $description = 'Sync ByBest Inventory with Alpha API';
 
     protected $syncController;
+    protected $omniGatewaySyncController;
 
-    public function __construct(AlphaSyncController $syncController) // Update constructor
+    public function __construct(AlphaSyncController $syncController, OmniGatewaySyncController $omniGatewaySyncController) // Update constructor
     {
         parent::__construct();
         $this->syncController = $syncController;
+        $this->omniGatewaySyncController = $omniGatewaySyncController;
     }
 
     public function handle()
@@ -45,10 +48,19 @@ class BbAlphaSyncInventoryCommand extends Command
         $priceResponse = $this->syncController->syncPriceAlpha($request); // Updated method
         $this->info('Price sync response: ' . json_encode($priceResponse->getData()));
 
+        // Sync Prices from BookMaster
+        $omniGatewayPriceResponse = $this->omniGatewaySyncController->syncPrice($request);
+        $this->info('Bookmaster Price sync response: ' . json_encode($omniGatewayPriceResponse->getData()));
+
         // Sync Stock
         $this->info('Syncing stock...');
         $stockResponse = $this->syncController->syncStockAlpha($request); // Updated method
         $this->info('Stock sync response: ' . json_encode($stockResponse->getData()));
+
+
+        // Sync Stock from BookMaster
+        $omniGatewayStockResponse = $this->omniGatewaySyncController->syncStock($request);
+        $this->info('Bookmaster Stock sync response: ' . json_encode($omniGatewayStockResponse->getData()));
 
         // Calculate Stock for Single Products
         $this->info('Calculating stock for single products...');

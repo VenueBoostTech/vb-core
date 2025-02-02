@@ -55,4 +55,8 @@ return [
     'bkt' => [
         'web_redirect_url' => env('APP_ENV') === 'production' ? env('BKT_BBSHOP_URL_LIVE') : env('BKT_BBSHOP_URL_TEST'),
     ],
+    'omnigateway' => [
+        'base_url' => env('OMNI_GATEWAY_URL', 'https://apigtw.omnistackhub.xyz'),
+        'api_key' => env('OMNI_GATEWAY_API_KEY'),
+    ],
 ];
