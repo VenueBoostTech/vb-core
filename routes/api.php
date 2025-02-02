@@ -60,6 +60,7 @@ use App\Http\Controllers\v3\Accommodation\CalendarConnectionController;
 use App\Http\Controllers\v3\EndUserController;
 use App\Http\Controllers\v3\GeneralSyncController;
 use App\Http\Controllers\v3\Synchronization\AlphaSyncController;
+use App\Http\Controllers\v3\Synchronization\OmniGatewaySyncController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbBrandsController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCategoriesController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCollectionsController;
@@ -411,6 +412,11 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                 Route::post('/sku', [AlphaSyncController::class, 'syncSkuAlpha']);
                 Route::post('/stocks', [AlphaSyncController::class, 'syncStockAlpha']);
                 Route::post('/calculate-stock', [AlphaSyncController::class, 'calculateStock']);
+            });
+
+            Route::prefix('omni-gateway-sync')->group(function() {
+                Route::post('/price', [OmniGatewaySyncController::class, 'syncPrice']);
+                Route::post('/stock', [OmniGatewaySyncController::class, 'syncStock']);
             });
         });
 

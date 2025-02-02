@@ -26,7 +26,8 @@ class Restaurant extends Model
         'reservation_start_time',
         'reservation_end_time',
         'timezone',
-        'vt_id'
+        'vt_id',
+        'omnigateway_api_ke'
     ];
 
     public function blogs()
