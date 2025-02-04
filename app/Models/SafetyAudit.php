@@ -23,7 +23,8 @@ class SafetyAudit extends Model
         'key_findings', 
         'status',
         'audited_at', 
-        'audited_by'
+        'audited_by',
+        'score'
     ];
 
     public function oshaCompliance()

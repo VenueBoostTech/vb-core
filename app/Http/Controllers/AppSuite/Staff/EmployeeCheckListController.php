@@ -52,7 +52,8 @@ class EmployeeCheckListController extends Controller
         $completedItems = $checklists->sum(function ($checklist) {
             return $checklist->checklistItems->where('is_completed', 1)->count();
         });
-        return response()->json(['data' => $checklists, 'message' => 'Checklists fetched successfully', 'progress' => $completedItems / $totalItems * 100]);
+        $progress = $totalItems > 0 ? round(($completedItems / $totalItems) * 100, 2) : 0;
+        return response()->json(['data' => $checklists, 'message' => 'Checklists fetched successfully', 'progress' => $progress]);
     }
 
     // Store a newly created resource in storage

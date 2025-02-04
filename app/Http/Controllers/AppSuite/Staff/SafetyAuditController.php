@@ -25,7 +25,7 @@ class SafetyAuditController extends Controller
 
         $perPage = $request->input('per_page', 10); 
         $page = $request->input('page', 1);
-        $safetyAudits = SafetyAudit::with(['audited'])->where('venue_id', $authEmployee->restaurant_id)
+        $safetyAudits = SafetyAudit::with(['audited', 'oshaCompliance'])->where('venue_id', $authEmployee->restaurant_id)
             ->where('construction_site_id', $constructionSiteId)
             ->orderBy('created_at', 'desc')
             ->paginate($perPage, ['*'], 'page', $page);

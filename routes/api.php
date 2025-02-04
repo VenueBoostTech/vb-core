@@ -1837,6 +1837,11 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     });
 
                     Route::prefix('construction-site')->group(function () {
+
+                        Route::group(['prefix' => 'osha-compliance'], function () {
+                            Route::get('/', [OshaComplianceEquipmentController::class, 'index']);
+                        });
+
                         Route::get('/', [ConstructionSiteController::class, 'index'])->name('construction-site.index');
                         Route::get('/{id}', [ConstructionSiteController::class, 'show'])->name('construction-site.show');
                         Route::get('{constructionSiteId}/check-in-exists', [ConstructionSiteController::class, 'checkInExists'])->name('construction-site.check-in-exists');
@@ -1852,10 +1857,6 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                         Route::prefix('/safety-audit/{constructionSiteId}')->group(function () {
                             Route::get('/', [SafetyAuditController::class, 'index'])->name('safety-audit.index');
                             Route::post('/', [SafetyAuditController::class, 'store'])->name('safety-audit.store');
-                        });
-
-                        Route::group(['prefix' => 'osha-compliance'], function () {
-                            Route::get('/', [OshaComplianceEquipmentController::class, 'index']);
                         });
 
                         Route::prefix('issues')->group(function () {
