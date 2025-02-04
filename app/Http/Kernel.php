@@ -72,5 +72,6 @@ class Kernel extends HttpKernel
         'client_portal_api_key' => \App\Http\Middleware\ClientPortalApiKeyMiddleware::class,
         'jwt' => \App\Http\Middleware\JwtMiddleware::class,
         'public_api_key' => \App\Http\Middleware\PublicApiKeyMiddleware::class,
+        'omni_stack_gateway_api_key' => \App\Http\Middleware\OmniStackGatewayMiddleware::class,
     ];
 }
