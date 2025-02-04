@@ -1460,6 +1460,14 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
     });
 });
 
+Route::middleware(['omni_stack_gateway_api_key', 'api'])->prefix('v1')->group(function () {
+
+    Route::group(['prefix' => 'feedback'], function () {
+        Route::get('/', [VBAppCustomersController::class, 'listFeedbackOS']);
+        Route::get('/{id}', [VBAppCustomersController::class, 'getFeedbackByIdOS']);
+    });
+});
+
 // API Calls for Superadmin
 Route::middleware(['superadmin_api_key'])->prefix('v1')->group(function () {
 

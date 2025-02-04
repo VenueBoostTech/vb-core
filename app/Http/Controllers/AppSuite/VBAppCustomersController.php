@@ -195,4 +195,52 @@ class VBAppCustomersController extends Controller
             'feedback' => $feedback
         ], 201);
     }
+
+    public function listFeedbackOS(Request $request): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $page = $request->input('page', 1);
+        $perPage = $request->input('per_page', 10);
+
+        $feedback = Feedback::with(['customer'])
+                            ->where('venue_id', $venue->id)
+                            ->orderBy('created_at', 'desc')
+                            ->paginate($perPage, ['*'], 'page', $page);
+
+        return response()->json([
+            'message' => 'Feedback retrieved successfully',
+            'data' => $feedback->items(),
+            'pagination' => [
+                'total' => $feedback->total(),
+                'per_page' => $perPage,
+                'current_page' => $page,
+            ],
+        ]);
+    }
+
+    public function getFeedbackByIdOS(Request $request, $id): JsonResponse
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $feedback = Feedback::with(['customer'])
+                            ->where('venue_id', $venue->id)
+                            ->where('id', $id)
+                            ->first();
+
+        if (!$feedback) {
+            return response()->json(['error' => 'Feedback not found'], 404);
+        }
+
+        return response()->json([
+            'message' => 'Feedback retrieved successfully',
+            'data' => $feedback,
+        ], 200);
+    }
 }
