@@ -10,6 +10,7 @@ use App\Models\Comment;
 use App\Models\ChatConversation;
 use App\Models\Employee;
 use App\Models\Restaurant;
+use App\Models\Task;
 use App\Services\VenueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,7 +43,8 @@ class EmployeeProjectController extends Controller
             'avatar' => $employee->profile_picture
                 ? Storage::disk('s3')->temporaryUrl($employee->profile_picture, '+5 minutes')
                 : $this->getInitials($employee->name),
-            'role' => $role
+            'role' => $role,
+            'phone' => $employee->personal_phone
         ];
 
         if ($assignedAt) {
@@ -131,10 +133,11 @@ class EmployeeProjectController extends Controller
 
             $project = AppProject::where('venue_id', $venue->id)->with([
                                     'assignedEmployees:id,name,profile_picture',
-                                    'projectManager:id,name,profile_picture',
+                                    'projectManager:id,name,profile_picture,personal_phone',
                                     'teamLeaders:id,name,profile_picture',
                                     'operationsManagers:id,name,profile_picture',
-                                    'timeEntries'
+                                    'timeEntries',
+                                    'address'
                                 ])
                                 ->find($id);
             if (!$project) {
@@ -192,6 +195,13 @@ class EmployeeProjectController extends Controller
                 })
             ];
 
+
+            $task = Task::where('project_id', $project->id)
+                        ->whereDate('due_date', now()->addDay()->toDateString())
+                        ->where('status', Task::STATUS_IN_PROGRESS)
+                        ->where('venue_id', $venue->id)
+                        ->limit(3)
+                        ->get();
             // Build response
             $response = [
                 'id' => $project->id,
@@ -216,7 +226,9 @@ class EmployeeProjectController extends Controller
                     'checklist_completion_percentage' => $checklistStats['percentage'],
                     'comments' => $commentsCount,
                     'chats' => $chatCount
-                ]
+                ],
+                'address' => $project->address,
+                'tasks' => $task
             ];
 
             return response()->json($response);
