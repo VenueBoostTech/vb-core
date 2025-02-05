@@ -144,10 +144,66 @@ class MemberController extends Controller
 
         $perPage = $request->get('per_page', 15);
         $page = $request->get('page', 1);
-            
+
         $members = Member::where('venue_id', $venue->id)
             ->with('preferredBrand')
             ->orderBy('created_at', 'desc')
+            ->paginate($perPage);
+
+        $formattedMembers = $members->map(function ($member) {
+            return [
+                'id' => $member->id,
+                'first_name' => $member->first_name,
+                'last_name' => $member->last_name,
+                'email' => $member->email,
+                'phone_number' => $member->phone_number,
+                'birthday' => $member->birthday ? $member->birthday->format('F d, Y') : null,
+                'birthday1' => $member->birthday,
+                'city' => $member->city,
+                'address' => $member->address,
+                'preferred_brand' => $member->preferredBrand ? $member->preferredBrand->title : null,
+                'accept_terms' => $member->accept_terms,
+                'registration_source' => $member->registration_source,
+                'approval_status' => $this->getApprovalStatus($member),
+                'old_platform_member_code'=> $member->old_platform_member_code,
+                'applied_at' => $member->created_at->format('F d, Y h:i A'),
+            ];
+        });
+
+        return response()->json([
+            'data' => $formattedMembers,
+            'current_page' => $members->currentPage(),
+            'last_page' => $members->lastPage(),
+            'per_page' => $members->perPage(),
+            'total' => $members->total()
+        ], 200);
+    }
+
+    public function listMembersOS(Request $request): JsonResponse
+    {
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $perPage = $request->get('per_page', 15);
+        $page = $request->get('page', 1);
+        $registrationSource = $request->get('registration_source');
+
+        $membersQuery = Member::where('venue_id', $venue->id)
+            ->with('preferredBrand');
+
+        // Add registration source filter if provided
+        if ($registrationSource && in_array($registrationSource, ['from_my_club', 'landing_page'])) {
+            $membersQuery->where('registration_source', $registrationSource);
+        }
+
+        $members = $membersQuery->orderBy('created_at', 'desc')
             ->paginate($perPage);
 
         $formattedMembers = $members->map(function ($member) {
@@ -210,7 +266,7 @@ class MemberController extends Controller
         $member = Member::where('id', $request->input('member_id'))
             ->where('venue_id', $venue->id)
             ->first();
-       
+
         if (!$member) {
             return response()->json(['error' => 'Member not found'], 404);
         }
@@ -220,7 +276,7 @@ class MemberController extends Controller
 
         // fixed below code
         $user = User::where('email', $member->email)->first();
-        
+
         if (!$user) {
             $user = User::create([
                 'name' => $member->first_name . ' ' . $member->last_name,

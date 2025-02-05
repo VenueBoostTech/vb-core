@@ -172,4 +172,20 @@ class AttendanceController extends Controller
             return response()->json(['error' => 'Failed to generate export'], 500);
         }
     }
+
+    public function getAttendanceList(Request $request): JsonResponse
+    {
+        try {
+            $employee = $this->venueService->employee();
+
+            $status = $this->attendanceService->getAttendanceList($employee, $request->input('page', 1), $request->input('per_page', 10));
+
+            return response()->json($status);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Failed to get attendance list'
+            ], 500);
+        }
+    }
 }

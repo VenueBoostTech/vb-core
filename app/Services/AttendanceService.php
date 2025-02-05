@@ -144,4 +144,33 @@ class AttendanceService
 
         return $warnings;
     }
+
+    public function getAttendanceList(Employee $employee, $page = 1, $perPage = 10): array
+    {
+        $date = $date ?? now();
+
+        $records = AttendanceRecord::with(['employee:id,name'])->where('employee_id', $employee->id)
+                            ->orderBy('scanned_at', 'asc')
+                            ->get()
+                            ->groupBy(function ($record) {
+                                return \Carbon\Carbon::parse($record->scanned_at)->toDateString(); // Group by date
+                            })
+                            ->map(function ($items) {
+                                return [
+                                    'date' => $items->first()->scanned_at->toDateString(),
+                                    'employee' => $items->first()->employee,
+                                    'status' => $items->where('scan_type', 'check_in')->first() ? $items->where('scan_type', 'check_in')->first() : null,
+                                    'check_in' => $items->where('scan_type', 'check_in')->first() ? $items->where('scan_type', 'check_in')->first()->scanned_at : null,
+                                    'check_out' => $items->where('scan_type', 'check_out')->first() ? $items->where('scan_type', 'check_out')->first()->scanned_at : null,
+                                ];
+                            })
+                            ->values();
+
+        return [
+            'data' => $records,
+            'success' => true,
+            'message' => 'Attendance list retrieved successfully'
+        ];
+    }
 }
+

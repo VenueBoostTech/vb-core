@@ -166,7 +166,7 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
             Route::get('/variant', [BbProductsController::class, 'changeProductVariant']);
         });
 
-        
+
        Route::post('similar-products', [BbSimilarProductsController::class, 'getSimilarProducts']);
 
        Route::post('cart-suggestions', [BbCartSuggestionProductsController::class, 'getCartSuggestionProducts']);
@@ -946,8 +946,8 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::get('/attributes-options/{id}', 'App\Http\Controllers\v1\VbStoreAttributeController@getAttributesOptions');
             Route::patch('/update-attributes-options', 'App\Http\Controllers\v1\VbStoreAttributeController@updateAttributeOptions');
             Route::delete('/delete-attributes-options/{id}', 'App\Http\Controllers\v1\VbStoreAttributeController@deleteAttributeOption');
-            
-             
+
+
             Route::group(['prefix' => 'inventory-management'], function () {
                 Route::get('/summery', 'App\Http\Controllers\v1\ProductsController@getProductInventoriesSummery');
                 Route::get('/cross-location-inventory-balance', 'App\Http\Controllers\v1\ProductsController@getCrossLocationInventoryBalance');
@@ -978,7 +978,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::resource('payment-methods', PaymentMethodsController::class);
 
         });
-        
+
         Route::group(['prefix' => 'staff'], function () {
             Route::get('employees', 'App\Http\Controllers\v1\EmployeeController@index');
             Route::get('employees-staff', 'App\Http\Controllers\v1\EmployeeController@getHousekeepingStaff');
@@ -1390,7 +1390,7 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
                     // todo: add comment section at task details
 
                 });
-                
+
                 Route::group(['prefix' => 'shifts'], function () {
                     Route::get('/calendar', [ShiftController::class, 'getCalendarEvents']);
                     Route::post('/schedule', [ShiftController::class, 'createSchedule']);
@@ -1465,6 +1465,10 @@ Route::middleware(['omni_stack_gateway_api_key', 'api'])->prefix('v1')->group(fu
     Route::group(['prefix' => 'feedback'], function () {
         Route::get('/', [VBAppCustomersController::class, 'listFeedbackOS']);
         Route::get('/{id}', [VBAppCustomersController::class, 'getFeedbackByIdOS']);
+    });
+
+    Route::group(['prefix' => 'members-os'], function () {
+        Route::get('/', 'App\Http\Controllers\v3\Whitelabel\MemberController@listMembersOS');
     });
 });
 
@@ -1823,7 +1827,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                         Route::post('/checklists-item/{checklistId}', [EmployeeCheckListController::class, 'addCheckListItem'])->name('checklists-item.store');
                         Route::put('/checklists-item/{checklistId}/{itemId}/mark-as-completed-uncompleted', [EmployeeCheckListController::class, 'markAsCompletedUnCompleted'])->name('checklists-item.markAsCompletedUnCompleted');
 
-                        
+
                         Route::get('/service-ticket', [EmployeeServiceTicketController::class, 'index'])->name('service-ticket.index');
                         Route::post('/service-ticket', [EmployeeServiceTicketController::class, 'store'])->name('service-ticket.store');
 
@@ -1851,7 +1855,7 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                         Route::get('/report-incident', [ReportIncidentController::class, 'index'])->name('report-incident.index');
 
                         Route::prefix('/{constructionSiteId}/report-incident')->group(function () {
-                            Route::post('/', [ReportIncidentController::class, 'store'])->name('report-incident.store');    
+                            Route::post('/', [ReportIncidentController::class, 'store'])->name('report-incident.store');
                         });
 
                         Route::prefix('/safety-audit/{constructionSiteId}')->group(function () {
@@ -1890,10 +1894,10 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                         });
                     });
 
-                    
+
                     Route::get('tasks', [EmployeeTaskController::class, 'index']);
                     Route::get('tasks/{id}', [EmployeeTaskController::class, 'show']);
-                     Route::put('tasks/{id}/status', [EmployeeTaskController::class, 'updateStatus']);
+                    Route::put('tasks/{id}/status', [EmployeeTaskController::class, 'updateStatus']);
 
                     Route::get('reports', [StaffReportController::class, 'employeeReport']);
 
@@ -1973,9 +1977,11 @@ Route::middleware(['vb_apps_api_key'])->prefix('v1')->group(function () {
                     Route::get('/leave-types', [ShiftController::class, 'getLeaveTypes']);
                     Route::get('/leave-balance', [ShiftController::class, 'getLeaveBalance']);
                     Route::post('/time-off', [ShiftController::class, 'requestTimeOff']);
+                    Route::get('/time-off/list', [ShiftController::class, 'getShiftList']);
                 });
 
                 Route::group(['prefix' => 'attendance'], function () {
+                    Route::get('/list', [AttendanceController::class, 'getAttendanceList']);
                     Route::get('/', [AttendanceController::class, 'getAttendanceData']);
                     Route::post('/check-in', [AttendanceController::class, 'checkIn']);
                     Route::post('/check-out', [AttendanceController::class, 'checkOut']);
