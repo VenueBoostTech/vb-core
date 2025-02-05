@@ -1462,13 +1462,17 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
 
 Route::middleware(['omni_stack_gateway_api_key', 'api'])->prefix('v1')->group(function () {
 
-    Route::group(['prefix' => 'feedback'], function () {
+    Route::group(['prefix' => 'feedback-os'], function () {
         Route::get('/', [VBAppCustomersController::class, 'listFeedbackOS']);
+        Route::get('/stats', [VBAppCustomersController::class, 'getFeedbackStatsOS']);
         Route::get('/{id}', [VBAppCustomersController::class, 'getFeedbackByIdOS']);
     });
 
     Route::group(['prefix' => 'members-os'], function () {
         Route::get('/', 'App\Http\Controllers\v3\Whitelabel\MemberController@listMembersOS');
+        Route::post('/accept', 'App\Http\Controllers\v3\Whitelabel\MemberController@acceptMemberOS');;
+        Route::post('/reject', 'App\Http\Controllers\v3\Whitelabel\MemberController@rejectMemberOS');
+        Route::get('/export', 'App\Http\Controllers\v3\Whitelabel\MemberController@exportMembersOS');
     });
 });
 
