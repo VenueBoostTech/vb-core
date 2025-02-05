@@ -181,6 +181,7 @@ class MemberController extends Controller
 
     public function listMembersOS(Request $request): JsonResponse
     {
+        // Ensure the venue short code is provided
         $apiCallVenueShortCode = $request->get('venue_short_code');
         if (!$apiCallVenueShortCode) {
             return response()->json(['error' => 'Venue short code is required'], 400);
@@ -191,48 +192,164 @@ class MemberController extends Controller
             return response()->json(['error' => 'Venue not found'], 404);
         }
 
+        // Retrieve pagination and filtering parameters
         $perPage = $request->get('per_page', 15);
         $page = $request->get('page', 1);
         $registrationSource = $request->get('registration_source');
+        $search = $request->get('search');
+        $status = $request->get('status'); // expected values: 'approved', 'rejected', 'pending', or 'all'
 
-        $membersQuery = Member::where('venue_id', $venue->id)
-            ->with('preferredBrand');
+        // Build the base query for members belonging to the venue
+        $baseQuery = Member::where('venue_id', $venue->id);
 
-        // Add registration source filter if provided
+        // Filter by registration source if provided and valid
         if ($registrationSource && in_array($registrationSource, ['from_my_club', 'landing_page'])) {
-            $membersQuery->where('registration_source', $registrationSource);
+            $baseQuery->where('registration_source', $registrationSource);
         }
 
-        $members = $membersQuery->orderBy('created_at', 'desc')
-            ->paginate($perPage);
+        // Apply search filtering (searching in first_name, last_name, or email)
+        if ($search) {
+            $baseQuery->where(function ($query) use ($search) {
+                $query->where('first_name', 'LIKE', "%{$search}%")
+                    ->orWhere('last_name', 'LIKE', "%{$search}%")
+                    ->orWhere('email', 'LIKE', "%{$search}%");
+            });
+        }
 
+        // Apply status filtering if provided and not "all"
+        if ($status && $status !== 'all') {
+            if ($status === 'approved') {
+                $baseQuery->whereNotNull('accepted_at');
+            } elseif ($status === 'rejected') {
+                $baseQuery->whereNotNull('rejected_at');
+            } elseif ($status === 'pending') {
+                $baseQuery->whereNull('accepted_at')->whereNull('rejected_at');
+            }
+        }
+
+        // Clone the query for metrics calculation (so metrics reflect the applied filters)
+        $metricsQuery = clone $baseQuery;
+
+        // Calculate metrics based on the filtered results
+        $metrics = [
+            'totalRegistrations' => $metricsQuery->count(),
+            'approvedUsers'      => $metricsQuery->whereNotNull('accepted_at')->count(),
+            'pendingUsers'       => $metricsQuery->whereNull('accepted_at')->whereNull('rejected_at')->count(),
+            'rejectedUsers'      => $metricsQuery->whereNotNull('rejected_at')->count(),
+            'trends'             => [
+                'monthly' => $this->calculateMonthlyTrend($venue->id),
+                'weekly'  => $this->calculateWeeklyTrend($venue->id)
+            ]
+        ];
+
+        // Build the main query including eager loading for preferredBrand and order by creation date
+        $membersQuery = $baseQuery->with('preferredBrand')->orderBy('created_at', 'desc');
+
+        // Paginate the results
+        $members = $membersQuery->paginate($perPage);
+
+        // Format the member data as needed
         $formattedMembers = $members->map(function ($member) {
             return [
-                'id' => $member->id,
-                'first_name' => $member->first_name,
-                'last_name' => $member->last_name,
-                'email' => $member->email,
-                'phone_number' => $member->phone_number,
-                'birthday' => $member->birthday ? $member->birthday->format('F d, Y') : null,
-                'birthday1' => $member->birthday,
-                'city' => $member->city,
-                'address' => $member->address,
-                'preferred_brand' => $member->preferredBrand ? $member->preferredBrand->title : null,
-                'accept_terms' => $member->accept_terms,
-                'registration_source' => $member->registration_source,
-                'approval_status' => $this->getApprovalStatus($member),
+                'id'                   => $member->id,
+                'first_name'           => $member->first_name,
+                'last_name'            => $member->last_name,
+                'email'                => $member->email,
+                'phone_number'         => $member->phone_number,
+                'birthday'             => $member->birthday ? $member->birthday->format('F d, Y') : null,
+                'birthday1'            => $member->birthday,
+                'city'                 => $member->city,
+                'address'              => $member->address,
+                'preferred_brand'      => $member->preferredBrand ? $member->preferredBrand->title : null,
+                'accept_terms'         => $member->accept_terms,
+                'registration_source'  => $member->registration_source,
+                'approval_status'      => $this->getApprovalStatus($member),
                 'old_platform_member_code'=> $member->old_platform_member_code,
-                'applied_at' => $member->created_at->format('F d, Y h:i A'),
+                'applied_at'           => $member->created_at->format('F d, Y h:i A'),
             ];
         });
 
+        // Return the JSON response
         return response()->json([
-            'data' => $formattedMembers,
+            'data'         => $formattedMembers,
             'current_page' => $members->currentPage(),
-            'last_page' => $members->lastPage(),
-            'per_page' => $members->perPage(),
-            'total' => $members->total()
+            'last_page'    => $members->lastPage(),
+            'per_page'     => $members->perPage(),
+            'total'        => $members->total(),
+            'metrics'      => $metrics
         ], 200);
+    }
+
+    public function exportMembersOS(Request $request)
+    {
+        // Validate required venue short code
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        // Find the venue by short code
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        // Optional filter by registration source (from_my_club or landing_page)
+        $registrationSource = $request->get('registration_source');
+
+        // Build the query similar to listMembersOS
+        $membersQuery = Member::where('venue_id', $venue->id)->with('preferredBrand');
+        if ($registrationSource && in_array($registrationSource, ['from_my_club', 'landing_page'])) {
+            $membersQuery->where('registration_source', $registrationSource);
+        }
+        $members = $membersQuery->orderBy('created_at', 'desc')->get();
+
+        // Define CSV headers (adjust as needed)
+        $headers = [
+            'ID',
+            'First Name',
+            'Last Name',
+            'Email',
+            'Phone Number',
+            'Birthday',
+            'City',
+            'Address',
+            'Preferred Brand',
+            'Registration Source',
+            'Approval Status',
+            'Applied At'
+        ];
+
+        // Create a callback to stream the CSV data
+        $callback = function() use ($members, $headers) {
+            $file = fopen('php://output', 'w');
+            // Write CSV header row
+            fputcsv($file, $headers);
+            foreach ($members as $member) {
+                $data = [
+                    $member->id,
+                    $member->first_name,
+                    $member->last_name,
+                    $member->email,
+                    $member->phone_number,
+                    $member->birthday ? $member->birthday->format('F d, Y') : '',
+                    $member->city,
+                    $member->address,
+                    $member->preferredBrand ? $member->preferredBrand->title : '',
+                    $member->registration_source,
+                    $this->getApprovalStatus($member),
+                    $member->created_at->format('F d, Y h:i A'),
+                ];
+                fputcsv($file, $data);
+            }
+            fclose($file);
+        };
+
+        // Define a filename using the current timestamp
+        $fileName = 'members_export_' . now()->format('Ymd_His') . '.csv';
+
+        // Return the CSV as a streamed download
+        return response()->streamDownload($callback, $fileName, ['Content-Type' => 'text/csv']);
     }
 
     private function getApprovalStatus(Member $member): string
@@ -356,5 +473,145 @@ class MemberController extends Controller
         $member->save();
 
         return response()->json(['message' => 'Member rejected successfully'], 200);
+    }
+
+
+    public function acceptMemberOS(Request $request): JsonResponse
+    {
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $member = Member::where('id', $request->input('member_id'))
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$member) {
+            return response()->json(['error' => 'Member not found'], 404);
+        }
+
+        // Generate a random password
+        $password = Str::random(8);
+
+        // fixed below code
+        $user = User::where('email', $member->email)->first();
+
+        if (!$user) {
+            $user = User::create([
+                'name' => $member->first_name . ' ' . $member->last_name,
+                'email' => $member->email,
+                'password' => Hash::make($password),
+                'country_code' => 'AL',
+                'enduser' => true
+            ]);
+        }
+        $customer = Customer::where('user_id', $user->id)->first();
+        if(!$customer){
+            $customer = Customer::create([
+                'user_id' => $user->id,
+                'venue_id' => $venue->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $member->phone_number ?? '-',
+                'address' => $member->address ?? '-',
+            ]);
+        }
+        // Create a new customer
+
+
+        // Send email to new user
+        Mail::to($member->email)->send(new NewUserFromMemberWelcomeEmail($user, $password));
+
+        // Update the member
+        $member->user_id = $user->id;
+        $member->accepted_at = now();
+        if($member->old_platform_member_code == null){
+            $member->old_platform_member_code = str_pad(random_int(0, 9999999999), 13, '0', STR_PAD_LEFT);
+        }
+        $member->is_rejected = false;
+        $member->rejection_reason = null;
+        $member->rejected_at = null;
+        $member->save();
+
+        $user->old_platform_member_code = $member->old_platform_member_code;
+        return response()->json(['message' => 'Member accepted and user created successfully',
+            'data' => [
+                'user' => $user,
+                'customer' => $customer
+            ]
+        ], 200);
+    }
+
+    public function rejectMemberOS(Request $request): JsonResponse
+    {
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $member = Member::where('id', $request->input('member_id'))
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$member) {
+            return response()->json(['error' => 'Member not found'], 404);
+        }
+
+        // Update the member
+        $member->is_rejected = true;
+        $member->rejected_at = now();
+        $member->rejection_reason = $request->input('rejection_reason'); // You may want to add this to your request validation
+        $member->accepted_at = null;
+        $member->user_id = null; // Remove association with user if any
+        $member->save();
+
+        return response()->json(['message' => 'Member rejected successfully'], 200);
+    }
+
+    private function calculateMonthlyTrend($venueId): float
+    {
+        $currentMonth = now()->startOfMonth();
+        $lastMonth = now()->subMonth()->startOfMonth();
+
+        $currentCount = Member::where('venue_id', $venueId)
+            ->whereBetween('created_at', [$currentMonth, now()])
+            ->count();
+
+        $lastCount = Member::where('venue_id', $venueId)
+            ->whereBetween('created_at', [$lastMonth, $currentMonth])
+            ->count();
+
+        if ($lastCount == 0) return $currentCount > 0 ? 100 : 0;
+
+        return round((($currentCount - $lastCount) / $lastCount) * 100, 2);
+    }
+
+    private function calculateWeeklyTrend($venueId): float
+    {
+        $currentWeek = now()->startOfWeek();
+        $lastWeek = now()->subWeek()->startOfWeek();
+
+        $currentCount = Member::where('venue_id', $venueId)
+            ->whereBetween('created_at', [$currentWeek, now()])
+            ->count();
+
+        $lastCount = Member::where('venue_id', $venueId)
+            ->whereBetween('created_at', [$lastWeek, $currentWeek])
+            ->count();
+
+        if ($lastCount == 0) return $currentCount > 0 ? 100 : 0;
+
+        return round((($currentCount - $lastCount) / $lastCount) * 100, 2);
     }
 }

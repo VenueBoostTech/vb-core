@@ -116,7 +116,7 @@ class CheckoutController extends Controller
                             'address' => $request->address,
                         ]);
 
-                        $newCustomer->assignRole('client');
+                        // $newCustomer->assignRole('client');
 
                         try {
                             $data_string = [
@@ -232,7 +232,7 @@ class CheckoutController extends Controller
                     'product_discount_price' => 0,
                 ]);
 
-                $this->inventoryService->decreaseStock($product, 1, $order_id);
+                // $this->inventoryService->decreaseStock($product, 1, $order_id);
 
             } else {
                 // Handle card payment
@@ -302,7 +302,7 @@ class CheckoutController extends Controller
                     return response()->json(['message' => $result['error']], 500);
                 }
                 $result_order = $result['order'];
-                $this->inventoryService->decreaseStock($product, 1, $result_order->id);
+                // $this->inventoryService->decreaseStock($product, 1, $result_order->id);
                 $orderDetails = [
                     'id' => $result_order->id,
                     'total' => $result_order->total_amount,
@@ -403,20 +403,20 @@ class CheckoutController extends Controller
             }, $request->input('order_products'));
 
             // Check if all products are available in stock
-            $outOfStockProducts = [];
-            foreach($order_products as $productData) {
-                $product = Product::find($productData['id']);
-                if (!$product) {
-                    return response()->json(['message' => 'Product not found: ' . $productData['id']], 404);
-                }
-                if (!$this->inventoryService->checkStockAvailability($product, $productData['product_quantity'])) {
-                    $outOfStockProducts[] = $product->title;
-                }
-            }
+            // $outOfStockProducts = [];
+            // foreach($order_products as $productData) {
+            //     $product = Product::find($productData['id']);
+            //     if (!$product) {
+            //         return response()->json(['message' => 'Product not found: ' . $productData['id']], 404);
+            //     }
+            //     if (!$this->inventoryService->checkStockAvailability($product, $productData['product_quantity'])) {
+            //         $outOfStockProducts[] = $product->title;
+            //     }
+            // }
 
-            if(count($outOfStockProducts) > 0) {
-                return response()->json(['message' => 'Insufficient stock for products: ' . implode(', ', $outOfStockProducts)], 400);
-            }
+            // if(count($outOfStockProducts) > 0) {
+            //     return response()->json(['message' => 'Insufficient stock for products: ' . implode(', ', $outOfStockProducts)], 400);
+            // }
 
             $total = $this->getProductsTotal($order_products);
             if ($total['status'] == false) {
@@ -635,7 +635,7 @@ class CheckoutController extends Controller
                                 'address' => $request->address,
                             ]);
 
-                            $newCustomer->assignRole('client');
+                            // $newCustomer->assignRole('client');
 
                             try {
                                 $data_string = [
@@ -664,7 +664,7 @@ class CheckoutController extends Controller
                                 'address' => $request->address,
                             ]);
 
-                            $newCustomer->assignRole('client');
+                            // $newCustomer->assignRole('client');
 
                             try {
                                 $data_string = [
@@ -713,7 +713,7 @@ class CheckoutController extends Controller
                                                 'address' => $request->address,
                                             ]);
 
-                                            $newCustomer->assignRole('client');
+                                            // $newCustomer->assignRole('client');
 
                                             try {
                                                 $data_string = [
@@ -810,7 +810,7 @@ class CheckoutController extends Controller
                         'product_discount_price' => 0,
                     ]);
 
-                    $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $order_id);
+                    // $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $order_id);
 
 
 
@@ -830,12 +830,12 @@ class CheckoutController extends Controller
                 ];
 
                 $paymentInfo = $this->bktPaymentService->initiatePayment($orderDetails);
-                foreach($order_products as $productData) {
-                    $product = Product::where('id', $productData['id'])->first();
-                    if ($product) {
-                        $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $result_order->id);
-                    }
-                }
+                // foreach($order_products as $productData) {
+                //     $product = Product::where('id', $productData['id'])->first();
+                //     if ($product) {
+                //         $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $result_order->id);
+                //     }
+                // }
                 return response()->json([
                     'status' => 'success',
                     'payment_url' => $paymentInfo['url'],
@@ -940,7 +940,7 @@ class CheckoutController extends Controller
                         'product_total_price' => $product->price * $productData['product_quantity'],
                     ]);
 
-                    $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $order->id);
+                    // $this->inventoryService->decreaseStock($product, $productData['product_quantity'], $order->id);
                 }
             }
 

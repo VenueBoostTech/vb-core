@@ -9,11 +9,13 @@ use App\Models\FeatureUsageCreditHistory;
 use App\Models\Feedback;
 use App\Models\PlanFeature;
 use App\Models\Product;
+use App\Models\Restaurant;
 use App\Models\StoreSetting;
 use App\Models\Subscription;
 use App\Services\VenueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
@@ -196,9 +198,91 @@ class VBAppCustomersController extends Controller
         ], 201);
     }
 
+    public function getFeedbackStatsOS(Request $request): JsonResponse
+    {
+        // Validate required venue short code
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        // Find the venue by short code
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        try {
+            // Get all feedback for calculations
+            $feedback = Feedback::where('venue_id', $venue->id);
+
+            // Calculate average rating from all rating fields
+            $averageRating = $feedback->avg(DB::raw(
+                '(overall_satisfaction + product_quality + staff_knowledge +
+            staff_friendliness + store_cleanliness + value_for_money) / 6'
+            ));
+
+            // Total feedback count
+            $totalFeedback = $feedback->count();
+
+            // Satisfaction score (percentage of ratings above 7)
+            $satisfactionScore = 0;
+            if ($totalFeedback > 0) {
+                $highRatings = $feedback->where(function ($query) {
+                    $query->whereRaw(
+                        '(overall_satisfaction + product_quality + staff_knowledge +
+                    staff_friendliness + store_cleanliness + value_for_money) / 6 >= ?',
+                        [7]
+                    );
+                })->count();
+
+                $satisfactionScore = ($highRatings / $totalFeedback) * 100;
+            }
+
+            // Calculate trending (compare with last month)
+            $lastMonth = now()->subMonth();
+            $thisMonthAvg = $feedback->where('created_at', '>=', now()->startOfMonth())
+                    ->avg(DB::raw(
+                        '(overall_satisfaction + product_quality + staff_knowledge +
+                staff_friendliness + store_cleanliness + value_for_money) / 6'
+                    )) ?? 0;
+
+            $lastMonthAvg = $feedback->where('created_at', '>=', $lastMonth->startOfMonth())
+                    ->where('created_at', '<', now()->startOfMonth())
+                    ->avg(DB::raw(
+                        '(overall_satisfaction + product_quality + staff_knowledge +
+                staff_friendliness + store_cleanliness + value_for_money) / 6'
+                    )) ?? 0;
+
+            $trending = 0;
+            if ($lastMonthAvg > 0) {
+                $trending = (($thisMonthAvg - $lastMonthAvg) / $lastMonthAvg) * 100;
+            }
+
+            return response()->json([
+                'message' => 'Feedback stats retrieved successfully',
+                'data' => [
+                    'averageRating' => round($averageRating, 1),
+                    'totalFeedback' => $totalFeedback,
+                    'satisfactionScore' => round($satisfactionScore, 1),
+                    'trending' => round($trending, 1)
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            \Sentry\captureException($e);
+            return response()->json(['error' => 'Failed to calculate feedback stats'], 500);
+        }
+    }
+
     public function listFeedbackOS(Request $request): JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
         if (!$venue) {
             return response()->json(['error' => 'Venue not found'], 404);
         }
@@ -206,14 +290,52 @@ class VBAppCustomersController extends Controller
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 10);
 
-        $feedback = Feedback::with(['customer'])
-                            ->where('venue_id', $venue->id)
-                            ->orderBy('created_at', 'desc')
-                            ->paginate($perPage, ['*'], 'page', $page);
+        $feedback = Feedback::with(['customer', 'store'])
+            ->where('venue_id', $venue->id)
+            ->orderBy('created_at', 'desc')
+            ->paginate($perPage, ['*'], 'page', $page);
+
+        // Transform feedback data to be more frontend-friendly
+        $transformedData = collect($feedback->items())->map(function ($item) {
+            return [
+                'id' => $item->id,
+                'customer' => [
+                    'id' => $item->customer->id,
+                    'name' => $item->customer->name,
+                    'email' => $item->customer->email,
+                    'phone' => $item->customer->phone
+                ],
+                'store' => [
+                    'id' => optional($item->store)->id,
+                    'name' => optional($item->store)->name ?? 'N/A'
+                ],
+                'ratings' => [
+                    'overall' => $item->overall_satisfaction,
+                    'product' => $item->product_quality,
+                    'staff_knowledge' => $item->staff_knowledge,
+                    'staff_friendliness' => $item->staff_friendliness,
+                    'cleanliness' => $item->store_cleanliness,
+                    'value' => $item->value_for_money
+                ],
+                'feedback' => [
+                    'product' => $item->product_feedback,
+                    'service' => $item->service_feedback,
+                    'improvements' => $item->improvement_suggestions
+                ],
+                'purchase' => [
+                    'made' => $item->purchase_made,
+                    'amount' => $item->purchase_amount,
+                    'found_product' => $item->found_desired_product
+                ],
+                'visit_date' => $item->visit_date,
+                'would_recommend' => $item->would_recommend,
+                'created_at' => $item->created_at
+            ];
+        })->all();
 
         return response()->json([
             'message' => 'Feedback retrieved successfully',
-            'data' => $feedback->items(),
+            'data' => $transformedData,
             'pagination' => [
                 'total' => $feedback->total(),
                 'per_page' => $perPage,
@@ -224,7 +346,14 @@ class VBAppCustomersController extends Controller
 
     public function getFeedbackByIdOS(Request $request, $id): JsonResponse
     {
-        $venue = $this->venueService->adminAuthCheck();
+        // Validate required venue short code
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        // Find the venue by short code
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
         if (!$venue) {
             return response()->json(['error' => 'Venue not found'], 404);
         }
