@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\LeaveType;
 use App\Models\Schedule;
 use App\Models\Shift;
+use App\Models\Employee;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -190,6 +191,52 @@ class ShiftController extends Controller
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to fetch leave balance'], 500);
+        }
+    }
+
+    public function getShiftList(Request $request): JsonResponse
+    {
+        try {
+            $employee = auth()->user()->employee;
+            
+            $page = $request->input('page', 1); 
+            $perPage = $request->input('per_page', 10);
+            $shifts = Schedule::with(['employee:id,name'])
+                ->where('restaurant_id', $employee->restaurant_id)
+                ->orderBy('date', 'desc')
+                ->paginate($perPage, ['*'], 'page', $page);
+
+            $employeeOnShift = Employee::where('restaurant_id', $employee->restaurant_id)
+                                        ->where('status', 'active')
+                                        ->whereDoesntHave('leaveRequests', function ($query) {
+                                            $query->where('date', now()->toDateString());
+                                        })
+                                        ->count();
+            $currentlyOnBreak = Employee::where('restaurant_id', $employee->restaurant_id)
+                                        ->where('status', 'on-break')
+                                        ->count();
+            $pendingAlerts = 0;
+            $overtimeAlerts = 0;
+            $complienceScore = 100;
+            return response()->json([
+                'data' => $shifts->items(),
+                'employeeOnShift' => $employeeOnShift,
+                'currentlyOnBreak' => $currentlyOnBreak,
+                'pendingAlerts' => $pendingAlerts,
+                'overtimeAlerts' => $overtimeAlerts,
+                'complienceScore' => $complienceScore,
+                'pagination' => [
+                    'total' => $shifts->total(),
+                    'per_page' => $shifts->perPage(),
+                    'current_page' => $shifts->currentPage(),
+                    'last_page' => $shifts->lastPage(),
+                ],
+                'success' => true,
+                'message' => 'Shift list retrieved successfully'
+            ]);
+        } catch (\Exception $e) {
+            dd($e);
+            return response()->json(['error' => 'Failed to fetch shift list'], 500);
         }
     }
 
