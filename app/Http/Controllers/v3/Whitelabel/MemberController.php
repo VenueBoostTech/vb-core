@@ -201,6 +201,7 @@ class MemberController extends Controller
 
         // Build the base query for members belonging to the venue
         $baseQuery = Member::where('venue_id', $venue->id);
+        $baseQuery->where('created_at', '>=', '2025-02-04 00:00:00');
 
         // Filter by registration source if provided and valid
         if ($registrationSource && in_array($registrationSource, ['from_my_club', 'landing_page'])) {
@@ -227,22 +228,33 @@ class MemberController extends Controller
             }
         }
 
-        // Clone the query for metrics calculation (so metrics reflect the applied filters)
+        // Clone the query for metrics calculation
         $metricsQuery = clone $baseQuery;
+
+        // Time references for metrics
+        $now = now();
+        $sevenDaysAgo = $now->copy()->subDays(7);
+        $monthAgo = $now->copy()->subMonth();
 
         // Calculate metrics based on the filtered results
         $metrics = [
-            'totalRegistrations' => $metricsQuery->count(),
-            'approvedUsers'      => $metricsQuery->whereNotNull('accepted_at')->count(),
-            'pendingUsers'       => $metricsQuery->whereNull('accepted_at')->whereNull('rejected_at')->count(),
-            'rejectedUsers'      => $metricsQuery->whereNotNull('rejected_at')->count(),
+            'totalRegistrations' => (clone $baseQuery)->count(),
+            'approvedUsers'      => (clone $baseQuery)->whereNotNull('accepted_at')->count(),
+            'pendingUsers'       => (clone $baseQuery)->whereNull('accepted_at')->whereNull('rejected_at')->count(),
+            'rejectedUsers'      => (clone $baseQuery)->whereNotNull('rejected_at')->count(),
+            'recentSignups'      => (clone $baseQuery)->whereNotNull('accepted_at')
+                ->where(function($query) use ($sevenDaysAgo, $now) {
+                    $query->whereDate('accepted_at', '>=', $sevenDaysAgo)
+                        ->whereDate('accepted_at', '<=', $now);
+                })->count(),
             'trends'             => [
                 'monthly' => $this->calculateMonthlyTrend($venue->id),
-                'weekly'  => $this->calculateWeeklyTrend($venue->id)
+                'weekly'  => $this->calculateWeeklyTrend($venue->id),
+                'recent'  => $this->calculateRecentTrend($venue->id)
             ]
         ];
 
-        // Build the main query including eager loading for preferredBrand and order by creation date
+        // Build the main query including eager loading and order by creation date
         $membersQuery = $baseQuery->with('preferredBrand')->orderBy('created_at', 'desc');
 
         // Paginate the results
@@ -266,10 +278,10 @@ class MemberController extends Controller
                 'approval_status'      => $this->getApprovalStatus($member),
                 'old_platform_member_code'=> $member->old_platform_member_code,
                 'applied_at'           => $member->created_at->format('F d, Y h:i A'),
+                'accepted_at'           => $member->accepted_at,
             ];
         });
 
-        // Return the JSON response
         return response()->json([
             'data'         => $formattedMembers,
             'current_page' => $members->currentPage(),
@@ -298,10 +310,14 @@ class MemberController extends Controller
         $registrationSource = $request->get('registration_source');
 
         // Build the query similar to listMembersOS
-        $membersQuery = Member::where('venue_id', $venue->id)->with('preferredBrand');
+        $membersQuery = Member::where('venue_id', $venue->id)
+            ->where('created_at', '>=', '2025-02-04 00:00:00')  // Add February 4th filter
+            ->with('preferredBrand');
+
         if ($registrationSource && in_array($registrationSource, ['from_my_club', 'landing_page'])) {
             $membersQuery->where('registration_source', $registrationSource);
         }
+
         $members = $membersQuery->orderBy('created_at', 'desc')->get();
 
         // Define CSV headers (adjust as needed)
@@ -581,37 +597,65 @@ class MemberController extends Controller
 
     private function calculateMonthlyTrend($venueId): float
     {
-        $currentMonth = now()->startOfMonth();
-        $lastMonth = now()->subMonth()->startOfMonth();
+        $now = now();
+        $monthAgo = $now->copy()->subMonth();
+        $twoMonthsAgo = $now->copy()->subMonths(2);
 
-        $currentCount = Member::where('venue_id', $venueId)
-            ->whereBetween('created_at', [$currentMonth, now()])
+        $thisMonthCount = Member::where('venue_id', $venueId)
+            ->where('accepted_at', '>=', $monthAgo)
             ->count();
 
-        $lastCount = Member::where('venue_id', $venueId)
-            ->whereBetween('created_at', [$lastMonth, $currentMonth])
+        $lastMonthCount = Member::where('venue_id', $venueId)
+            ->whereBetween('accepted_at', [$twoMonthsAgo, $monthAgo])
             ->count();
 
-        if ($lastCount == 0) return $currentCount > 0 ? 100 : 0;
+        if ($lastMonthCount > 0) {
+            return round((($thisMonthCount - $lastMonthCount) / $lastMonthCount) * 100, 1);
+        }
 
-        return round((($currentCount - $lastCount) / $lastCount) * 100, 2);
+        return $thisMonthCount > 0 ? 100 : 0;
     }
 
     private function calculateWeeklyTrend($venueId): float
     {
-        $currentWeek = now()->startOfWeek();
-        $lastWeek = now()->subWeek()->startOfWeek();
+        $now = now();
+        $weekAgo = $now->copy()->subWeek();
+        $twoWeeksAgo = $now->copy()->subWeeks(2);
 
-        $currentCount = Member::where('venue_id', $venueId)
-            ->whereBetween('created_at', [$currentWeek, now()])
+        $thisWeekCount = Member::where('venue_id', $venueId)
+            ->where('accepted_at', '>=', $weekAgo)
             ->count();
 
-        $lastCount = Member::where('venue_id', $venueId)
-            ->whereBetween('created_at', [$lastWeek, $currentWeek])
+        $lastWeekCount = Member::where('venue_id', $venueId)
+            ->whereBetween('accepted_at', [$twoWeeksAgo, $weekAgo])
             ->count();
 
-        if ($lastCount == 0) return $currentCount > 0 ? 100 : 0;
+        if ($lastWeekCount > 0) {
+            return round((($thisWeekCount - $lastWeekCount) / $lastWeekCount) * 100, 1);
+        }
 
-        return round((($currentCount - $lastCount) / $lastCount) * 100, 2);
+        return $thisWeekCount > 0 ? 100 : 0;
     }
+
+    private function calculateRecentTrend($venueId): float
+    {
+        $now = now();
+        $sevenDaysAgo = $now->copy()->subDays(7);
+        $fourteenDaysAgo = $now->copy()->subDays(14);
+
+        $lastWeekCount = Member::where('venue_id', $venueId)
+            ->where('accepted_at', '>=', $sevenDaysAgo)
+            ->count();
+
+        $previousWeekCount = Member::where('venue_id', $venueId)
+            ->whereBetween('accepted_at', [$fourteenDaysAgo, $sevenDaysAgo])
+            ->count();
+
+        if ($previousWeekCount > 0) {
+            return round((($lastWeekCount - $previousWeekCount) / $previousWeekCount) * 100, 1);
+        }
+
+        return $lastWeekCount > 0 ? 100 : 0;
+    }
+
 }

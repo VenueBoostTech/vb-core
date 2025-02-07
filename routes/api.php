@@ -67,6 +67,7 @@ use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbCollectionsController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbGroupsController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbProductsController;
 use App\Http\Controllers\v3\Whitelabel\ByBestShop\BbSearchController;
+use App\Http\Controllers\v3\Whitelabel\ByBestShop\BBCheckoutController;
 use App\Http\Controllers\VisionTrack\ActivityAnalyticsController;
 use App\Http\Controllers\VisionTrack\AnalyticsController;
 use App\Http\Controllers\VisionTrack\DevicesController;
@@ -214,8 +215,8 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         });
 
         Route::group(['prefix' => 'postals'], function () {
-            Route::get('/', 'App\Http\Controllers\v3\WhiteLabel\ByBestShop\CheckoutController@index');
-            Route::get('/pricing', 'App\Http\Controllers\v3\WhiteLabel\ByBestShop\CheckoutController@pricing');
+            Route::get('/', [BBCheckoutController::class, 'index']);
+            Route::get('/pricing', [BBCheckoutController::class, 'pricing']);
         });
 
         // Route::post('/checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\TwoCheckoutController@quickCheckout');
@@ -223,8 +224,8 @@ Route::middleware(['web_api_key'])->prefix('v1')->group(function () {
         Route::get('/payment/success', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@success')->name('payment.success');
         Route::get('/payment/cancel', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@cancel')->name('payment.cancel');
         Route::get('/payment/callback', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\PaymentController@callback')->name('payment.callback');
-        Route::post('/quick-checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@quickCheckout');
-        Route::post('/checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\CheckoutController@checkout');
+        Route::post('/quick-checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BBCheckoutController@quickCheckout');
+        Route::post('/checkout/bybest', 'App\Http\Controllers\v3\Whitelabel\ByBestShop\BBCheckoutController@checkout');
         Route::post('/initiate-bkt-payment', 'App\Http\Controllers\v3\Whitelabel\BktPaymentController@initiatePayment');
 
     });
@@ -1473,6 +1474,12 @@ Route::middleware(['omni_stack_gateway_api_key', 'api'])->prefix('v1')->group(fu
         Route::post('/accept', 'App\Http\Controllers\v3\Whitelabel\MemberController@acceptMemberOS');;
         Route::post('/reject', 'App\Http\Controllers\v3\Whitelabel\MemberController@rejectMemberOS');
         Route::get('/export', 'App\Http\Controllers\v3\Whitelabel\MemberController@exportMembersOS');
+    });
+
+    Route::group(['prefix' => 'stores-os'], function () {
+
+        Route::get('/', [InventoryConfigurationController::class, 'listStoresOS']);
+        Route::post('connect-disconnect', [InventoryConfigurationController::class, 'connectDisconnectStoreOS']);
     });
 });
 

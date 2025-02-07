@@ -163,7 +163,7 @@ class Order extends Model
         return $this->hasOne(Chat::class);
     }
 
-    public function discount(): \Illuminate\Database\Eloquent\Relations\HasMany
+    public function discount(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Discount::class);
     }

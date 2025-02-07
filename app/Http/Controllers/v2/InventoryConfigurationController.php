@@ -48,7 +48,7 @@ class InventoryConfigurationController extends Controller
         if (!$venue) {
             return response()->json(['error' => 'Venue not found'], 404);
         }
-        
+
         $warehouses = InventoryWarehouse::where('venue_id', $venue->id)->with('address', 'inventoryRetails')->get();
         $warehouses = $warehouses->map(function ($warehouse) {
             $total_products = 0;
@@ -59,7 +59,7 @@ class InventoryConfigurationController extends Controller
                     $total_stock = $total_stock + $item->stock_quantity;
                 }
             }
-            
+
             return [
                 'id' => $warehouse->id,
                 'address' => $warehouse->address,
@@ -212,7 +212,7 @@ class InventoryConfigurationController extends Controller
             ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
             ->where('inventory_retail.venue_id', $venue->id)
             ->sum('inventory_retail.stock_quantity');
-            
+
         $stores = $stores->map(function ($store) use ($nProducts, $totalStock){
             return [
                 'id' => $store->id,
@@ -224,6 +224,102 @@ class InventoryConfigurationController extends Controller
         });
 
         return response()->json($stores);
+    }
+
+    public function listStoresOS(Request $request): \Illuminate\Http\JsonResponse
+    {
+        // Validate required venue short code
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        // Find the venue by short code
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+        $venueId = $venue->id;
+
+        $stores = PhysicalStore::where('venue_id', $venueId)->with('address')->get();
+
+
+        $stores = $stores->map(function ($store) {
+            return [
+                'id' => $store->id,
+                'address' => $store->address,
+                'name' => $store->name,
+                'external_ids' => $store->external_ids
+            ];
+        });
+
+        return response()->json($stores);
+    }
+
+    public function connectDisconnectStoreOS(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'vb_id' => 'required|integer',
+            'os_id' => 'required|string',
+            'type' => 'required|in:connect,disconnect'
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $apiCallVenueShortCode = $request->get('venue_short_code');
+        if (!$apiCallVenueShortCode) {
+            return response()->json(['error' => 'Venue short code is required'], 400);
+        }
+
+        // Find the venue by short code
+        $venue = Restaurant::where('short_code', $apiCallVenueShortCode)->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Venue not found'], 404);
+        }
+
+
+        $store = PhysicalStore::where('venue_id', $venue->id)
+            ->where('id', $request->vb_id)
+            ->first();
+
+        if (!$store) {
+            return response()->json(['error' => 'Store not found'], 404);
+        }
+
+        $externalIds = json_decode($store->external_ids ?? '{}', true);
+        $omniStackId = $externalIds['omniStackGateway'] ?? null;
+
+        if ($request->type === 'connect') {
+            if ($omniStackId) {
+                if ($omniStackId === $request->os_id) {
+                    return response()->json(['message' => 'Store already connected']);
+                }
+                return response()->json(['error' => 'Store already connected with different provider'], 400);
+            }
+
+            $externalIds['omniStackGateway'] = $request->os_id;
+            $store->external_ids = json_encode($externalIds);
+            $store->save();
+
+            return response()->json(['message' => 'Store connected successfully']);
+        } else {
+            if (!$omniStackId) {
+                return response()->json(['error' => 'Store not connected'], 400);
+            }
+
+            if ($omniStackId !== $request->os_id) {
+                return response()->json(['error' => 'Store connected with different provider'], 400);
+            }
+
+            unset($externalIds['omniStackGateway']);
+            $store->external_ids = json_encode($externalIds);
+            $store->save();
+
+            return response()->json(['message' => 'Store disconnected successfully']);
+        }
     }
 
     public function createStore(Request $request): \Illuminate\Http\JsonResponse
@@ -362,7 +458,7 @@ class InventoryConfigurationController extends Controller
             ->leftJoin('brands', 'brands.id', '=', 'products.brand_id')
             ->where('inventory_retail.venue_id', $venue->id)
             ->sum('inventory_retail.stock_quantity');
-            
+
         $platforms = $platforms->map(function ($platform) use ($nProducts, $totalStock){
             return [
                 'id' => $platform->id,
