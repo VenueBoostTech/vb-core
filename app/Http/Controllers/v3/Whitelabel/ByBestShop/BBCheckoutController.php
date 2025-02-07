@@ -35,7 +35,7 @@ use App\Mail\CustomerOrderConfirmationEmail;
 use App\Mail\NewOrderEmail;
 use Stevebauman\Location\Facades\Location;
 
-class CheckoutController extends Controller
+class BBCheckoutController extends Controller
 {
     protected $bktPaymentService;
     protected $inventoryService;
@@ -234,6 +234,9 @@ class CheckoutController extends Controller
 
                 // $this->inventoryService->decreaseStock($product, 1, $order_id);
 
+                // Send webhook after successful order creation
+                $this->sendOrderWebhook($orders, 'quick_checkout');
+
             } else {
                 // Handle card payment
                 if($request->email) {
@@ -310,12 +313,16 @@ class CheckoutController extends Controller
 
                 $paymentInfo = $this->bktPaymentService->initiatePayment($orderDetails);
 
+                $this->sendOrderWebhook($result_order, 'quick_checkout');
+
                 return response()->json([
                     'status' => 'success',
                     'payment_url' => $paymentInfo['url'],
                     'payment_data' => $paymentInfo['data']
                 ]);
             }
+
+
 
             return response()->json(['message' => 'Order added successfully'], 200);
 
@@ -848,6 +855,8 @@ class CheckoutController extends Controller
             //     Mail::to($venue->email)->send(new NewOrderEmail($venue->name));
             // }
 
+
+            $this->sendOrderWebhook($result_order, 'regular_checkout');
             return response()->json(['message' => 'Order added successfully', 'order' => $result_order], 200);
 
         } catch (\Exception $e) {
@@ -1007,4 +1016,104 @@ class CheckoutController extends Controller
 
         return response()->json(['data' => $pricing], 200);
     }
+
+    /**
+     * Send webhook notification for new order
+     */
+    private function mapOrderStatus($status)
+    {
+        $statusMap = [
+            1 => 'new',
+            2 => 'processing',
+            3 => 'completed',
+            4 => 'refunded',
+            5 => 'cancelled'
+        ];
+        return $statusMap[$status] ?? 'new';
+    }
+
+    private function sendOrderWebhook(Order $order, $checkoutType = 'regular_checkout')
+    {
+        try {
+            $venue = Restaurant::find($order->restaurant_id);
+            if (!$venue || !$venue->webhook_url) {
+                return;
+            }
+
+            $webhookData = [
+                'order_number' => $order->order_number,
+                'id' => $order->id,
+                'customer_id' => $order->customer_id,
+                'subtotal' => $order->subtotal,
+                'total_amount' => $order->total_amount,
+                'discount' => $order->discount ?? 0,
+                'currency' => 'ALL',
+                'exchange_rate_all' => $order->exchange_rate_all ?? 1,
+                'status' => $this->mapOrderStatus($order->status),
+                'payment_method_id' => $order->payment_method_id,
+                'payment_status' => $order->payment_status,
+                'stripe_payment_id' => $order->payment['transactionId'] ?? null,
+                'payment_metadata' => $order->payment ?? [],
+                'source_type' => $checkoutType,
+                'source_url' => 'https://metroshop.al',
+                'source_platform' => 'venueboost-whitelabel',
+                'customer_email' => $order->customer ? $order->customer->email : ($order->billing_email ?? null),
+
+
+                // Shipping details
+                'shipping_name' => $order->shipping_name,
+                'shipping_surname' => $order->shipping_surname,
+                'shipping_address' => $order->shipping_address,
+                'shipping_city' => $order->shipping_city,
+                'shipping_state' => $order->shipping_state,
+                'shipping_postal_code' => $order->shipping_postal_code,
+                'shipping_phone_no' => $order->shipping_phone_no,
+                'shipping_email' => $order->shipping_email,
+
+                // Billing details
+                'billing_name' => $order->billing_name,
+                'billing_surname' => $order->billing_surname,
+                'billing_address' => $order->billing_address,
+                'billing_city' => $order->billing_city,
+                'billing_state' => $order->billing_state,
+                'billing_postal_code' => $order->billing_postal_code,
+                'billing_phone_no' => $order->billing_phone_no,
+                'billing_email' => $order->billing_email,
+
+                // Order products
+                'order_products' => $order->orderProducts->map(function($orderProduct) {
+                    return [
+                        'product_id' => $orderProduct->product_id,
+                        'product_name' => $orderProduct->product->title ?? 'Unknown Product',
+                        'product_quantity' => $orderProduct->product_quantity,
+                        'product_total_price' => $orderProduct->product_total_price
+                    ];
+                })->toArray()
+            ];
+
+
+            // Get venue's webhook URL and construct full endpoint
+            $webhookUrl = rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/webhooks/orders/' . $venue->short_code;
+
+            // Send webhook
+            $response = Http::withHeaders([
+                'webhook-api-key' => env('OMNISTACK_GATEWAY_MSHOP_API_KEY'),
+                'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                'Content-Type' => 'application/json',
+            ])->post($webhookUrl, $webhookData);
+
+            if (!$response->successful()) {
+                \Log::error('Webhook failed for order ' . $order->id, [
+                    'status' => $response->status(),
+                    'response' => $response->json()
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Error sending webhook for order ' . $order->id, [
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
 }

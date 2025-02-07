@@ -13,6 +13,7 @@ class PhysicalStore extends Model
 
     protected $fillable = [
         'name',
+        'external_ids',
         'venue_id',
         'address_id',
         'code'
