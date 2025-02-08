@@ -856,7 +856,7 @@ class BBCheckoutController extends Controller
             // }
 
 
-            $this->sendOrderWebhook($result_order, 'regular_checkout');
+//            $this->sendOrderWebhook($result_order, 'regular_checkout');
             return response()->json(['message' => 'Order added successfully', 'order' => $result_order], 200);
 
         } catch (\Exception $e) {
