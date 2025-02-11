@@ -22,4 +22,5 @@ class OrderStatus
     const ORDER_ON_DELIVERY = 'order_on_delivery';
     const ORDER_READY_FOR_PICKUP = 'order_ready_for_pickup'; // preparation completed (cooked, packed, etc.)
     const ORDER_PAID = 'Paid';
+    const PENDING = 'pending';
 }

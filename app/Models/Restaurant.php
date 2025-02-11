@@ -20,6 +20,8 @@ class Restaurant extends Model
         'plan_type', 'plan_id', 'subscription_id', 'contact_id', 'stripe_customer_id', 'status', 'active_plan',
         'last_payment_date', 'referral_code', 'used_referral_id', 'venue_type', 'paused', 'currency', 'can_process_transactions',
         'years_in_business', 'use_referrals_for', 'qr_code_path', 'full_whitelabel',
+        'app_key',
+        'short_code',
         'inventory_warehouses',
         'has_ecommerce',
         'physical_stores',
@@ -27,7 +29,7 @@ class Restaurant extends Model
         'reservation_end_time',
         'timezone',
         'vt_id',
-        'omnigateway_api_ke'
+        'omnigateway_api_key'
     ];
 
     public function blogs()
