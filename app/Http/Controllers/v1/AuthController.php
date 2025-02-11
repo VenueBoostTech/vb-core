@@ -578,13 +578,13 @@ class AuthController extends Controller
         $currentTierName = null;
         $walletBalance = null;
 
-        // Define subAccountId based on source
-        $subAccountId = null;
+        // Define $venueShortCode based on source
+        $venueShortCode = null;
         $customer = null;
         $guest = null;
         $endUserObject = new StdClass();
         if ($source === 'bybest.shop_web') {
-            $subAccountId = '66551ae760ba26d93d6d3a32';
+            $venueShortCode = 'BYB2929SCDE';
             $customer = Customer::where('user_id', $user->id)->first();
             $endUserObject->firstName = $customer->name;
             $endUserObject->lastName = '-';
@@ -592,7 +592,7 @@ class AuthController extends Controller
             $endUserObject->phone = $customer->phone;
             $endUserObject->password = $password;
         } elseif ($source === 'metrosuites') {
-            $subAccountId = '6730cb67d23dc622500cbf0d';
+            $venueShortCode = ''; // todo: replace with the right one
             $guest = Guest::where('user_id', $user->id)->first();
             $endUserObject->firstName = $guest->name;
             $endUserObject->lastName = '-';
@@ -602,34 +602,8 @@ class AuthController extends Controller
         }
 
 
-
-        // Insert user to CRM Pixel Breeze
-        try {
-
-            $data_string = [
-                "crm_client_customer_id" => $user->id,
-                "source" => $source,
-                "firstName" => $endUserObject->firstName,
-                "lastName" => $endUserObject->lastName,
-                "email" => $endUserObject->email,
-                "phone" => $endUserObject->phone ?? null,
-                "password" => $endUserObject->password,
-                "referral_code" =>  null,
-            ];
-
-            Http::withHeaders([
-                "Content-Type" => "application/json",
-            ])->post('https://crmapi.pixelbreeze.xyz/api/add-end-user-to-sub-account', $data_string);
-
-        } catch (\Throwable $th) {
-            \Sentry\captureException($th);
-            // You may want to log this error or handle it in some way
-        }
-
-
-
         // Only call CRM API if subAccountId is set
-        if ($subAccountId) {
+        if ($venueShortCode) {
             if ($source === 'metrosuites') {
                 $venue = Restaurant::where('id', $guest?->restaurant_id)->first();
             } else {
@@ -640,17 +614,30 @@ class AuthController extends Controller
                 return response()->json(['error' => 'User can\'t login.'], 403);
             }
 
-            // Fetch data from CRM with the specified subAccountId
-            $crmResponse = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$user->id}", [
-                'subAccountId' => $subAccountId,
-            ]);
+            try {
+                $endUserResponse = Http::withHeaders([
+                    'webhook-api-key' => env('OMNISTACK_GATEWAY_MSHOP_API_KEY'),
+                    'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                ])->post(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . $venueShortCode . '/get-or-create', [
+                    "external_id" => $user->id,
+                    "registrationSource" => $source === 'metrosuites' ? "metrosuites" : "metroshop",
+                    "name" => $endUserObject->firstName,
+                    "surname" => $endUserObject->lastName,
+                    "email" => $endUserObject->email,
+                    "phone" => $endUserObject->phone,
+                    "password" => $password
+                ]);
 
-            if ($crmResponse->successful()) {
-                $crmData = $crmResponse->json()['result']['endUser'] ?? [];
-                $referralCode = $crmData['referralCode'] ?? null;
-                $currentTierName = $crmData['currentTierName'] ?? null;
-                $walletBalance = $crmData['wallet']['balance'] ?? null;
+                if ($endUserResponse->successful()) {
+                    $omniData = $endUserResponse->json();
+                    $referralCode = $omniData['referralCode'] ?? null;
+                    $currentTierName = $omniData['currentTierName'] ?? null;
+                    $walletBalance = $omniData['wallet']['balance'] ?? null;
+                }
+            } catch (\Throwable $th) {
+                \Sentry\captureException($th);
             }
+
         } else {
             // If source is neither bybest.shop_web nor metrosuites
             $venue = null;
@@ -1622,6 +1609,11 @@ class AuthController extends Controller
             'id' => $user->id,
         ];
 
+        $referralCode = null;
+        $currentTierName = null;
+        $walletBalance = null;
+
+
         if ($request->source == 'bybest.shop_web') {
             // Create customer in db
             $customer = Customer::create([
@@ -1672,23 +1664,63 @@ class AuthController extends Controller
                 }
             }
 
-            // Insert user to CRM Pixel Breeze
+            // Insert user to OmniStack
             try {
+                // Prepare data for Omnistack API
                 $data_string = [
-                    "crm_client_customer_id" => $user->id,
-                    "source" => "bybest.shop_web",
-                    "firstName" => $request->first_name,
-                    "lastName" => $request->last_name,
+                    "external_ids" => [
+                        "venueBoostUserId" => $user->id,  // User ID from VenueBoost
+                        "venueBoostCustomerId" => $customer->id  // Customer ID from VenueBoost
+                    ],
+                    "registrationSource" => "metroshop",
+                    "name" => $request->first_name,
+                    "surname" => $request->last_name,
                     "email" => $request->email,
                     "phone" => $customer->phone ?? null,
                     "password" => $request->password,
-                    "referral_code" => $request->referral_code ?? null,
+                    "referralCode" => $request->referral_code ?? null,
+                    "address" => [
+                        "addressLine1" => $request->country . ' ' . $request->state . ' ' . $request->city . ' ' . $request->postcode,
+                        "postcode" => $request->postcode,
+                        "city" => $request->city,
+                        "state" => $request->state,
+                        "country" => $request->country
+                    ]
                 ];
 
+
+                // Get venue's webhook URL and construct full endpoint
+                $omniStackUrl = rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . $venue->short_code . '/register';
+                // Send webhook
                 $response = Http::withHeaders([
-                    "Content-Type" => "application/json",
-                ])->post('https://crmapi.pixelbreeze.xyz/api/add-end-user-to-sub-account', $data_string);
-                // We might want to log or handle the response here
+                    'webhook-api-key' => env('OMNISTACK_GATEWAY_MSHOP_API_KEY'),
+                    'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                    'Content-Type' => 'application/json',
+                ])->post($omniStackUrl, $data_string);
+
+                // Update customer with external ID if API call was successful
+                if ($response->successful()) {
+
+                    $customerExternalIds['omniStackGateway'] = $response->json('customerId');
+                    $customer->external_ids = json_encode($customerExternalIds);
+                    $customer->save();
+
+                    $userExternalIds['omniStackGateway'] = $response->json('userId');
+                    $user->external_ids = json_encode($userExternalIds);
+                    $user->save();
+
+                    // Store the loyalty data
+                    $walletBalance = $response->json('walletBalance', 0);
+                    $currentTierName = $response->json('currentTierName', 'Default Tier');
+                    $referralCode = $response->json('referralCode');
+                }
+
+                if (!$response->successful()) {
+                    \Log::error('Call failed for registration', [
+                        'status' => $response->status(),
+                        'response' => $response->json()
+                    ]);
+                }
 
             } catch (\Throwable $th) {
                 \Sentry\captureException($th);
@@ -1721,6 +1753,9 @@ class AuthController extends Controller
                 'last_name' => $user->last_name,
                 'email' => $user->email,
                 'email_verified_at' => $user->email_verified_at,
+                'walletBalance' => $walletBalance,
+                'currentTierName' => $currentTierName,
+                'referralCode' => $referralCode
             ],
             'access_token' => $token,
             'token_type' => 'bearer',

@@ -41,7 +41,8 @@ class User extends Authenticatable implements JWTSubject
         'is_app_client',
         'created_at',
         'updated_at',
-        'deleted_at'
+        'deleted_at',
+        'external_ids'
     ];
 
     /**
