@@ -28,7 +28,7 @@ class ByBestShopUserVerifyEmail extends Mailable
      */
     public function build()
     {
-        return $this ->from('noreply@bybest.shop', 'ByBest Shop')
+        return $this ->from('noreply@venueboost.io', 'ByBest Shop')
             ->subject('Mirë se vini në ByBest Shop! Verifikoni Adresën tuaj të Email-it')
             ->view('emails.whitelabel.user_verify_email')
             ->with(['name' => $this->name, 'link' => $this->link]);

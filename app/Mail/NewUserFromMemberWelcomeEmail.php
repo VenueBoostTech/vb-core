@@ -35,7 +35,7 @@ class NewUserFromMemberWelcomeEmail extends Mailable
     public function build()
     {
         return $this->view('emails.whitelabel.new_user_from_member_welcome')
-            ->from('noreply@bybest.shop', 'ByBest Shop')
+            ->from('noreply@venueboost.io', 'ByBest Shop')
         ->with([
                 'userName' => $this->user->name,
                 'userEmail' => $this->user->email,
