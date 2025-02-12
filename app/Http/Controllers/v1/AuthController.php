@@ -632,7 +632,7 @@ class AuthController extends Controller
                     $omniData = $endUserResponse->json();
                     $referralCode = $omniData['referralCode'] ?? null;
                     $currentTierName = $omniData['currentTierName'] ?? null;
-                    $walletBalance = $omniData['wallet']['balance'] ?? null;
+                    $walletBalance = $omniData['walletBalance'] ?? null;
                 }
             } catch (\Throwable $th) {
                 \Sentry\captureException($th);
@@ -682,6 +682,7 @@ class AuthController extends Controller
                 'referralCode' => $referralCode,
                 'currentTierName' => $currentTierName,
                 'walletBalance' => $walletBalance,
+                'external_ids' => $user->external_ids,
                 'enduser' => $user->enduser,
                 'venue' => $venue,
                 'customer' => $user->customer ?? null,

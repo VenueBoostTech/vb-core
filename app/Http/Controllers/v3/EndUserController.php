@@ -384,65 +384,112 @@ class EndUserController extends Controller
         // Get the source from the request (default to 'bybest.shop_web' if not provided)
         $source = $request->query('source', 'bybest.shop_web');
 
-        // Validate source
+        // Validate source and get venue
         if (!in_array($source, ['metrosuites', 'bybest.shop_web'])) {
             return response()->json(['error' => 'Invalid source provided'], 400);
         }
 
-        // Fetch wallet info from CRM based on the source
-        $crmResponse = $this->fetchWalletInfoFromCRM($user->id, $source);
+        // Get venue and its currency
+        $venue = null;
+        if ($source === 'metrosuites') {
+            $venue = Restaurant::where('id', $user->guest?->restaurant_id)->first();
+        } else {
+            $venue = Restaurant::where('id', $user->customer?->venue_id)->first();
+        }
 
-        // If CRM response is unsuccessful, return an error response
-        if (!$crmResponse['success']) {
-            return response()->json(['error' => 'Failed to fetch wallet information from CRM'], 500);
+        $currency = $venue?->currency ?? 'EUR'; // Fallback to EUR if not set
+
+        // Get OmniStack external ID
+        $externalIds = json_decode($user->external_ids, true);
+        $omniStackId = $externalIds['omniStackGateway'] ?? null;
+
+        // Prepare default wallet info
+        $walletInfo = new \stdClass();
+        $walletInfo->balance = 0;
+        $walletInfo->currency = $currency;
+        $walletInfo->money_value = '0.00';
+        $walletInfo->walletActivities = [];
+        $walletInfo->referralsList = [];
+        $walletInfo->loyaltyTier = null;
+        $walletInfo->referralCode = '';
+
+        // If no omnistack ID, return empty wallet info
+        if (!$omniStackId) {
+            return response()->json(['wallet_info' => $walletInfo], 200);
+        }
+
+        // Fetch wallet info from CRM based on the source
+        $crmResponse = $this->fetchWalletInfoFromCRM($omniStackId, $source);
+
+        // If CRM response is unsuccessful, return default wallet info
+        if (isset($crmResponse['success']) && $crmResponse['success'] === false) {
+            return response()->json(['wallet_info' => $walletInfo], 200);
         }
 
         // Extract data from CRM response
-        $crmData = $crmResponse['result']['endUser'];
+        $crmData = $crmResponse['wallet_info'];
 
-        // Get balance and calculate money value (100 points = 1 EUR)
-        $balance = $crmData['wallet']['balance'] ?? 0;
+        // Update wallet info with CRM data
+        $balance = $crmData['balance'] ?? 0;
         $moneyValue = $balance > 0 ? ($balance / 100) : 0;
 
-        // Prepare wallet info response
-        $walletInfo = new \stdClass();
         $walletInfo->balance = $balance;
-        $walletInfo->currency = 'EUR';
-        $walletInfo->money_value = number_format($moneyValue, 2, '.', ''); // Format to 2 decimal places
-        $walletInfo->walletActivities = $crmData['wallet']['transactions'] ?? [];
+        $walletInfo->money_value = number_format($moneyValue, 2, '.', '');
+        $walletInfo->walletActivities = $crmData['walletActivities'] ?? [];
         $walletInfo->referralsList = $crmData['referrals'] ?? [];
-        $walletInfo->loyaltyTier = $crmData['currentTierName'] ?? null;
+        $walletInfo->loyaltyTier = $crmData['loyaltyTier'] ?? null;
         $walletInfo->referralCode = $crmData['referralCode'] ?? '';
 
         return response()->json(['wallet_info' => $walletInfo], 200);
     }
 
+    // OLD: for reference
+//    private function fetchWalletInfoFromCRM($userId, $source)
+//    {
+//        // Define subAccountId based on the source
+//        $subAccountIds = [
+//            'metrosuites' => '6730cb67d23dc622500cbf0d', // Metrosuites crm id
+//            'bybest.shop_web' => '66551ae760ba26d93d6d3a32', // ByBest Shop CRM ID
+//        ];
+//
+//        // Ensure the source has a corresponding subAccountId
+//        if (!isset($subAccountIds[$source])) {
+//            return ['success' => false];
+//        }
+//
+//        $subAccountId = $subAccountIds[$source];
+//
+//        // Make the request to the CRM API with the appropriate subAccountId
+//        $response = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$userId}", [
+//            'subAccountId' => $subAccountId,
+//        ]);
+//
+//        // Return response if successful, otherwise return failure
+//        if ($response->successful()) {
+//            return $response->json();
+//        }
+//
+//        return ['success' => false];
+//    }
+
+
     private function fetchWalletInfoFromCRM($userId, $source)
     {
-        // Define subAccountId based on the source
-        $subAccountIds = [
-            'metrosuites' => '6730cb67d23dc622500cbf0d', // Metrosuites crm id
-            'bybest.shop_web' => '66551ae760ba26d93d6d3a32', // ByBest Shop CRM ID
-        ];
+        try {
+            $response = Http::withHeaders([
+                'webhook-api-key' => env('OMNISTACK_GATEWAY_MSHOP_API_KEY'),
+                'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+            ])->get(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . ($source === 'bybest.shop_web' ? 'BYB2929SCDE' : '') . '/wallet-info/' . $userId);
 
-        // Ensure the source has a corresponding subAccountId
-        if (!isset($subAccountIds[$source])) {
+            if ($response->successful()) {
+                return $response->json();
+            }
+
+            return ['success' => false];
+        } catch (\Exception $e) {
+            \Sentry\captureException($e);
             return ['success' => false];
         }
-
-        $subAccountId = $subAccountIds[$source];
-
-        // Make the request to the CRM API with the appropriate subAccountId
-        $response = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$userId}", [
-            'subAccountId' => $subAccountId,
-        ]);
-
-        // Return response if successful, otherwise return failure
-        if ($response->successful()) {
-            return $response->json();
-        }
-
-        return ['success' => false];
     }
 
 
