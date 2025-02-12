@@ -816,14 +816,20 @@ class EndUserController extends Controller
         }
 
         $user = $userOrResponse;
-        $source = $request->get('source'); // Add source to differentiate between MetroSuites and ByBest Shop
+        $source = $request->get('source');
+
+        // Set default false values for null fields
+        $promotionSmsNotify = $request->promotion_sms_notify ?? false;
+        $promotionEmailNotify = $request->promotion_email_notify ?? false;
+        $bookingSmsNotify = $request->booking_sms_notify ?? false;
+        $bookingEmailNotify = $request->booking_email_notify ?? false;
 
         // Validate the input data
         $validator = Validator::make($request->all(), [
             'promotion_sms_notify' => 'nullable|boolean',
             'promotion_email_notify' => 'nullable|boolean',
-            'booking_sms_notify' => 'nullable|boolean', // Changed to booking_sms_notify
-            'booking_email_notify' => 'nullable|boolean' // Changed to booking_email_notify
+            'booking_sms_notify' => 'nullable|boolean',
+            'booking_email_notify' => 'nullable|boolean'
         ]);
 
         if ($validator->fails()) {
@@ -831,27 +837,25 @@ class EndUserController extends Controller
         }
 
         if ($source === 'bybest.shop_web') {
-            // For ByBest Shop, use customer_id and use booking_* fields
             $marketingSettings = GuestMarketingSettings::updateOrCreate(
-                ['customer_id' => $user->id], // Using customer_id for ByBest Shop
+                ['customer_id' => $user->customer->id],
                 [
                     'user_id' => $user->id,
-                    'promotion_sms_notify' => $request->promotion_sms_notify,
-                    'promotion_email_notify' => $request->promotion_email_notify,
-                    'booking_sms_notify' => $request->booking_sms_notify, // Changed to booking_sms_notify
-                    'booking_email_notify' => $request->booking_email_notify // Changed to booking_email_notify
+                    'promotion_sms_notify' => $promotionSmsNotify,
+                    'promotion_email_notify' => $promotionEmailNotify,
+                    'booking_sms_notify' => $bookingSmsNotify,
+                    'booking_email_notify' => $bookingEmailNotify
                 ]
             );
         } else {
-            // Default to MetroSuites, use guest_id
             $marketingSettings = GuestMarketingSettings::updateOrCreate(
-                ['guest_id' => $user->guest->id], // Using guest_id for MetroSuites
+                ['guest_id' => $user->guest->id],
                 [
                     'user_id' => $user->id,
-                    'promotion_sms_notify' => $request->promotion_sms_notify,
-                    'promotion_email_notify' => $request->promotion_email_notify,
-                    'booking_sms_notify' => $request->booking_sms_notify, // Keep booking_sms_notify for MetroSuites
-                    'booking_email_notify' => $request->booking_email_notify // Keep booking_email_notify for MetroSuites
+                    'promotion_sms_notify' => $promotionSmsNotify,
+                    'promotion_email_notify' => $promotionEmailNotify,
+                    'booking_sms_notify' => $bookingSmsNotify,
+                    'booking_email_notify' => $bookingEmailNotify
                 ]
             );
         }
@@ -861,8 +865,8 @@ class EndUserController extends Controller
             'marketing_settings' => [
                 'promotion_sms_notify' => $marketingSettings->promotion_sms_notify,
                 'promotion_email_notify' => $marketingSettings->promotion_email_notify,
-                'booking_sms_notify' => $marketingSettings->booking_sms_notify,  // Changed to booking_sms_notify
-                'booking_email_notify' => $marketingSettings->booking_email_notify // Changed to booking_email_notify
+                'booking_sms_notify' => $marketingSettings->booking_sms_notify,
+                'booking_email_notify' => $marketingSettings->booking_email_notify
             ]
         ], 200);
     }
