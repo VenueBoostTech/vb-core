@@ -142,6 +142,16 @@ class BBCheckoutController extends Controller
                 return response()->json(['message' => 'Product not found'], 404);
             }
 
+            // Process customer - Added this
+            $this->getOrCreateCustomer([
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'email' => $request->email,
+                'phone' => $request->phone,
+                'address' => $request->address,
+                'venueShortCode' => $venue->short_code
+            ]);
+
             // Transform to regular order format
             $orderRequest = $request->all();
             $orderRequest['order_products'] = [[
@@ -150,9 +160,6 @@ class BBCheckoutController extends Controller
             ]];
 
             return $this->checkout(new Request($orderRequest));
-
-            // Note: we don't create customer during quick checkout
-            // maybe we should check tomrorow
 
         } catch (\Exception $e) {
             Log::error('Quick checkout error', [
