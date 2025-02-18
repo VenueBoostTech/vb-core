@@ -178,21 +178,17 @@ class EndUserController extends Controller
         ], 200);
     }
 
-
     public function getOrderDetails(Request $request, $orderId): \Illuminate\Http\JsonResponse
     {
         try {
             $userOrResponse = $this->endUserService->endUserAuthCheck();
-
-            if ($userOrResponse instanceof JsonResponse) {
-                return $userOrResponse;
-            }
+            if ($userOrResponse instanceof JsonResponse) return $userOrResponse;
 
             $user = $userOrResponse;
-
-            $validateOrder = Order::where('id', $orderId)->whereHas('customer', function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })->first();
+            $validateOrder = Order::where('id', $orderId)
+                ->whereHas('customer', function ($query) use ($user) {
+                    $query->where('user_id', $user->id);
+                })->first();
 
             if (!$validateOrder) {
                 return response()->json(['error' => "This order doesn't belong to the user."], 400);
@@ -200,34 +196,74 @@ class EndUserController extends Controller
 
             $order = Order::with([
                 'customer',
-                'reservation',
-                'restaurant',
-                'orderProducts.product',
-                'inventoryActivities',
-                'orderDelivery',
-                'paymentMethod',
-                'promotion',
-                'orderCoupons',
-                'orderDiscounts',
-                'address',
-                'earn_points_history',
-                'statusChanges',
-                'orderSplitPayments',
-                'physicalStore'
+                'orderProducts' => function($query) {
+                    $query->select(
+                        'id',
+                        'order_id',
+                        'product_id',
+                        'product_quantity',
+                        'product_total_price',
+                        'metadata'
+                    );
+                },
+                'orderProducts.product' => function($query) {
+                    $query->select(
+                        'id',
+                        'title',
+                        'title_al',
+                        'price',
+                        'image_path',
+                        'product_sku',
+                        'sku_alpha',
+                        'brand_id'
+                    )->with([
+                        'brand' => function($q) {
+                            $q->select('id', 'title', 'logo_path');
+                        },
+                        'attribute' => function($q) {
+                            $q->select(
+                                'id',
+                                'product_id',
+                                'attribute_id'
+                            )->with('option:id,attribute_id,option_name,option_description');
+                        }
+                    ]);
+                },
+                'paymentMethod:id,name',
+                'address' => function ($query) {
+                    $query->select('id', 'address_line1', 'state', 'postcode', 'country', 'city_id', 'state_id', 'country_id')
+                        ->with([
+                            'city:id,name',
+                            'state:id,name',
+                            'country:id,name',
+                        ]);
+                }
+            ])->select([
+                'id',
+                'customer_id', // Include the foreign key for the customer relation
+                'order_number',
+                'status',
+                'total_amount',
+                'subtotal',
+                'discount_total',
+                'payment_method_id',
+                'payment_status',
+                'created_at',
+                'delivery_fee',
+                'currency',
+                'address_id'
             ])->where('id', $orderId)->first();
 
-
-            // Check if a chat exists for this order
             $chat = Chat::where('order_id', $orderId)
                 ->where('end_user_id', $user->id)
                 ->first();
 
-            $response = [
-                'order' => $order,
-                'chat_id' => $chat ? $chat->id : null,
-            ];
-
-            return response()->json(['data' => $response], 200);
+            return response()->json([
+                'data' => [
+                    'order' => $order,
+                    'chatId' => $chat ? $chat->id : null,
+                ]
+            ], 200);
 
         } catch (ModelNotFoundException $e) {
             return response()->json(['error' => 'Order not found'], 404);

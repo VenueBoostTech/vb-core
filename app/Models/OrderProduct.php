@@ -22,7 +22,14 @@ class OrderProduct extends Model
         'product_total_price_eur',
         'product_discount_price',
         'product_discount_price_eur',
+        'metadata'
     ];
+
+
+    protected $casts = [
+        'metadata' => 'array'
+    ];
+
 
     public function order()
     {
