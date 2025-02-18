@@ -3,6 +3,12 @@
 namespace App\Http\Controllers\v3\Whitelabel\ByBestShop;
 
 use App\Models\AccountingFinance\Currency;
+use App\Models\Address;
+use App\Models\CustomerAddress;
+use App\Models\City;
+use App\Models\Country;
+use App\Models\State;
+use App\Models\VbStoreAttributeOption;
 use App\Models\VbStoreProductAttribute;
 use App\Models\VbStoreProductVariant;
 use App\Models\VbStoreProductVariantAttribute;
@@ -61,15 +67,27 @@ class BBCheckoutController extends Controller
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'address' => $request->address,
-                'venueShortCode' => $venue->short_code
+                'venueShortCode' => $venue->short_code,
+                'city' => $request->city,
+                'country' => $request->country,
+                'postcode' => $request->zip
+            ]);
+
+            // Create or update address
+            $address = $this->createOrUpdateAddress([
+                'customer' => $customer,
+                'address_line1' => $request->address,
+                'city_id' => (int)$request->city,
+                'country_id' => (int)$request->country,
+                'postcode' => $request->zip
             ]);
 
             // Calculate totals
-            $orderTotals = $this->calculateOrderTotals($request->order_products);
+            $orderTotals = $this->calculateOrderTotals($request->order_products, $request->city);
 
             // Process order based on payment method
             if ($request->payment_method === 'cash') {
-                $order = $this->processCashOrder($venue, $customer, $orderTotals, $request);
+                $order = $this->processCashOrder($venue, $customer, $orderTotals, $request, $address);
 
                 // Send webhook after successful creation
                 $this->sendOrderWebhook($order, 'regular_checkout');
@@ -80,7 +98,7 @@ class BBCheckoutController extends Controller
                     'order' => $order
                 ]);
             } else {
-                $order = $this->processCardOrder($venue, $customer, $orderTotals, $request);
+                $order = $this->processCardOrder($venue, $customer, $orderTotals, $request, $address);
 
                 // Get payment URL from BKT
                 $paymentInfo = $this->bktPaymentService->initiatePayment([
@@ -121,6 +139,7 @@ class BBCheckoutController extends Controller
                 'first_name' => 'required|string',
                 'last_name' => 'nullable|string',
                 'address' => 'required|string',
+                'city' => 'required|string',
                 'phone' => 'required|string',
                 'email' => 'nullable|string|email',
                 'product_id' => 'required|integer',
@@ -142,22 +161,44 @@ class BBCheckoutController extends Controller
                 return response()->json(['message' => 'Product not found'], 404);
             }
 
-            // Process customer - Added this
-            $this->getOrCreateCustomer([
+            // Get city and country information
+            $city = City::find((int)$request->city);
+            if (!$city) {
+                return response()->json(['message' => 'Invalid city'], 404);
+            }
+
+            // Process customer
+            $customer = $this->getOrCreateCustomer([
                 'first_name' => $request->first_name,
                 'last_name' => $request->last_name,
                 'email' => $request->email,
                 'phone' => $request->phone,
                 'address' => $request->address,
-                'venueShortCode' => $venue->short_code
+                'venueShortCode' => $venue->short_code,
+                'city' => $request->city,
+                'country' => $city->state->country_id
+            ]);
+
+            // Create or update address
+            $address = $this->createOrUpdateAddress([
+                'customer' => $customer,
+                'address_line1' => $request->address,
+                'city_id' => (int)$request->city,
+                'country_id' => $city->state->country_id,
+                'state_id' => $city->state_id
             ]);
 
             // Transform to regular order format
             $orderRequest = $request->all();
             $orderRequest['order_products'] = [[
                 'id' => $product->id,
-                'product_quantity' => 1
+                'product_quantity' => 1,
+                'attribute_id' => $request->attribute_id,
+                'option_id' => $request->option_id
             ]];
+
+            // Add the address to the request
+            $orderRequest['address_id'] = $address->id;
 
             return $this->checkout(new Request($orderRequest));
 
@@ -171,6 +212,42 @@ class BBCheckoutController extends Controller
                 'message' => 'Error processing quick checkout: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Create or update address for customer
+     */
+    private function createOrUpdateAddress(array $data): Address
+    {
+        $customer = $data['customer'];
+
+        // Get city and state information with their relations
+        $city = City::with(['state.country'])->find($data['city_id']);
+        if (!$city) {
+            throw new \Exception('Invalid city ID');
+        }
+
+        if (!$city->state || !$city->state->country) {
+            throw new \Exception('Invalid city configuration - missing state or country');
+        }
+
+        // Create new address
+        $address = Address::create([
+            'address_line1' => $data['address_line1'],
+            'city_id' => $data['city_id'],
+            'state_id' => $city->state_id,
+            'country_id' => $city->state->country->id,
+            'postcode' => $data['postcode'] ?? '-',
+            'active' => true
+        ]);
+
+        // Create customer address association
+        CustomerAddress::create([
+            'customer_id' => $customer->id,
+            'address_id' => $address->id
+        ]);
+
+        return $address;
     }
 
     /**
@@ -316,11 +393,12 @@ class BBCheckoutController extends Controller
         ]);
     }
 
-    private function calculateOrderTotals(array $products): array
+    private function calculateOrderTotals(array $products, $city_id = null): array
     {
         $subtotal = 0;
         $total = 0;
         $discount = 0;
+        $delivery_fee = 0;
 
         foreach ($products as $productData) {
             $product = Product::find($productData['id']);
@@ -340,16 +418,28 @@ class BBCheckoutController extends Controller
             $subtotal += $itemTotal;
         }
 
-        $total = $subtotal - $discount;
+        // Get delivery fee if city_id provided
+        if ($city_id) {
+            $postalPricing = PostalPricing::whereHas('city', function($query) use ($city_id) {
+                $query->where('id', $city_id);
+            })->first();
+
+            if ($postalPricing) {
+                $delivery_fee = $postalPricing->price;
+            }
+        }
+
+        $total = $subtotal - $discount + $delivery_fee;
 
         return [
             'subtotal' => $subtotal,
             'discount' => $discount,
+            'delivery_fee' => $delivery_fee,
             'total' => $total
         ];
     }
 
-    private function processCashOrder(Restaurant $venue, Customer $customer, array $totals, Request $request): Order
+    private function processCashOrder(Restaurant $venue, Customer $customer, array $totals, Request $request, Address $address): Order
     {
         $order = Order::create([
             'customer_id' => $customer->id,
@@ -360,6 +450,7 @@ class BBCheckoutController extends Controller
             'payment_status' => 'pending',
             'subtotal' => $totals['subtotal'],
             'discount' => $totals['discount'],
+            'delivery_fee' => $totals['delivery_fee'],
             'total_amount' => $totals['total'],
             'shipping_name' => $request->first_name,
             'shipping_surname' => $request->last_name,
@@ -374,7 +465,9 @@ class BBCheckoutController extends Controller
             'billing_city' => $request->city,
             'billing_state' => $request->country,
             'billing_phone_no' => $request->phone,
-            'billing_email' => $request->email
+            'billing_email' => $request->email,
+            'address_id' => $address->id,
+            'ip' => $request->ip()
         ]);
 
         $this->createOrderProducts($order, $request->order_products);
@@ -382,7 +475,7 @@ class BBCheckoutController extends Controller
         return $order;
     }
 
-    private function processCardOrder(Restaurant $venue, Customer $customer, array $totals, Request $request): Order
+    private function processCardOrder(Restaurant $venue, Customer $customer, array $totals, Request $request, Address $address): Order
     {
         $order = Order::create([
             'customer_id' => $customer->id,
@@ -393,6 +486,7 @@ class BBCheckoutController extends Controller
             'payment_status' => 'pending',
             'subtotal' => $totals['subtotal'],
             'discount' => $totals['discount'],
+            'delivery_fee' => $totals['delivery_fee'],
             'total_amount' => $totals['total'],
             'shipping_name' => $request->first_name,
             'shipping_surname' => $request->last_name,
@@ -407,7 +501,9 @@ class BBCheckoutController extends Controller
             'billing_city' => $request->city,
             'billing_state' => $request->country,
             'billing_phone_no' => $request->phone,
-            'billing_email' => $request->email
+            'billing_email' => $request->email,
+            'address_id' => $address->id,
+            'ip' => $request->ip()
         ]);
 
         $this->createOrderProducts($order, $request->order_products);
@@ -427,28 +523,32 @@ class BBCheckoutController extends Controller
                 'options' => []
             ];
 
-            // Handle variants
-            if (isset($productData['variant_id'])) {
-                $variant = VbStoreProductVariant::find($productData['variant_id']);
-                if ($variant) {
-                    $metadata['variant'] = [
-                        'id' => $variant->id,
-                        'name' => $variant->name,
-                        'sku' => $variant->sku,
-                        'price' => $variant->price
+            // Handle attribute and option
+            if (isset($productData['attribute_id']) && isset($productData['option_id'])) {
+                // Get the option directly from VbStoreAttributeOption table
+                $option = VbStoreAttributeOption::where('id', $productData['option_id'])
+                    ->where('attribute_id', $productData['attribute_id'])
+                    ->first();
+
+                if ($option) {
+                    $metadata['options'][] = [
+                        'id' => $option->id,
+                        'attribute_id' => $productData['attribute_id'],
+                        'name' => $option->option_name,
+                        'value' => $option->option_description
                     ];
                 }
             }
 
-            // Handle options
+            // Handle options array if present
             if (isset($productData['options']) && is_array($productData['options'])) {
-                foreach ($productData['options'] as $optionId) {
-                    $option = VbStoreProductAttribute::find($optionId);
+                foreach ($productData['options'] as $optionData) {
+                    $option = VbStoreAttributeOption::find($optionData);
                     if ($option) {
                         $metadata['options'][] = [
                             'id' => $option->id,
-                            'name' => $option->name,
-                            'value' => $option->value
+                            'name' => $option->option_name,
+                            'value' => $option->option_description
                         ];
                     }
                 }
@@ -457,7 +557,6 @@ class BBCheckoutController extends Controller
             OrderProduct::create([
                 'order_id' => $order->id,
                 'product_id' => $product->id,
-                'variant_id' => $metadata['variant']['id'] ?? null,
                 'product_quantity' => $productData['product_quantity'],
                 'product_total_price' => $product->price * $productData['product_quantity'],
                 'product_discount_price' => 0,
@@ -562,4 +661,35 @@ class BBCheckoutController extends Controller
             ]);
         }
     }
+
+    public function pricing(Request $request)
+    {
+        $app_key = $request->input('venue_app_key');
+        $venue = Restaurant::where('app_key', $app_key)->first();
+        if (!$venue) {
+            return response()->json(['message' => 'Venue not found'], 404);
+        }
+
+        $postalIds = $venue->postals()->pluck('id');
+        // Handle options
+
+        $pricing = PostalPricing::whereIn('postal_id', $postalIds)
+            ->with(['postal', 'city'])
+            ->get()
+            ->map(function ($price) {
+                return [
+                    'id' => $price->id,
+                    'price' => $price->price,
+                    'price_without_tax' => $price->price_without_tax,
+                    'city' => $price->city->name,
+                    'postal' => $price->postal->name,
+                    'type' => $price->type,
+                    'alpha_id' => $price->alpha_id,
+                    'alpha_description' => $price->alpha_description,
+                    'notes' => $price->notes,
+                ];
+            });
+        return response()->json(['data' => $pricing], 200);
+    }
+
 }
