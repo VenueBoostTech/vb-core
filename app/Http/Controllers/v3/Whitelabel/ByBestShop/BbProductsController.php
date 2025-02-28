@@ -330,16 +330,16 @@ class BbProductsController extends Controller
                         })
                     ];
                 });
-          
+
 
                 $similarProducts = SimilarProduct::where('bybest_id', '=', $product_id)->get();
 
                 $allSimilarProducts = $similarProducts->map(function ($similarProduct) {
                     $similarProductIds = json_decode($similarProduct->similar_products);
                     return Product::whereIn('id', $similarProductIds)->get();
-                })->flatten();     
+                })->flatten();
 
-      
+
                 // Ensuring variable names are correct
                 $response_data = [
                     'currency' => $currency,
@@ -352,7 +352,7 @@ class BbProductsController extends Controller
                     'similar_products' => $allSimilarProducts, // Corrected variable name
                     //'cities' => $cities,
                 ];
-                
+
 
             return response()->json($response_data);
         } catch (\Throwable $th) {

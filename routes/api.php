@@ -1481,6 +1481,14 @@ Route::middleware(['omni_stack_gateway_api_key', 'api'])->prefix('v1')->group(fu
         Route::get('/', [InventoryConfigurationController::class, 'listStoresOS']);
         Route::post('connect-disconnect', [InventoryConfigurationController::class, 'connectDisconnectStoreOS']);
     });
+
+
+    Route::group(['prefix' => 'auth-os'], function () {
+        Route::post('/get-connection', [App\Http\Controllers\AppSuite\Staff\AuthenticationController::class, 'getConnection']);
+        Route::post('/create-venue-user-for-staffluent', [App\Http\Controllers\AppSuite\Staff\AuthenticationController::class, 'createVenueAndUserForStaffluent']);
+        Route::post('/verify-user-email', [App\Http\Controllers\AppSuite\Staff\AuthenticationController::class, 'verifyUserEmail']);
+        Route::post('/change-password', [App\Http\Controllers\AppSuite\Staff\AuthenticationController::class, 'changePassword']);
+    });
 });
 
 // API Calls for Superadmin

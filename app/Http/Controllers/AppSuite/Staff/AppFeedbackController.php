@@ -57,7 +57,7 @@ class AppFeedbackController extends Controller
         $venue = $this->venueService->adminAuthCheck();
         if ($venue instanceof JsonResponse) return $venue;
 
-        $query = AppAppFeedback::forVenue($venue->id)
+        $query = AppFeedback::forVenue($venue->id)
             ->with(['client', 'project'])
             ->orderBy('created_at', 'desc');
 

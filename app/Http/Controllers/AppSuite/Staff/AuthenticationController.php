@@ -7,6 +7,8 @@ use App\Models\Employee;
 use App\Models\LoginActivity;
 use App\Models\Restaurant;
 use App\Models\User;
+use App\Models\VenueIndustry;
+use App\Models\VenueType;
 use App\Services\VenueService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -113,7 +115,8 @@ class AuthenticationController extends Controller
                 'supabase_id' => $connection->supabase_id,
                 'token' => $token,
                 'account_type' => 'business',
-                'refresh_token' => $refreshToken
+                'refresh_token' => $refreshToken,
+                'has_changed_password' => true
             ]);
 
         } catch (ValidationException $e) {
@@ -130,6 +133,249 @@ class AuthenticationController extends Controller
 
             // Return a general error response
             return response()->json(['message' => 'An unexpected error occurred'], 500);
+        }
+    }
+
+    /**
+     * Register a venue and user with data from NestJS API
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function createVenueAndUserForStaffluent(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'first_name' => 'required|string',
+                'last_name' => 'required|string',
+                'email' => 'required|email',
+                'password' => 'required|string',
+                'business_name' => 'required|string',
+                'supabase_id' => 'required|string',
+                'omnistack_user_id' => 'required|string'
+            ]);
+
+            // 1. Create the user
+            $user = new User();
+            $user->name = $request->first_name . ' ' . $request->last_name;
+            $user->country_code = 'US';
+            $user->first_name = $request->first_name;
+            $user->last_name = $request->last_name;
+            $user->email = $request->email;
+            $user->password = bcrypt($request->password);
+
+
+            // Set external IDs for the user
+            $userExternalIds = [];
+            $userExternalIds['omniStackGateway'] = $request->omnistack_user_id;
+            $user->external_ids = json_encode($userExternalIds);
+
+            $user->save();
+
+            $venueType = VenueType::where('short_name', 'restaurant')->first();
+            $venueIndustry = VenueIndustry::where('name', 'food')->first();
+
+            // 2. Create the venue/restaurant
+            $restaurant = new Restaurant();
+            $restaurant->name = $request->business_name;
+            $restaurant->email = $request->email;
+            $restaurant->phone_number = $request->phone_number ?? '';
+            $restaurant->user_id = $user->id;
+            $restaurant->status = 'active';
+            $restaurant->venue_type = $venueType->id;
+            $restaurant->venue_industry = $venueIndustry->id;
+            $restaurant->short_code = $this->generateStringShortCode($request->business_name);
+            $restaurant->app_key = $this->generateStringAppKey($request->business_name);;
+            $restaurant->save();
+
+            // 3. Create employee record
+            $employee = new Employee();
+            $employee->name = $user->name;
+            $employee->email = $user->email;
+            $employee->role_id = 2; // Assuming 2 is Owner role
+            $employee->restaurant_id = $restaurant->id;
+            $employee->user_id = $user->id;
+            $employee->save();
+
+
+            // 4. Create the connection between user, venue, and Supabase
+            DB::table('venue_user_supabase_connections')->insert([
+                'user_id' => $user->id,
+                'venue_id' => $restaurant->id,
+                'supabase_id' => $request->supabase_id,
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+
+            // Return only the necessary IDs as requested
+            return response()->json([
+                'success' => true,
+                'user_id' => $user->id,
+                'venue_id' => $restaurant->id
+            ], 201);
+
+        } catch (ValidationException $e) {
+            return response()->json(['success' => false, 'message' => 'Validation failed', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('Error in createVenueAndUserForStaffluent: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'An unexpected error occurred: ' . $e->getMessage()], 500);
+        }
+    }
+
+    private function generateStringShortCode($providerName) {
+        $prefix = strtoupper(substr($providerName, 0, 3));
+        $randomNumbers = sprintf('%04d', mt_rand(0, 9999));
+        $suffix = 'SCD';
+        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $randomChar = $alphabet[rand(0, strlen($alphabet) - 1)];
+
+        return $prefix . $randomNumbers . $suffix . $randomChar;
+    }
+
+    private function generateStringAppKey($providerName) {
+        $prefix = strtoupper(substr($providerName, 0, 3));
+        $randomNumbers = sprintf('%04d', mt_rand(0, 9999));
+        $suffix = 'APP';
+        $alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $randomChar = $alphabet[rand(0, strlen($alphabet) - 1)];
+
+        return $prefix . $randomNumbers . $suffix . $randomChar;
+    }
+
+
+    /**
+     * Verify a user's email based on VenueBoost user ID
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function verifyUserEmail(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'email' => 'required|email',
+                'venueboost_user_id' => 'required|numeric'
+            ]);
+
+
+
+                // Try to find by email as fallback
+                $user = User::where('email', $request->email)->first();
+
+                if (!$user) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'User not found'
+                    ], 404);
+                }
+
+
+            // Get the venue associated with this user through connection table
+            $connection = DB::table('venue_user_supabase_connections')
+                ->where('user_id', $request->venueboost_user_id)
+                ->first();
+
+            if (!$connection) {
+                // Try to look up by other methods
+                $connection = DB::table('venue_user_supabase_connections')
+                    ->where('user_id', $user->id)
+                    ->first();
+
+                if (!$connection) {
+                    Log::warning('No connection found for user when verifying email', [
+                        'venueboost_user_id' => $request->venueboost_user_id,
+                        'email' => $request->email,
+                        'omnistack_user_id' => $request->omnistack_user_id
+                    ]);
+                }
+            }
+
+            // Mark user as verified in the system
+            $user->email_verified_at = now();
+            $user->save();
+
+            // Log the verification
+            UserActivityLogger::log($user->id, 'Email Verified via OmniStack');
+
+            // Return success response
+            return response()->json([
+                'success' => true,
+                'message' => 'Email verified successfully',
+                'user_id' => $user->id,
+                'venue_id' => $connection ? $connection->venue_id : null
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error in verifyUserEmail: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'An unexpected error occurred: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Change a user's password
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function changePassword(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'email' => 'required|email',
+                'venueboost_user_id' => 'required|numeric',
+                'new_password' => 'required|string|min:8'
+            ]);
+
+            // Find user by VenueBoost ID
+            $user = User::where('id', $request->venueboost_user_id)->first();
+
+            if (!$user) {
+                // Try to find by email as fallback
+                $user = User::where('email', $request->email)->first();
+
+                if (!$user) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'User not found'
+                    ], 404);
+                }
+            }
+
+            // Update the user's password
+            $user->password = bcrypt($request->new_password);
+            $user->save();
+
+            // Log the password change
+            UserActivityLogger::log($user->id, 'Password Changed via OmniStack');
+
+            // Return success response
+            return response()->json([
+                'success' => true,
+                'message' => 'Password changed successfully',
+                'user_id' => $user->id
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Error in changePassword: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'An unexpected error occurred: ' . $e->getMessage()
+            ], 500);
         }
     }
 
