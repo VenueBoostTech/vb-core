@@ -1010,7 +1010,8 @@ class CompanySetupController extends Controller
                 $employee->save();
 
                 // Send email notification to the new staff member
-                Mail::to($employee->email)->send(new NewStaffEmail($venue));
+                // Commenting this since the email will be sent by the OmniStack Gateway
+                /// Mail::to($employee->email)->send(new NewStaffEmail($venue));
             }
 
             // Call OmniStack Gateway to create employee in NestJS backend
@@ -1111,7 +1112,7 @@ class CompanySetupController extends Controller
 
             } catch (\Exception $e) {
                 // Log the error but don't fail the transaction
-                \Log::error('Error calling OmniStack Gateway: ' . $e->getMessage());
+                \Log::error('Error calling OmniStack Gateway API: ' . $e->getMessage());
                 \Sentry\captureException($e);
             }
 
