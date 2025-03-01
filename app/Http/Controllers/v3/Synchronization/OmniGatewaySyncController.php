@@ -61,7 +61,7 @@ class OmniGatewaySyncController extends Controller
             $request->validate(['sync_date' => 'required|date_format:Y-m-d']);
 
             $before_sync = now();
-            
+
             // Make API request to OmniGateway
             $response = Http::withHeaders([
                 'x-api-key' => $venue->omnigateway_api_key,
@@ -70,7 +70,7 @@ class OmniGatewaySyncController extends Controller
             ->get(config('services.omnigateway.base_url') . '/brands', [
                 'sync_date' => $request->input('sync_date'),
             ]);
-            
+
             if ($response->successful()) {
                 DB::beginTransaction();
                 try {

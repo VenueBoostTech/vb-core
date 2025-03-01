@@ -40,6 +40,7 @@ class Employee extends Model
         'company_email',
         'company_phone',
         'profile_picture',
+        'external_ids'
     ];
 
     public function role()
