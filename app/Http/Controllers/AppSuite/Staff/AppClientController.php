@@ -114,7 +114,91 @@ class AppClientController extends Controller
             $client = AppClient::create(array_merge($validated, [
                 'venue_id' => $venue->id,
                 'address_id' => $address->id,
+                'external_ids' => json_encode([]) // Initialize empty external_ids
             ]));
+
+            // Call OmniStack Gateway to create simple app client in NestJS
+            try {
+                // Convert our type to Omnistack's ClientType format
+                $clientType = 'INDIVIDUAL';
+                if ($validated['type'] === 'company') {
+                    $clientType = 'company';
+                } elseif ($validated['type'] === 'homeowner') {
+                    $clientType = 'homeowner';
+                } else {
+
+                }
+
+                // Prepare metadata
+                $metadata = [
+                    'source' => 'venueboost',
+                    'vb_venue_id' => $venue->id,
+                    'vb_client_id' => $client->id
+                ];
+
+                // Prepare external_ids
+                $externalIds = [
+                    'vbClientId' => (string)$client->id
+                ];
+
+                $venueOwner = User::find($venue->user_id);
+                $adminOmniStackId = null;
+
+                // Extract the venue owner's OmniStack ID from their external_ids
+                if ($venueOwner && !empty($venueOwner->external_ids)) {
+                    $ownerExternalIds = is_string($venueOwner->external_ids)
+                        ? json_decode($venueOwner->external_ids, true)
+                        : $venueOwner->external_ids;
+
+                    if (is_array($ownerExternalIds) && isset($ownerExternalIds['omniStackGateway'])) {
+                        $adminOmniStackId = $ownerExternalIds['omniStackGateway'];
+                    }
+                }
+
+                // Build request payload
+                $omniStackData = [
+                    'name' => $validated['name'],
+                    'adminUserId' => $adminOmniStackId, // Get business by admin user ID
+                    'type' => $clientType,
+                    'contact_person' => $validated['contact_person'] ?? null,
+                    'email' => $validated['email'] ?? null,
+                    'phone' => $validated['phone'] ?? null,
+                    'notes' => $validated['notes'] ?? null,
+                    'external_ids' => $externalIds,
+                    'metadata' => $metadata
+                ];
+
+                // Make the API call to OmniStack Gateway
+                $response = Http::withHeaders([
+                    'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                    'client-x-api-key' => env('OMNISTACK_GATEWAY_STAFFLUENT_X_API_KEY'),
+                    'Content-Type' => 'application/json',
+                ])->post(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/businesses/simple-app-client', $omniStackData);
+
+                // Process response
+                if ($response->successful()) {
+                    $responseData = $response->json();
+
+                    // Update local client with OmniStack IDs
+                    $clientExternalIds = is_string($client->external_ids) ? json_decode($client->external_ids, true) : [];
+                    if (!is_array($clientExternalIds)) $clientExternalIds = [];
+
+                    $clientExternalIds['omniStackClientId'] = $responseData['appClient']['_id'] ?? null;
+                    $client->external_ids = json_encode($clientExternalIds);
+                    $client->save();
+                } else {
+                    // Log error but don't fail the transaction
+                    \Log::error('Failed to create simple app client in OmniStack', [
+                        'status' => $response->status(),
+                        'response' => $response->json()
+                    ]);
+                }
+
+            } catch (\Exception $e) {
+                // Log the error but don't fail the transaction
+                \Log::error('Error calling OmniStack Gateway for simple client: ' . $e->getMessage());
+                \Sentry\captureException($e);
+            }
 
             DB::commit();
             return response()->json($client->load('address'), 201);
@@ -306,9 +390,11 @@ class AppClientController extends Controller
                 // Convert our type to Omnistack's ClientType format
                 $clientType = 'INDIVIDUAL';
                 if ($request->type === 'company') {
-                    $clientType = 'COMPANY';
+                    $clientType = 'company';
                 } elseif ($request->type === 'homeowner') {
-                    $clientType = 'HOMEOWNER';
+                    $clientType = 'homeowner';
+                } else {
+                    $clientType = 'individual';
                 }
 
                 // Prepare metadata
