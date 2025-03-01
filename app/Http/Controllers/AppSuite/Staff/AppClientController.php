@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Http;
 
 class AppClientController extends Controller
 {
@@ -266,7 +267,8 @@ class AppClientController extends Controller
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
                 'country_code' => $request->country_code,
-                'is_app_client' => true
+                'is_app_client' => true,
+                'external_ids' => json_encode([]) // Initialize empty external_ids
             ]);
 
             // Create address
@@ -295,8 +297,101 @@ class AppClientController extends Controller
                 'address_id' => $address->id,
                 'venue_id' => $venue->id,
                 'notes' => $request->notes,
-                'user_id' => $user->id
+                'user_id' => $user->id,
+                'external_ids' => json_encode([]) // Initialize empty external_ids
             ]);
+
+            // Call OmniStack Gateway to create app client in NestJS
+            try {
+                // Convert our type to Omnistack's ClientType format
+                $clientType = 'INDIVIDUAL';
+                if ($request->type === 'company') {
+                    $clientType = 'COMPANY';
+                } elseif ($request->type === 'homeowner') {
+                    $clientType = 'HOMEOWNER';
+                }
+
+                // Prepare metadata
+                $metadata = [
+                    'source' => 'venueboost',
+                    'vb_venue_id' => $venue->id,
+                    'vb_client_id' => $client->id
+                ];
+
+                // Prepare external_ids
+                $externalIds = [
+                    'vbClientId' => (string)$client->id,
+                    'vbUserId' => (string)$user->id
+                ];
+
+                $venueOwner = User::find($venue->user_id);
+                $adminOmniStackId = null;
+
+                // Extract the venue owner's OmniStack ID from their external_ids
+                if ($venueOwner && !empty($venueOwner->external_ids)) {
+                    $ownerExternalIds = is_string($venueOwner->external_ids)
+                        ? json_decode($venueOwner->external_ids, true)
+                        : $venueOwner->external_ids;
+
+                    if (is_array($ownerExternalIds) && isset($ownerExternalIds['omniStackGateway'])) {
+                        $adminOmniStackId = $ownerExternalIds['omniStackGateway'];
+                    }
+                }
+
+                // Build request payload
+                $omniStackData = [
+                    'name' => $request->name,
+                    'adminUserId' => $adminOmniStackId, // Get business by admin user ID
+                    'type' => $clientType,
+                    'contact_person' => $request->contact_person,
+                    'password' => $request->password,
+                    'email' => $request->email,
+                    'phone' => $request->phone,
+                    'notes' => $request->notes,
+                    'createAccount' => true,
+                    'external_ids' => $externalIds,
+                    'metadata' => $metadata
+                ];
+
+                // Make the API call to OmniStack Gateway
+                $response = Http::withHeaders([
+                    'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                    'client-x-api-key' => env('OMNISTACK_GATEWAY_STAFFLUENT_X_API_KEY'),
+                    'Content-Type' => 'application/json',
+                ])->post(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/businesses/app-client', $omniStackData);
+
+                // Process response
+                if ($response->successful()) {
+                    $responseData = $response->json();
+
+                    // Update local client with OmniStack IDs
+                    $clientExternalIds = is_string($client->external_ids) ? json_decode($client->external_ids, true) : [];
+                    if (!is_array($clientExternalIds)) $clientExternalIds = [];
+
+                    $clientExternalIds['omniStackClientId'] = $responseData['appClient']['_id'] ?? null;
+                    $client->external_ids = json_encode($clientExternalIds);
+                    $client->save();
+
+                    // Update user's external_ids with omniStackGateway ID
+                    $userExternalIds = is_string($user->external_ids) ? json_decode($user->external_ids, true) : [];
+                    if (!is_array($userExternalIds)) $userExternalIds = [];
+
+                    $userExternalIds['omniStackGateway'] = $responseData['userId'] ?? null;
+                    $user->external_ids = json_encode($userExternalIds);
+                    $user->save();
+                } else {
+                    // Log error but don't fail the transaction
+                    \Log::error('Failed to create app client in OmniStack', [
+                        'status' => $response->status(),
+                        'response' => $response->json()
+                    ]);
+                }
+
+            } catch (\Exception $e) {
+                // Log the error but don't fail the transaction
+                \Log::error('Error calling OmniStack Gateway: ' . $e->getMessage());
+                \Sentry\captureException($e);
+            }
 
             DB::commit();
 
@@ -306,7 +401,12 @@ class AppClientController extends Controller
                     'id' => $client->id,
                     'name' => $client->name,
                     'email' => $client->email,
-                    'user_id' => $client->user_id
+                    'user_id' => $client->user_id,
+                    'external_ids' => $client->external_ids
+                ],
+                'user' => [
+                    'id' => $user->id,
+                    'external_ids' => $user->external_ids
                 ]
             ], 201);
 
@@ -316,6 +416,8 @@ class AppClientController extends Controller
         }
     }
 
+
+    // TODO-Ominstack-maybe-connection
     public function connectExistingUser(Request $request): JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();

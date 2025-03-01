@@ -21,7 +21,8 @@ class AppClient extends Model
         'address_id',
         'venue_id',
         'notes',
-        'user_id'
+        'user_id',
+        'external_ids'
     ];
 
     protected $casts = [

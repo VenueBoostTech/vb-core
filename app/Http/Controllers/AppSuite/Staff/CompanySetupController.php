@@ -24,6 +24,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -978,6 +979,7 @@ class CompanySetupController extends Controller
                 [
                     'restaurant_id' => $venue->id,
                     'address_id' => $address->id,
+                    'external_ids' => json_encode([]) // Initialize empty external_ids
                 ]
             );
 
@@ -987,11 +989,12 @@ class CompanySetupController extends Controller
                 $employeeData['profile_picture'] = $path; // Add profile picture path
             }
 
-
             // Create the employee
             $employee = Employee::create($employeeData);
 
             $validatedData['create_user'] = (int) $validatedData['create_user'];
+            $userCreated = null;
+
             // Check if user creation is required
             if ($validatedData['create_user'] === 1) {
                 $userCreated = User::create([
@@ -999,6 +1002,7 @@ class CompanySetupController extends Controller
                     'email' => $employee->email,
                     'password' => Hash::make($request->input('employee_password')),
                     'country_code' => 'US',
+                    'external_ids' => json_encode([]) // Initialize empty external_ids
                 ]);
 
                 // Assign the user ID to the employee
@@ -1009,11 +1013,114 @@ class CompanySetupController extends Controller
                 Mail::to($employee->email)->send(new NewStaffEmail($venue));
             }
 
+            // Call OmniStack Gateway to create employee in NestJS backend
+            try {
+                // Get the venue owner user to retrieve their OmniStack ID
+                $venueOwner = User::find($venue->user_id);
+                $adminOmniStackId = null;
+
+                // Extract the venue owner's OmniStack ID from their external_ids
+                if ($venueOwner && !empty($venueOwner->external_ids)) {
+                    $ownerExternalIds = is_string($venueOwner->external_ids)
+                        ? json_decode($venueOwner->external_ids, true)
+                        : $venueOwner->external_ids;
+
+                    if (is_array($ownerExternalIds) && isset($ownerExternalIds['omniStackGateway'])) {
+                        $adminOmniStackId = $ownerExternalIds['omniStackGateway'];
+                    }
+                }
+
+                // Split name into first and last name for NestJS service
+                $nameParts = explode(' ', $employee->name, 2);
+                $firstName = $nameParts[0];
+                $lastName = isset($nameParts[1]) ? $nameParts[1] : '';
+
+                // Prepare external IDs and metadata
+                $externalIds = [
+                    'vbEmployeeId' => (string)$employee->id,
+                    'vbVenueId' => (string)$venue->id
+                ];
+
+                if ($userCreated) {
+                    $externalIds['vbUserId'] = (string)$userCreated->id;
+                }
+
+                $metadata = [
+                    'source' => 'php_venue_app',
+                    'vb_venue_id' => $venue->id,
+                    'vb_employee_id' => $employee->id,
+                    'vb_role_id' => $employee->role_id,
+                    'vb_department_id' => $employee->department_id
+                ];
+
+                // Build payload for OmniStack
+                $omniStackData = [
+                    'name' => $firstName,
+                    'surname' => $lastName,
+                    'email' => $employee->email,
+                    'adminUserId' => $adminOmniStackId, // Use the owner's OmniStack ID
+                    'createAccount' => $validatedData['create_user'] === 1,
+                    'password' => $request->input('employee_password') ? $request->input('employee_password') : null,
+                    'external_ids' => $externalIds,
+                    'metadata' => $metadata
+                ];
+
+                // Only proceed with the API call if we have a valid adminUserId
+                if ($adminOmniStackId) {
+                    // Make API call to OmniStack
+                    $response = Http::withHeaders([
+                        'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                        'client-x-api-key' => env('OMNISTACK_GATEWAY_STAFFLUENT_X_API_KEY'),
+                        'Content-Type' => 'application/json',
+                    ])->post(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/businesses/employee', $omniStackData);
+
+                    // Process response
+                    if ($response->successful()) {
+                        $responseData = $response->json();
+
+                        // Update local employee with OmniStack IDs
+                        $employeeExternalIds = is_string($employee->external_ids) ? json_decode($employee->external_ids, true) : [];
+                        if (!is_array($employeeExternalIds)) $employeeExternalIds = [];
+
+                        $employeeExternalIds['omniStackEmployeeId'] = $responseData['employee']['_id'] ?? null;
+                        $employee->external_ids = json_encode($employeeExternalIds);
+                        $employee->save();
+
+                        // If a user was created, update user's external_ids with omniStackGateway ID
+                        if ($userCreated && isset($responseData['userId'])) {
+                            $userExternalIds = is_string($userCreated->external_ids) ? json_decode($userCreated->external_ids, true) : [];
+                            if (!is_array($userExternalIds)) $userExternalIds = [];
+
+                            $userExternalIds['omniStackGateway'] = $responseData['userId'];
+                            $userCreated->external_ids = json_encode($userExternalIds);
+                            $userCreated->save();
+                        }
+                    } else {
+                        // Log error but don't fail the transaction
+                        \Log::error('Failed to create employee in OmniStack', [
+                            'status' => $response->status(),
+                            'response' => $response->json()
+                        ]);
+                    }
+                } else {
+                    \Log::warning('Could not call OmniStack Gateway: Missing adminUserId OmniStack ID', [
+                        'venue_id' => $venue->id,
+                        'venue_user_id' => $venue->user_id
+                    ]);
+                }
+
+            } catch (\Exception $e) {
+                // Log the error but don't fail the transaction
+                \Log::error('Error calling OmniStack Gateway: ' . $e->getMessage());
+                \Sentry\captureException($e);
+            }
 
             DB::commit();
 
+            // Add the external_ids to response for debugging
+            $employeeWithRelations = $employee->load('address', 'role', 'department');
 
-            return response()->json($employee->load('address', 'role', 'department'), 201);
+            return response()->json($employeeWithRelations, 201);
         } catch (\Exception $e) {
             DB::rollBack();
             return response()->json(['error' => 'Failed to create employee: ' . $e->getMessage()], 500);

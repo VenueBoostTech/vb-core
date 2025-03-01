@@ -10,6 +10,7 @@ use App\Models\User;
 use App\Models\VenueIndustry;
 use App\Models\VenueType;
 use App\Services\VenueService;
+use Google\Cloud\Storage\Connection\Rest;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -378,5 +379,132 @@ class AuthenticationController extends Controller
             ], 500);
         }
     }
+
+
+    /**
+     * Get staff connection for OmniStack API
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getStaffConnection(Request $request): JsonResponse
+    {
+        try {
+            $request->validate([
+                'email' => 'required|email'
+            ]);
+
+            // Find the user with the given email
+            $user = User::where('email', $request->email)->first();
+
+            if (!$user) {
+                return response()->json(['message' => 'User not found'], 404);
+            }
+
+            // Get employee info
+            $employee = $user->employee()->with('role:id,name')->get();
+
+            // Fetch venue data
+            $venue =  Restaurant::where('id', $employee->restaurant_id)->first();
+
+            if (!$venue) {
+                return response()->json(['message' => 'Venue not found'], 404);
+            }
+
+            // Calculate token expiration
+            $ttl = auth()->guard('api')->factory()->getTTL() * 600;
+            $refreshTtl = $ttl * 8; // Refresh token TTL (8x longer)
+
+            // Calculate expiration timestamps
+            $expiresAt = now()->addSeconds($ttl)->timestamp;
+            $refreshExpiresAt = now()->addSeconds($refreshTtl)->timestamp;
+
+            // Generate token
+            $token = JWTAuth::fromUser($user);
+
+            // Generate refresh token
+            $refreshToken = JWTAuth::customClaims([
+                'refresh' => true,
+                'exp' => $refreshExpiresAt
+            ])->fromUser($user);
+
+            // Save Login Activity
+            LoginActivity::create([
+                'user_id' => $user->id,
+                'app_source' => 'staffluent',
+                'venue_id' => $venue->id,
+            ]);
+
+            UserActivityLogger::log($user->id, 'Login via Staffluent');
+
+            // Get account type
+            $accountType = $this->getStaffAccountType($employee);
+
+            // Return simplified JSON response without subscription/vision_track logic
+            return response()->json([
+                'user' => [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'employee' => $employee,
+                    'has_app_access' => true,
+                ],
+                'access_token' => $token,
+                'refresh_token' => $refreshToken,
+                'token_type' => 'bearer',
+                'expires_in' => $ttl,
+                'expires_at' => $expiresAt,
+                'account_type' => $accountType,
+                'is_app_client' => $user->is_app_client,
+                'refresh_expires_in' => $refreshTtl,
+                'refresh_expires_at' => $refreshExpiresAt
+            ]);
+
+        } catch (ValidationException $e) {
+            return response()->json(['message' => 'Validation failed', 'errors' => $e->errors()], 422);
+        } catch (JWTException $e) {
+            return response()->json(['message' => 'Token generation failed'], 500);
+        } catch (\Exception $e) {
+            Log::error('Error in getStaffConnection: ' . $e->getMessage());
+            return response()->json(['message' => 'An unexpected error occurred'], 500);
+        }
+    }
+
+    /**
+     * Determine account type based on employee role
+     *
+     * @param Employee $employee
+     * @return string
+     */
+    private function getStaffAccountType(Employee $employee): string
+    {
+        if (!$employee->role) {
+            return 'staff';
+        }
+
+        $roleName = $employee->role->name;
+
+        if ($roleName === 'Team Leader') {
+            return 'staff_team_leader';
+        }
+
+        if ($roleName === 'Operations Manager') {
+            return 'staff_operations_manager';
+        }
+
+        if ($roleName === 'Manager') {
+            return 'staff_manager';
+        }
+
+        if ($roleName === 'Owner') {
+            return 'staff_owner';
+        }
+
+        return 'staff';
+    }
+
+
 
 }
