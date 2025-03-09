@@ -479,43 +479,35 @@ class EndUserController extends Controller
         return response()->json(['wallet_info' => $walletInfo], 200);
     }
 
-    // OLD: for reference
-//    private function fetchWalletInfoFromCRM($userId, $source)
-//    {
-//        // Define subAccountId based on the source
-//        $subAccountIds = [
-//            'metrosuites' => '6730cb67d23dc622500cbf0d', // Metrosuites crm id
-//            'bybest.shop_web' => '66551ae760ba26d93d6d3a32', // ByBest Shop CRM ID
-//        ];
-//
-//        // Ensure the source has a corresponding subAccountId
-//        if (!isset($subAccountIds[$source])) {
-//            return ['success' => false];
-//        }
-//
-//        $subAccountId = $subAccountIds[$source];
-//
-//        // Make the request to the CRM API with the appropriate subAccountId
-//        $response = Http::get("https://crmapi.pixelbreeze.xyz/api/crm-web/customers/{$userId}", [
-//            'subAccountId' => $subAccountId,
-//        ]);
-//
-//        // Return response if successful, otherwise return failure
-//        if ($response->successful()) {
-//            return $response->json();
-//        }
-//
-//        return ['success' => false];
-//    }
-
-
     private function fetchWalletInfoFromCRM($userId, $source)
     {
         try {
+            // Map of sources to their respective shortcodes and API keys
+            $sourceConfig = [
+                'bybest.shop_web' => [
+                    'shortcode' => 'BYB2929SCDE',
+                    'api_key' => 'OMNISTACK_GATEWAY_MSHOP_API_KEY'
+                ],
+                'metrosuites' => [
+                    'shortcode' => 'BY%200312SCDF',
+                    'api_key' => 'OMNISTACK_GATEWAY_MSUITES_API_KEY'
+                ],
+                // You can easily add more sources here
+            ];
+
+            // Get the configuration for the provided source
+            if (!isset($sourceConfig[$source])) {
+                return ['success' => false];
+            }
+
+            $config = $sourceConfig[$source];
+            $shortcode = $config['shortcode'] . '/';
+            $apiKey = env($config['api_key']);
+
             $response = Http::withHeaders([
-                'webhook-api-key' => env('OMNISTACK_GATEWAY_MSHOP_API_KEY'),
+                'webhook-api-key' => $apiKey,
                 'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
-            ])->get(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . ($source === 'bybest.shop_web' ? 'BYB2929SCDE' : '') . '/wallet-info/' . $userId);
+            ])->get(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . $shortcode . 'wallet-info/' . $userId);
 
             if ($response->successful()) {
                 return $response->json();
@@ -527,7 +519,6 @@ class EndUserController extends Controller
             return ['success' => false];
         }
     }
-
 
     public function getPaymentMethods(Request $request): \Illuminate\Http\JsonResponse
     {

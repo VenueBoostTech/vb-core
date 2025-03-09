@@ -578,11 +578,13 @@ class AuthController extends Controller
         $currentTierName = null;
         $walletBalance = null;
 
-        // Define $venueShortCode based on source
+        // Define endpoint and data configuration based on source
         $venueShortCode = null;
         $customer = null;
         $guest = null;
         $endUserObject = new StdClass();
+        $endpoint = '/get-or-create'; // Default endpoint
+
         if ($source === 'bybest.shop_web') {
             $venueShortCode = 'BYB2929SCDE';
             $customer = Customer::where('user_id', $user->id)->first();
@@ -591,18 +593,20 @@ class AuthController extends Controller
             $endUserObject->email = $customer->email;
             $endUserObject->phone = $customer->phone;
             $endUserObject->password = $password;
+            $apiKey = env('OMNISTACK_GATEWAY_MSHOP_API_KEY');
         } elseif ($source === 'metrosuites') {
-            $venueShortCode = ''; // todo: replace with the right one
+            $venueShortCode = 'BY%200312SCDF';
             $guest = Guest::where('user_id', $user->id)->first();
             $endUserObject->firstName = $guest->name;
             $endUserObject->lastName = '-';
             $endUserObject->email = $guest->email;
             $endUserObject->phone = $guest->phone;
             $endUserObject->password = $password;
+            $endpoint = '/get-or-create-guest'; // Use guest-specific endpoint
+            $apiKey = env('OMNISTACK_GATEWAY_MSUITES_API_KEY');
         }
 
-
-        // Only call CRM API if subAccountId is set
+        // Only call CRM API if venueShortCode is set
         if ($venueShortCode) {
             if ($source === 'metrosuites') {
                 $venue = Restaurant::where('id', $guest?->restaurant_id)->first();
@@ -615,10 +619,8 @@ class AuthController extends Controller
             }
 
             try {
-                $endUserResponse = Http::withHeaders([
-                    'webhook-api-key' => env('OMNISTACK_GATEWAY_MSHOP_API_KEY'),
-                    'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
-                ])->post(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . $venueShortCode . '/get-or-create', [
+                // Prepare request data based on source
+                $requestData = [
                     "external_id" => $user->id,
                     "registrationSource" => $source === 'metrosuites' ? "metrosuites" : "metroshop",
                     "name" => $endUserObject->firstName,
@@ -626,10 +628,48 @@ class AuthController extends Controller
                     "email" => $endUserObject->email,
                     "phone" => $endUserObject->phone,
                     "password" => $password
-                ]);
+                ];
+
+                // If metrosuites, update the request format to match get-or-create-guest requirements
+                if ($source === 'metrosuites') {
+                    $requestData = [
+                        "external_ids" => [
+                            "venueBoostUserId" => (string)$user->id,  // Convert to string
+                            "venueBoostGuestId" => (string)$guest->id  // Convert to string
+                        ],
+                        "name" => $endUserObject->firstName,
+                        "surname" => $endUserObject->lastName,
+                        "email" => $endUserObject->email,
+                        "phone" => $endUserObject->phone,
+                        "password" => $password,
+                        "registrationSource" => "metrosuites"
+                    ];
+                }
+
+                $endUserResponse = Http::withHeaders([
+                    'webhook-api-key' => $apiKey,
+                    'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                    'Content-Type' => 'application/json',
+                ])->post(rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . $venueShortCode . $endpoint, $requestData);
 
                 if ($endUserResponse->successful()) {
                     $omniData = $endUserResponse->json();
+
+                    // Handle the response based on source
+                    if ($source === 'metrosuites') {
+                        // Update user with external IDs
+                        $userExternalIds = json_decode($user->external_ids ?? '{}', true);
+                        $userExternalIds['omniStackGateway'] = $omniData['userId'] ?? null;
+                        $user->external_ids = json_encode($userExternalIds);
+                        $user->save();
+
+                        // Update guest with external IDs
+                        $guestExternalIds = json_decode($guest->external_ids ?? '{}', true);
+                        $guestExternalIds['omniStackGateway'] = $omniData['guestId'] ?? null;
+                        $guest->external_ids = json_encode($guestExternalIds);
+                        $guest->save();
+                    }
+
                     $referralCode = $omniData['referralCode'] ?? null;
                     $currentTierName = $omniData['currentTierName'] ?? null;
                     $walletBalance = $omniData['walletBalance'] ?? null;
@@ -637,8 +677,8 @@ class AuthController extends Controller
             } catch (\Throwable $th) {
                 \Sentry\captureException($th);
             }
-
         } else {
+
             // If source is neither bybest.shop_web nor metrosuites
             $venue = null;
         }
@@ -702,7 +742,6 @@ class AuthController extends Controller
             'refresh_expires_at' => $refreshExpiresAt
         ]);
     }
-
 
     protected function respondWithTokenForSuperadmin(string $token): JsonResponse
     {

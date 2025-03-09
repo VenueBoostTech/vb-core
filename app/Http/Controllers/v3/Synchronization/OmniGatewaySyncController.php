@@ -64,8 +64,8 @@ class OmniGatewaySyncController extends Controller
 
             // Make API request to OmniGateway
             $response = Http::withHeaders([
-                'x-api-key' => $venue->omnigateway_api_key,
-                'client-x-api-key' => config('services.omnigateway.api_key'),
+                'x-api-key' => config('services.omnigateway.api_key'),
+                'client-x-api-key' => $venue->omnigateway_api_key,
             ])
             ->get(config('services.omnigateway.base_url') . '/brands', [
                 'sync_date' => $request->input('sync_date'),

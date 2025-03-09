@@ -2139,6 +2139,103 @@ class AccommodationController extends Controller
         ]);
     }
 
+    public function listRentalUnitsForOmnistack(Request $request): \Illuminate\Http\JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Fetch rental units for this venue
+        $rentalUnits = RentalUnit::where('venue_id', $venue->id)
+            ->whereNull('deleted_at')
+            ->get();
+
+        // Format the response data
+        $responseRentalUnits = [];
+        foreach ($rentalUnits as $rentalUnit) {
+            $responseRentalUnit = new stdClass();
+            $responseRentalUnit->id = $rentalUnit->id;
+            $responseRentalUnit->name = $rentalUnit->name;
+            $responseRentalUnit->address = $rentalUnit->address;
+            $responseRentalUnit->unit_code = $rentalUnit->unit_code;
+            $responseRentalUnit->created_at = $rentalUnit->created_at->format('d M Y');
+            $responseRentalUnit->accommodation_type = $rentalUnit->accommodation_type;
+
+            // Add URL
+            $url = $rentalUnit->unit_code ? 'https://venueboost.io/rental/'.$rentalUnit->unit_code : null;
+            if($venue->id == 23) {
+                $url = $rentalUnit->unit_code ? 'https://metrosuites.al/rental/'.$rentalUnit->unit_code : null;
+            }
+            $responseRentalUnit->url = $url;
+
+            $responseRentalUnits[] = $responseRentalUnit;
+        }
+
+        return response()->json([
+            'data' => $responseRentalUnits,
+            'message' => 'Rental Units retrieved successfully'
+        ]);
+    }
+
+    /**
+     * Update rental unit with external ID from OmniStack
+     *
+     * @param Request $request
+     * @param int $id Rental Unit ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateRentalUnitExternalId(Request $request, $id): \Illuminate\Http\JsonResponse
+    {
+        // Validate request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+            'omnistack_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        $venue = Restaurant::where('omnigateway_api_key', $request->input('omnigateway_api_key'))->first();
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        $rentalUnit = RentalUnit::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$rentalUnit) {
+            return response()->json(['error' => 'Rental unit not found'], 404);
+        }
+
+        // Update external_ids
+        $externalIds = $rentalUnit->external_ids ? json_decode($rentalUnit->external_ids, true) : [];
+        $externalIds['omniStackId'] = $request->input('omnistack_id');
+        $rentalUnit->external_ids = json_encode($externalIds);
+        $rentalUnit->save();
+
+        return response()->json([
+            'message' => 'Rental unit external ID updated successfully',
+            'rental_unit_id' => $rentalUnit->id
+        ]);
+    }
+
 }
 
 

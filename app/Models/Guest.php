@@ -20,7 +20,8 @@ class Guest extends Model
         'user_id',
         'allow_restaurant_msg',
         'allow_venueboost_msg',
-        'allow_remind_msg'
+        'allow_remind_msg',
+        'external_ids'
     ];
 
     public function reservations()
