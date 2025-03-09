@@ -31,6 +31,8 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Twilio\Rest\Client;
+use Illuminate\Support\Facades\Http;
+
 
 class BookingController extends Controller
 {
@@ -91,6 +93,8 @@ class BookingController extends Controller
         }
     }
 
+
+
     public function store(Request $request): \Illuminate\Http\JsonResponse
     {
         $rentalUnitCode = request()->get('rental_unit_code');
@@ -136,101 +140,7 @@ class BookingController extends Controller
             $checkInDate = $request->input('check_in_date');
             $checkOutDate = $request->input('check_out_date');
 
-            $guestDetail = null;
-            $password = null;
-            if ($request->guest_id) {
-
-                // check if guest belongs to the venue and is is_for_accommodation
-
-                $guest = Guest::where('id', $request->guest_id)->first();
-                if (!$guest) {
-                    return response()->json(['error' => 'Guest not found'], 404);
-                }
-
-                if ($guest->restaurant_id != $venueId) {
-                    return response()->json(['error' => 'Guest does not belong to the venue'], 400);
-                }
-
-                if (!$guest->is_for_accommodation) {
-                    return response()->json(['error' => 'Guest is not for accommodation'], 400);
-                }
-
-
-                $guestDetail = $guest;
-
-                // also create user if not exists
-                $user = User::where('email', $guest->email)->first();
-                if (!$user) {
-                    $password = Str::random(8);
-                   $user = User::create([
-                        'name' => $guest->name,
-                        'email' => $guest->email,
-                        // make hash random password
-                        'password' => Hash::make($password),
-                        'country_code' => 'US',
-                        'enduser' => true
-                    ]);
-                }
-                $guest->user_id = $user->id;
-                $guest->save();
-            }
-            else {
-                $password = null;
-                if ($request->guest['email']){
-                    // First check if guest exists
-                    $guest = Guest::where('email', $request->guest['email'])->first();
-
-                    // First find existing user or create new one
-                    $user = User::where('email', $request->guest['email'])->first();
-
-                    if (!$user) {
-                        $password = Str::random(8);
-                        $user = User::create([
-                            'name' => $request->guest['first_name'] . ' ' . $request->guest['last_name'],
-                            'email' => $request->guest['email'],
-                            'password' => Hash::make($password),
-                            'country_code' => 'US',
-                            'enduser' => true
-                        ]);
-                    }
-
-                    if (!$guest) {
-                        // Create new guest if doesn't exist
-                        $guest = Guest::create([
-                            'restaurant_id' => $venueId,
-                            'name' => $request->guest['first_name'] . ' ' . $request->guest['last_name'],
-                            'email' => $request->guest['email'],
-                            'phone' => $request->guest['phone'],
-                            'is_for_accommodation' => true,
-                            'is_main' => true,
-                            'created_manually' => false,
-                            'user_id' => $user->id
-                        ]);
-
-                        // get first tier based on name
-                        $tier = LoyaltyTier::where('name', 'Bronze Tier')->first();
-
-                        Wallet::create([
-                            'guest_id' => $guest->id,
-                            'venue_id' => $venueId,
-                            'loyalty_tier_id' => $tier->id,
-                            'balance' => 0,
-                        ]);
-                        $guestDetail = $guest;
-                    } else {
-                        $guestDetail = $guest;
-
-                        // Update existing guest with user_id if not set
-                        if (!$guest->user_id) {
-                            $guest->user_id = $user->id;
-                            $guest->save();
-                        }
-                    }
-
-
-                }
-            }
-
+            // Check for overlapping bookings
             $overlappingBooking = Booking::where(function ($query) use ($venueId, $rentalUnitId) {
                 $query->where('venue_id', $venueId)
                     ->where('rental_unit_id', $rentalUnitId);
@@ -244,30 +154,155 @@ class BookingController extends Controller
                 });
             })->exists();
 
-
-
             if ($overlappingBooking) {
                 return response()->json([
                     'error' => 'Overlapping booking found. The booking already exist please select the other date range.'
                 ], 400);
             }
 
-//            $pricePerNight = PricePerNight::where('venue_id', $venueId)->where('rental_unit_id', $rentalUnitId)->where('nr_guests', $request->guest_nr)->where('id', $request->price_per_night_id)->first();
-//
-//            if(!$pricePerNight) {
-//                return response()->json(['error' => 'Booking not confirmed. The booking price for this rental unit not set.'], 400);
-//            }
-//
-//            // discount price of request should be same with price per night discount x nr of nights (check in checkout difference)
-//            if($request->discount_price != ($pricePerNight->price * ($pricePerNight->discount / 100) * (Carbon::parse($request->check_in_date)->diffInDays(Carbon::parse($request->check_out_date))))) {
-//                return response()->json(['error' => 'Booking not confirmed. The discount price is not correct.'], 400);
-//            }
-
-            // validate if total amount is correct subtotal  - discount price
+            // Validate total amount calculation
             if($request->total_amount != ($request->subtotal - $request->discount_price)) {
                 return response()->json(['error' => 'Booking not confirmed. The sub total is not correct.'], 400);
             }
 
+            // Get the venue for API call metadata
+            $venue = Restaurant::find($venueId);
+            if (!$venue) {
+                return response()->json(['error' => 'Venue not found'], 404);
+            }
+
+            $guestDetail = null;
+            $user = null;
+            $randomPassword = Str::random(8);
+
+            // STEP 1: First get or create user and guest in PHP Laravel
+            if ($request->guest_id) {
+                // Use existing guest
+                $guestDetail = Guest::where('id', $request->guest_id)->first();
+                if (!$guestDetail) {
+                    return response()->json(['error' => 'Guest not found'], 404);
+                }
+
+                if ($guestDetail->restaurant_id != $venueId) {
+                    return response()->json(['error' => 'Guest does not belong to the venue'], 400);
+                }
+
+                if (!$guestDetail->is_for_accommodation) {
+                    return response()->json(['error' => 'Guest is not for accommodation'], 400);
+                }
+
+                // Find user for this guest
+                if ($guestDetail->user_id) {
+                    $user = User::find($guestDetail->user_id);
+                }
+            }
+            elseif (isset($request->guest['email']) && !empty($request->guest['email'])) {
+                // Find or create user by email
+                $user = User::where('email', $request->guest['email'])->first();
+
+                if (!$user) {
+                    // Create new user
+                    $user = User::create([
+                        'name' => $request->guest['first_name'] . ' ' . $request->guest['last_name'],
+                        'email' => $request->guest['email'],
+                        'password' => Hash::make($randomPassword),
+                        'country_code' => 'US',
+                        'enduser' => true
+                    ]);
+                }
+
+                // Find or create guest
+                $guestDetail = Guest::where('email', $request->guest['email'])->first();
+
+                if (!$guestDetail) {
+                    // Create new guest
+                    $guestDetail = Guest::create([
+                        'restaurant_id' => $venueId,
+                        'name' => $request->guest['first_name'] . ' ' . $request->guest['last_name'],
+                        'email' => $request->guest['email'],
+                        'phone' => $request->guest['phone'] ?? null,
+                        'is_for_accommodation' => true,
+                        'is_main' => true,
+                        'created_manually' => false,
+                        'user_id' => $user->id
+                    ]);
+
+                    // Get first tier based on name
+                    $tier = LoyaltyTier::where('name', 'Bronze Tier')->first();
+
+                    Wallet::create([
+                        'guest_id' => $guestDetail->id,
+                        'venue_id' => $venueId,
+                        'loyalty_tier_id' => $tier->id,
+                        'balance' => 0,
+                    ]);
+                }
+                else if (!$guestDetail->user_id) {
+                    // Update guest with user_id if not set
+                    $guestDetail->user_id = $user->id;
+                    $guestDetail->save();
+                }
+            }
+            else {
+                return response()->json(['error' => 'Guest information is required'], 400);
+            }
+
+            // STEP 2: Now sync the guest with OmniStack using getOrCreateGuest
+            if ($user && $guestDetail) {
+                try {
+                    // Prepare data for OmniStack getOrCreateGuest API
+                    $data_string = [
+                        "external_ids" => [
+                            "venueBoostUserId" => $user->id,
+                            "venueBoostGuestId" => $guestDetail->id
+                        ],
+                        "name" => $user->first_name ?? explode(' ', $guestDetail->name)[0],
+                        "surname" => $user->last_name ?? (count(explode(' ', $guestDetail->name)) > 1 ? explode(' ', $guestDetail->name)[1] : ''),
+                        "email" => $guestDetail->email,
+                        "phone" => $guestDetail->phone ?? null,
+                        "password" => $randomPassword,
+                        "registrationSource" => "metrosuites"
+                    ];
+
+                    // Get venue's webhook URL and construct full endpoint
+                    $omniStackUrl = rtrim(env('OMNISTACK_GATEWAY_BASEURL'), '/') . '/users/' . $venue->short_code . '/get-or-create-guest';
+
+                    // Send API request
+                    $response = Http::withHeaders([
+                        'webhook-api-key' => env('OMNISTACK_GATEWAY_MSUITES_API_KEY'),
+                        'x-api-key' => env('OMNISTACK_GATEWAY_API_KEY'),
+                        'Content-Type' => 'application/json',
+                    ])->post($omniStackUrl, $data_string);
+
+                    if ($response->successful()) {
+                        // Update user with external IDs
+                        $userExternalIds = json_decode($user->external_ids ?? '{}', true);
+                        $userExternalIds['omniStackGateway'] = $response->json('userId');
+                        $user->external_ids = json_encode($userExternalIds);
+                        $user->save();
+
+                        // Update guest with external IDs
+                        $guestExternalIds = json_decode($guestDetail->external_ids ?? '{}', true);
+                        $guestExternalIds['omniStackGateway'] = $response->json('guestId');
+                        $guestDetail->external_ids = json_encode($guestExternalIds);
+                        $guestDetail->save();
+                    } else {
+                        \Log::error('Failed to sync guest with OmniStack', [
+                            'status' => $response->status(),
+                            'response' => $response->json()
+                        ]);
+                    }
+                } catch (\Throwable $th) {
+                    \Sentry\captureException($th);
+                    \Log::error('Exception in guest sync with OmniStack', [
+                        'error' => $th->getMessage(),
+                        'trace' => $th->getTraceAsString()
+                    ]);
+                    // Continue execution even if OmniStack sync fails
+                }
+            }
+
+            // STEP 3: Create the booking
             $booking = new Booking;
             $booking->venue_id = $venueId;
             $booking->rental_unit_id = $rentalUnit->id;
@@ -278,7 +313,6 @@ class BookingController extends Controller
             $booking->discount_price = $request->discount_price;
             $booking->total_amount = $request->total_amount;
             $booking->discount_id = $request->discount_id;
-
             $booking->subtotal = $request->subtotal;
             $booking->status = "Pending";
             $booking->paid_with = $request->paid_with;
@@ -289,8 +323,7 @@ class BookingController extends Controller
             $booking->confirmation_code = $this->generateConfirmationCode();
             $booking->save();
 
-
-            // Create a receipt based on payment method and prepayment amount
+            // Create a receipt
             $receipt = new Receipt();
             $receipt->booking_id = $booking->id;
             $receipt->receipt_id = $this->generateReceiptId();
@@ -305,11 +338,10 @@ class BookingController extends Controller
                 $receipt->status = 'fully_paid';
             }
 
-            // Set the total amount of the receipt to the booking's total amount
             $receipt->total_amount = $booking->total_amount;
-
             $receipt->save();
 
+            // Create price breakdown record
             $pricingBreakdown = new PriceBreakdown();
             $pricingBreakdown->booking_id = $booking->id;
             $pricingBreakdown->type = 'booking_create';
@@ -321,45 +353,34 @@ class BookingController extends Controller
             $pricingBreakdown->rental_unit_id = $booking->rental_unit_id;
             $pricingBreakdown->save();
 
-            $venue = Restaurant::find($venueId);
-
+            // Get venue logo for emails
             $venueLogo = $venue->logo ? Storage::disk('s3')->temporaryUrl($venue->logo, '+8000 minutes') : null;
 
-            // prepare data for guest receipt email
+            // Prepare data for guest receipt email
             $guestReceiptData = [
                 'receipt_id' => $receipt->receipt_id,
                 'venue_logo' => $venueLogo,
-                 // human-readable date
                 'receipt_created_at' => Carbon::parse($receipt->created_at)->format('M d, Y'),
-                // rental unit name
                 'rental_unit_name' => $rentalUnit->name,
                 'nr_of_nights' => Carbon::parse($booking->check_in_date)->diffInDays(Carbon::parse($booking->check_out_date)),
-                // booking date in this format Sun, May 14, 2023
                 'booking_date' => Carbon::parse($booking->created_at)->format('D, M d, Y'),
-                // rental type
                 'rental_type' => $rentalUnit->accommodation_type,
-                // nr of guests
                 'nr_of_guests' => $booking->guest_nr,
-                // booking confirmation code
                 'confirmation_code' => $booking->confirmation_code,
-                // pricing breakdown object from db
                 'pricing_breakdown' => $pricingBreakdown,
                 'pricing_breakdown_text' => $pricingBreakdown->type === 'booking_create' ? 'Booking Create' : $pricingBreakdown->type,
-                // currency
                 'currency' => $rentalUnit->currency,
-                // payment method
                 'payment_method' => $booking->paid_with === 'card' ? 'Card' : 'Cash',
-                // prepayment amount
                 'prepayment_amount' => $booking->prepayment_amount,
-                // check in date
                 'check_in_date' => Carbon::parse($booking->check_in_date)->format('M d, Y'),
-                // check out date
                 'check_out_date' => Carbon::parse($booking->check_out_date)->format('M d, Y'),
-                'password' => $password ?? null,
+                'password' => $randomPassword ?? null,
                 'email' => $guestDetail->email ?? null,
             ];
 
-            Mail::to($guest['email'])->send(new GuestReceiptEmail($venue->name, $guestReceiptData));
+            Mail::to($guestDetail->email)->send(new GuestReceiptEmail($venue->name, $guestReceiptData));
+
+//            Mail::to($guest['email'])->send(new GuestReceiptEmail($venue->name, $guestReceiptData));
 
             $venueLogo = $venue->logo ? Storage::disk('s3')->temporaryUrl($venue->logo, '+8000 minutes') : null;
             // send a new booking email to the venue
@@ -368,7 +389,7 @@ class BookingController extends Controller
                 // Send to venue email if activateMS is true
                 Mail::to($venue->email)->send(new NewBookingEmail(
                     $venue->name,
-                    $guest->name,
+                    $guestDetail->name,
                     $rentalUnit->name,
                     $booking->check_in_date,
                     $booking->check_out_date,
@@ -379,7 +400,7 @@ class BookingController extends Controller
             // Always send to specific email regardless of activateMS
             Mail::to('griseld.gerveni@yahoo.com')->send(new NewBookingEmail(
                 $venue->name,
-                $guest->name,
+                $guestDetail->name,
                 $rentalUnit->name,
                 $booking->check_in_date,
                 $booking->check_out_date,
@@ -395,7 +416,7 @@ class BookingController extends Controller
                 $client = new Client($account_sid, $auth_token);
 
                 $smsBody = "New Booking Notification from VenueBoost\n\n" .
-                    "Guest: {$guest->name}\n" .
+                    "Guest: {$guestDetail->name}\n" .
                     "Rental Unit: {$rentalUnit->name}\n" .
                     "Check-in: {$booking->check_in_date}\n" .
                     "Check-out: {$booking->check_out_date}";
@@ -430,28 +451,28 @@ class BookingController extends Controller
             // check tier of guest, get points and update wallet balance with points and update activate
             // get guest's tier attribute
 
-            $tier = $guest->getLoyaltyTierAttribute();
+            $tier = $guestDetail->getLoyaltyTierAttribute();
             // get the points earned based on the tier
             $pointsEarned = $tier?->points_per_booking ?? 0;
 
             // Update the guest's wallet balance with the points earned
             // Update guest's wallet balance with the earned points
-            if (!$guest->wallet) {
+            if (!$guestDetail->wallet) {
                 // get first tier based on name
                 $tier = LoyaltyTier::where('name', 'Bronze Tier')->first();
 
                 Wallet::create([
-                    'guest_id' => $guest->id,
+                    'guest_id' => $guestDetail->id,
                     'venue_id' => $venue->id,
                     'loyalty_tier_id' => $tier->id,
                     'balance' => $pointsEarned,
                 ]);
             } else {
-                $guest->wallet->increment('balance', $pointsEarned);
+                $guestDetail->wallet->increment('balance', $pointsEarned);
             }
 
             // Add a record to the earnPointsHistory table with guest_id, reservation_id, and points_earned
-            $guest->earnPointsHistory()->create([
+            $guestDetail->earnPointsHistory()->create([
                 'booking_id' => $booking->id,
                 'points_earned' => $pointsEarned,
                 'venue_id' => $venue->id,
@@ -467,6 +488,7 @@ class BookingController extends Controller
         }
 
     }
+
 
     // store third party booking from ics file
     public function storeThirdPartyBooking(Request $request, $id): \Illuminate\Http\JsonResponse
@@ -1119,5 +1141,95 @@ class BookingController extends Controller
 
         // Combine both parts to create the unique receipt ID
         return $timestampPart . $randomPart;
+    }
+
+    /**
+     * List bookings for OmniStack integration
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function listBookingsForOmnistack(Request $request): \Illuminate\Http\JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Get bookings for this venue
+        $bookings = Booking::getBookingsForOmniStack($venue->id);
+
+        return response()->json([
+            'data' => $bookings,
+            'message' => 'Bookings retrieved successfully'
+        ]);
+    }
+
+    /**
+     * Update booking with external ID from OmniStack
+     *
+     * @param Request $request
+     * @param int $id Booking ID
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateBookingExternalId(Request $request, $id): \Illuminate\Http\JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+            'omnistack_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Find the booking
+        $booking = Booking::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$booking) {
+            return response()->json(['error' => 'Booking not found'], 404);
+        }
+
+        // Get current external_ids or initialize as empty array
+        $externalIds = $booking->external_ids ? json_decode($booking->external_ids, true) : [];
+
+        // Add the OmniStack ID
+        $externalIds['omniStackId'] = $request->input('omnistack_id');
+
+        // Update the booking
+        $booking->external_ids = json_encode($externalIds);
+        $booking->save();
+
+        return response()->json([
+            'message' => 'Booking external ID updated successfully',
+            'booking_id' => $booking->id
+        ]);
     }
 }

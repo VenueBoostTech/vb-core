@@ -1491,6 +1491,14 @@ Route::middleware(['omni_stack_gateway_api_key', 'api'])->prefix('v1')->group(fu
 
         // New route for staff connections
         Route::post('/get-staff-connection', [App\Http\Controllers\AppSuite\Staff\AuthenticationController::class, 'getStaffConnection']);
+        Route::post('/get-mobile-staff-connection', [App\Http\Controllers\v1\AuthController::class, 'authenticate']);
+    });
+
+    Route::group(['prefix' => 'accommodation-os'], function () {
+        Route::get('/', [App\Http\Controllers\v1\AccommodationController::class, 'listRentalUnitsForOmnistack']);
+        Route::post('/{id}/external-id', [App\Http\Controllers\v1\AccommodationController::class, 'updateRentalUnitExternalId']);
+        Route::get('/bookings', [App\Http\Controllers\v1\BookingController::class, 'listBookingsForOmnistack']);
+        Route::post('/bookings/{id}/external-id', [App\Http\Controllers\v1\BookingController::class, 'updateBookingExternalId']);
     });
 });
 

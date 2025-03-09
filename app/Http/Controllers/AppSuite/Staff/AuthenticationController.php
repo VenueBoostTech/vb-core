@@ -402,14 +402,9 @@ class AuthenticationController extends Controller
             }
 
             // Get employee info
-            $employee = $user->employee()->with('role:id,name')->get();
+            $employee = $user->employee()->with('role:id,name')->first();
 
-            // Fetch venue data
-            $venue =  Restaurant::where('id', $employee->restaurant_id)->first();
 
-            if (!$venue) {
-                return response()->json(['message' => 'Venue not found'], 404);
-            }
 
             // Calculate token expiration
             $ttl = auth()->guard('api')->factory()->getTTL() * 600;
@@ -428,17 +423,23 @@ class AuthenticationController extends Controller
                 'exp' => $refreshExpiresAt
             ])->fromUser($user);
 
+            $venue = null;
+            if ($user->is_app_client) {
+                $accountType = 'client';
+            } else {
+                $accountType = $this->getStaffAccountType($employee);
+                // Fetch venue data
+                $venue =  Restaurant::where('id', $employee->restaurant_id)->first();
+            }
+
             // Save Login Activity
             LoginActivity::create([
                 'user_id' => $user->id,
                 'app_source' => 'staffluent',
-                'venue_id' => $venue->id,
+                'venue_id' => $venue?->id,
             ]);
 
             UserActivityLogger::log($user->id, 'Login via Staffluent');
-
-            // Get account type
-            $accountType = $this->getStaffAccountType($employee);
 
             // Return simplified JSON response without subscription/vision_track logic
             return response()->json([
