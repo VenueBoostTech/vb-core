@@ -651,6 +651,24 @@ class EndUserController extends Controller
                 break;
         }
 
+        // Transform the promotions to use times from connected entities
+        $transformedPromotions = $promotions->getCollection()->map(function ($promotion) {
+            if ($promotion->type === 'discount' && $promotion->discounts->count() > 0) {
+                $discount = $promotion->discounts->first();
+                $promotion->start_time = $discount->start_time;
+                $promotion->end_time = $discount->end_time;
+            } elseif ($promotion->type === 'coupon' && $promotion->coupons->count() > 0) {
+                $coupon = $promotion->coupons->first();
+                $promotion->start_time = $coupon->start_time;
+                $promotion->end_time = $coupon->expiry_time;
+            }
+
+            return $promotion;
+        });
+
+        // Replace the items in the paginator with the transformed items
+        $promotions->setCollection($transformedPromotions);
+
         return response()->json([
             'message' => 'Promotions retrieved successfully',
             'data' => $promotions->items(),
@@ -717,6 +735,24 @@ class EndUserController extends Controller
                     ->paginate($perPage);
                 break;
         }
+
+        // Transform the promotions to use times from connected entities
+        $transformedPromotions = $promotions->getCollection()->map(function ($promotion) {
+            if ($promotion->type === 'discount' && $promotion->discounts->count() > 0) {
+                $discount = $promotion->discounts->first();
+                $promotion->start_time = $discount->start_time;
+                $promotion->end_time = $discount->end_time;
+            } elseif ($promotion->type === 'coupon' && $promotion->coupons->count() > 0) {
+                $coupon = $promotion->coupons->first();
+                $promotion->start_time = $coupon->start_time;
+                $promotion->end_time = $coupon->expiry_time;
+            }
+
+            return $promotion;
+        });
+
+        // Replace the items in the paginator with the transformed items
+        $promotions->setCollection($transformedPromotions);
 
         return response()->json([
             'message' => 'Promotions retrieved successfully',
