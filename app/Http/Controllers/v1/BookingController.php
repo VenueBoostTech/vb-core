@@ -81,19 +81,26 @@ class BookingController extends Controller
 
         $query->orderBy('created_at', 'desc');
         $bookings = $query->paginate($perPage, ['*'], 'page', $currentPage);
+
         if ($bookings->total() > 0) {
-            // for each booking, find the rental unit and guest
-            foreach ($bookings as $booking) {
-                $booking->rental_unit = RentalUnit::where('id', $booking->rental_unit_id)->first();
-                $booking->guest = Guest::where('id', $booking->guest_id)->first();
+            $bookingsArray = $bookings->toArray();
+
+            foreach ($bookingsArray['data'] as &$booking) {
+                $booking['rental_unit'] = RentalUnit::where('id', $booking['rental_unit_id'])->first();
+                $booking['guest'] = Guest::where('id', $booking['guest_id'])->first();
+
+                // Format the date fields directly
+                $booking['check_in_date'] = Carbon::parse($booking['check_in_date'])->format('Y-m-d');
+                $booking['check_out_date'] = Carbon::parse($booking['check_out_date'])->format('Y-m-d');
             }
+
+            $bookings->setCollection(collect($bookingsArray['data']));
+
             return response()->json(['message' => 'Booking Found', 'bookings' => $bookings], 200);
         } else {
             return response()->json(['message' => 'No Booking Found', 'bookings' => $bookings], 200);
         }
     }
-
-
 
     public function store(Request $request): \Illuminate\Http\JsonResponse
     {

@@ -80,7 +80,6 @@ class PromotionsController extends Controller
      */
     public function index(): JsonResponse
     {
-        
         if (!auth()->user()->restaurants->count()) {
             return response()->json(['error' => 'User not eligible for making this API call'], 400);
         }
@@ -100,6 +99,21 @@ class PromotionsController extends Controller
         // Load the associated discounts or coupons for each promotion
         $promotions->load('discounts');
         $promotions->load('coupons');
+
+        // Transform each promotion to include the correct start and end times
+        $promotions->transform(function ($promotion) {
+            if ($promotion->type === 'discount' && $promotion->discounts->count() > 0) {
+                $discount = $promotion->discounts->first();
+                $promotion->start_time = $discount->start_time;
+                $promotion->end_time = $discount->end_time;
+            } elseif ($promotion->type === 'coupon' && $promotion->coupons->count() > 0) {
+                $coupon = $promotion->coupons->first();
+                $promotion->start_time = $coupon->start_time;
+                $promotion->end_time = $coupon->expiry_time;
+            }
+
+            return $promotion;
+        });
 
         return response()->json(['message' => 'Promotions retrieved successfully', 'data' => $promotions], 200);
     }
@@ -217,7 +231,7 @@ class PromotionsController extends Controller
                     $query->whereNull('promotion_id')
                         ->where('end_time', '>=', now());
                 })
-                ->first();  
+                ->first();
 
             if (!$discount) {
                 return response()->json(['error' => 'Invalid or inactive discount provided'], 400);
@@ -1609,11 +1623,11 @@ class PromotionsController extends Controller
         if ($validator->fails()) {
             return response()->json(['error' => $validator->errors()], 400);
         }
-        
+
         $coupon = Coupon::where('id', $request->id)
         ->where('venue_id', $venue->id)
         ->first();
-        
+
         $coupon->code = $request->input('code', $coupon->code);
         $coupon->description = $request->input('description', $coupon->description);
         $coupon->discount_type = $request->input('discount_type', $coupon->discount_type);
@@ -1626,9 +1640,9 @@ class PromotionsController extends Controller
         $coupon->user_id = $request->input('selected_customer', $coupon->user_id);
         $coupon->usage_limit_per_coupon = $request->input('usage_limit_per_coupon', $coupon->usage_limit_per_coupon);
         $coupon->usage_limit_per_customer = $request->input('usage_limit_per_customer', $coupon->usage_limit_per_customer);
-        
+
         $coupon->save();
- 
+
 
         $coupon->load('promotion');
 
