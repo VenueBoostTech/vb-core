@@ -222,4 +222,139 @@ class ChatController extends Controller
             'chat' => $formattedChat
         ], $chat->wasRecentlyCreated ? 201 : 200);
     }
+
+    /**
+     * List chats for OmniStack integration
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function listChatsForOmnistack(Request $request): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Get chats for this venue
+        $chats = Chat::getChatsForOmniStack($venue->id);
+
+        return response()->json([
+            'data' => $chats,
+            'message' => 'Chats retrieved successfully'
+        ]);
+    }
+
+    /**
+     * Update chat with external ID from OmniStack
+     *
+     * @param Request $request
+     * @param int $id Chat ID
+     * @return JsonResponse
+     */
+    public function updateChatExternalId(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+            'omnistack_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Find the chat
+        $chat = Chat::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$chat) {
+            return response()->json(['error' => 'Chat not found'], 404);
+        }
+
+        // Get current external_ids or initialize as empty array
+        $externalIds = $chat->external_ids ? json_decode($chat->external_ids, true) : [];
+
+        // Add the OmniStack ID
+        $externalIds['omniStackId'] = $request->input('omnistack_id');
+
+        // Update the chat
+        $chat->external_ids = json_encode($externalIds);
+        $chat->save();
+
+        return response()->json([
+            'message' => 'Chat external ID updated successfully',
+            'chat_id' => $chat->id
+        ]);
+    }
+
+    /**
+     * Delete a chat for OmniStack integration
+     *
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function destroyForOmnistack(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        $chat = Chat::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$chat) {
+            return response()->json(['error' => 'Chat not found'], 404);
+        }
+
+        // Don't actually delete the chat, just mark it as deleted
+        $chat->status = Chat::STATUS_DELETED;
+        $chat->save();
+
+        return response()->json([
+            'message' => 'Chat marked as deleted successfully'
+        ]);
+    }
 }

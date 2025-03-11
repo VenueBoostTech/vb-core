@@ -5,8 +5,10 @@ namespace App\Http\Controllers\v1;
 use App\Http\Controllers\Controller;
 use App\Models\Guest;
 use App\Models\LoyaltyTier;
+use App\Models\Restaurant;
 use App\Models\User;
 use App\Models\Wallet;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
@@ -397,6 +399,101 @@ class GuestsController extends Controller
 
         // Default note if none of the above conditions are met
         return 'Regular guest';
+    }
+
+
+    /**
+     * Delete a guest for OmniStack integration
+     *
+     * @param Request $request
+     * @param int $id Guest ID
+     * @return JsonResponse
+     */
+    public function destroyForOmnistack(Request $request, $id): JsonResponse
+    {
+
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        $guest = Guest::where('id', $id)
+            ->where('restaurant_id', $venue->id)
+            ->first();
+
+        if (!$guest) {
+            return response()->json(['error' => 'Guest not found'], 404);
+        }
+
+        // Check if guest has bookings
+        if ($guest->bookings()->count() > 0) {
+            $deleteWithBookings = $request->input('force_delete', false);
+
+            if (!$deleteWithBookings) {
+                return response()->json([
+                    'error' => 'Guest has active bookings. Use force_delete=true to delete the guest and all associated bookings.',
+                    'bookings_count' => $guest->bookings()->count()
+                ], 422);
+            }
+
+            // Delete all associated bookings if force_delete is true
+            foreach ($guest->bookings as $booking) {
+                // Delete receipt and price breakdowns
+                if ($booking->receipt) {
+                    $booking->receipt->delete();
+                }
+
+                $booking->priceBreakdowns()->delete();
+                $booking->delete();
+            }
+        }
+
+        // Delete related records
+        if ($guest->wallet) {
+            $guest->wallet->delete();
+        }
+
+        $guest->earnPointsHistory()->delete();
+        $guest->usePointsHistory()->delete();
+
+        if ($guest->guestMarketingSettings) {
+            $guest->guestMarketingSettings->delete();
+        }
+
+        // Optionally delete the associated user
+        $deleteUser = $request->input('delete_user', false);
+        if ($deleteUser && $guest->user_id) {
+            $user = User::find($guest->user_id);
+            if ($user) {
+                // Only delete if this is the only guest record for the user
+                $guestCount = Guest::where('user_id', $user->id)->count();
+                if ($guestCount <= 1) {
+                    $user->delete();
+                }
+            }
+        }
+
+        // Finally delete the guest
+        $guest->delete();
+
+        return response()->json([
+            'message' => 'Guest deleted successfully',
+            'user_deleted' => $deleteUser && $guest->user_id ? true : false
+        ]);
     }
 
 

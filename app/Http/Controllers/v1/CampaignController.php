@@ -9,6 +9,7 @@ use App\Models\Customer;
 use App\Models\Guest;
 use App\Models\Promotion;
 use App\Models\Campaign;
+use App\Models\Restaurant;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -190,7 +191,7 @@ class CampaignController extends Controller
         $campaign = Campaign::where('id', $request->id)
         ->where('venue_id', $venue->id)
         ->first();
-        
+
 
         if (!$campaign) {
             return response()->json(['error' => 'Campaign not found'], 404);
@@ -318,6 +319,140 @@ class CampaignController extends Controller
 
 
 
+    }
+
+
+    /**
+     * List campaigns for OmniStack integration
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function listCampaignsForOmnistack(Request $request): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Get campaigns for this venue
+        $campaigns = Campaign::getCampaignsForOmniStack($venue->id);
+
+        return response()->json([
+            'data' => $campaigns,
+            'message' => 'Campaigns retrieved successfully'
+        ]);
+    }
+
+    /**
+     * Update campaign with external ID from OmniStack
+     *
+     * @param Request $request
+     * @param int $id Campaign ID
+     * @return JsonResponse
+     */
+    public function updateCampaignExternalId(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+            'omnistack_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Find the campaign
+        $campaign = Campaign::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$campaign) {
+            return response()->json(['error' => 'Campaign not found'], 404);
+        }
+
+        // Get current external_ids or initialize as empty array
+        $externalIds = $campaign->external_ids ? json_decode($campaign->external_ids, true) : [];
+
+        // Add the OmniStack ID
+        $externalIds['omniStackId'] = $request->input('omnistack_id');
+
+        // Update the campaign
+        $campaign->external_ids = json_encode($externalIds);
+        $campaign->save();
+
+        return response()->json([
+            'message' => 'Campaign external ID updated successfully',
+            'campaign_id' => $campaign->id
+        ]);
+    }
+
+    /**
+     * Delete a campaign for OmniStack integration
+     *
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function destroyForOmnistack(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        $campaign = Campaign::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$campaign) {
+            return response()->json(['error' => 'Campaign not found'], 404);
+        }
+
+        $campaign->delete();
+
+        return response()->json([
+            'message' => 'Campaign deleted successfully'
+        ]);
     }
 
 
