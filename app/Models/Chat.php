@@ -19,8 +19,14 @@ class Chat extends Model
         'receiver_id',     // for staff/client chats
         'status',
         'order_id',
-        'type'
+        'type',
+        'external_ids'
     ];
+
+    protected $casts = [
+        'external_ids' => 'json',
+    ];
+
 
     const STATUS_ACTIVE = 'active';
     const STATUS_ARCHIVED = 'archived';
@@ -74,5 +80,50 @@ class Chat extends Model
     public function booking(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(Booking::class);
+    }
+
+    /**
+     * Get all chats for OmniStack integration
+     *
+     * @param int $venueId
+     * @return array
+     */
+    public static function getChatsForOmniStack($venueId)
+    {
+        $chats = self::with(['endUser', 'messages' => function($query) {
+            $query->orderBy('created_at', 'desc')->limit(1);
+        }])
+            ->where('venue_id', $venueId)
+            ->where('status', '!=', self::STATUS_DELETED)
+            ->get();
+
+        return $chats->map(function ($chat) {
+            $lastMessage = $chat->messages->first();
+
+            return [
+                'id' => $chat->id,
+                'end_user_id' => $chat->end_user_id,
+                'end_user_name' => $chat->endUser->name ?? 'Unknown',
+                'end_user_email' => $chat->endUser->email ?? null,
+                'venue_user_id' => $chat->venue_user_id,
+                'venue_id' => $chat->venue_id,
+                'booking_id' => $chat->booking_id,
+                'order_id' => $chat->order_id,
+                'status' => $chat->status,
+                'type' => $chat->type,
+                'message_count' => $chat->messages()->count(),
+                'unread_count' => $chat->messages()->where('is_read', false)
+                    ->where('receiver_id', $chat->venue_user_id)
+                    ->count(),
+                'created_at' => $chat->created_at->format('Y-m-d H:i:s'),
+                'updated_at' => $chat->updated_at->format('Y-m-d H:i:s'),
+                'last_message' => $lastMessage ? [
+                    'content' => $lastMessage->content,
+                    'type' => $lastMessage->type,
+                    'sender_id' => $lastMessage->sender_id,
+                    'created_at' => $lastMessage->created_at->format('Y-m-d H:i:s')
+                ] : null
+            ];
+        })->toArray();
     }
 }

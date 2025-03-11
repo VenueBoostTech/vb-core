@@ -1239,4 +1239,67 @@ class BookingController extends Controller
             'booking_id' => $booking->id
         ]);
     }
+
+
+    /**
+     * Delete a booking and associated records for OmniStack integration
+     *
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function destroyForOmniStack(Request $request, $id): JsonResponse
+    {
+
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        $booking = Booking::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$booking) {
+            return response()->json(['error' => 'Booking not found'], 404);
+        }
+
+        // Delete receipt if exists
+        if ($booking->receipt) {
+            $booking->receipt->delete();
+        }
+
+        // Delete price breakdowns
+        $booking->priceBreakdowns()->delete();
+
+        // Delete earn points history
+        $booking->earnPointsHistories()->delete();
+
+        // Delete chat if exists
+        $chat = \App\Models\Chat::where('booking_id', $booking->id)->first();
+        if ($chat) {
+            $chat->delete();
+        }
+
+        // Finally delete the booking
+        $booking->delete();
+
+        return response()->json([
+            'message' => 'Booking deleted successfully'
+        ]);
+    }
 }

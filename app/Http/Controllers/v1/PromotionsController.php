@@ -7,6 +7,7 @@ use App\Models\Discount;
 use App\Models\Product;
 use App\Models\Promotion;
 use App\Models\RentalUnit;
+use App\Models\Restaurant;
 use App\Models\StoreSetting;
 use App\Rules\MaxSpentRule;
 use App\Rules\NumericRangeRule;
@@ -1656,6 +1657,283 @@ class PromotionsController extends Controller
         } while (Coupon::where('code', $code)->exists());
 
         return $code;
+    }
+
+
+    /**
+     * List promotions for OmniStack integration
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function listPromotionsForOmnistack(Request $request): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Get promotions for this venue
+        $promotions = Promotion::getPromotionsForOmniStack($venue->id);
+
+        return response()->json([
+            'data' => $promotions,
+            'message' => 'Promotions retrieved successfully'
+        ]);
+    }
+
+    /**
+     * Update promotion with external ID from OmniStack
+     *
+     * @param Request $request
+     * @param int $id Promotion ID
+     * @return JsonResponse
+     */
+    public function updatePromotionExternalId(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+            'omnistack_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Find the promotion
+        $promotion = Promotion::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$promotion) {
+            return response()->json(['error' => 'Promotion not found'], 404);
+        }
+
+        // Get current external_ids or initialize as empty array
+        $externalIds = $promotion->external_ids ? json_decode($promotion->external_ids, true) : [];
+
+        // Add the OmniStack ID
+        $externalIds['omniStackId'] = $request->input('omnistack_id');
+
+        // Update the promotion
+        $promotion->external_ids = json_encode($externalIds);
+        $promotion->save();
+
+        return response()->json([
+            'message' => 'Promotion external ID updated successfully',
+            'promotion_id' => $promotion->id
+        ]);
+    }
+
+    /**
+     * List discounts for OmniStack integration
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function listDiscountsForOmnistack(Request $request): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Get discounts for this venue
+        $discounts = Discount::getDiscountsForOmniStack($venue->id);
+
+        return response()->json([
+            'data' => $discounts,
+            'message' => 'Discounts retrieved successfully'
+        ]);
+    }
+
+    /**
+     * Update discount with external ID from OmniStack
+     *
+     * @param Request $request
+     * @param int $id Discount ID
+     * @return JsonResponse
+     */
+    public function updateDiscountExternalId(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+            'omnistack_id' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Find the discount
+        $discount = Discount::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$discount) {
+            return response()->json(['error' => 'Discount not found'], 404);
+        }
+
+        // Get current external_ids or initialize as empty array
+        $externalIds = $discount->external_ids ? json_decode($discount->external_ids, true) : [];
+
+        // Add the OmniStack ID
+        $externalIds['omniStackId'] = $request->input('omnistack_id');
+
+        // Update the discount
+        $discount->external_ids = json_encode($externalIds);
+        $discount->save();
+
+        return response()->json([
+            'message' => 'Discount external ID updated successfully',
+            'discount_id' => $discount->id
+        ]);
+    }
+
+    /**
+     * Delete a promotion for OmniStack integration
+     *
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function destroyPromotionForOmnistack(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Find the promotion
+        $promotion = Promotion::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$promotion) {
+            return response()->json(['error' => 'Promotion not found'], 404);
+        }
+
+        // First, update related discounts to remove promotion_id
+        foreach ($promotion->discounts as $discount) {
+            $discount->promotion_id = null;
+            $discount->save();
+        }
+
+        // Then delete the promotion
+        $promotion->delete();
+
+        return response()->json([
+            'message' => 'Promotion deleted successfully'
+        ]);
+    }
+
+    /**
+     * Delete a discount for OmniStack integration
+     *
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function destroyDiscountForOmnistack(Request $request, $id): JsonResponse
+    {
+        // Validate incoming request
+        $validator = Validator::make($request->all(), [
+            'omnigateway_api_key' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 400);
+        }
+
+        // Get the API key from the request
+        $omnigatewayApiKey = $request->input('omnigateway_api_key');
+
+        // Find the venue by the API key
+        $venue = Restaurant::where('omnigateway_api_key', $omnigatewayApiKey)->first();
+
+        if (!$venue) {
+            return response()->json(['error' => 'Invalid API key or venue not found'], 401);
+        }
+
+        // Find the discount
+        $discount = Discount::where('id', $id)
+            ->where('venue_id', $venue->id)
+            ->first();
+
+        if (!$discount) {
+            return response()->json(['error' => 'Discount not found'], 404);
+        }
+
+        // Delete the discount
+        $discount->delete();
+
+        return response()->json([
+            'message' => 'Discount deleted successfully'
+        ]);
     }
 
 }

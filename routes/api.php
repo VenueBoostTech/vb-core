@@ -1499,6 +1499,33 @@ Route::middleware(['omni_stack_gateway_api_key', 'api'])->prefix('v1')->group(fu
         Route::post('/{id}/external-id', [App\Http\Controllers\v1\AccommodationController::class, 'updateRentalUnitExternalId']);
         Route::get('/bookings', [App\Http\Controllers\v1\BookingController::class, 'listBookingsForOmnistack']);
         Route::post('/bookings/{id}/external-id', [App\Http\Controllers\v1\BookingController::class, 'updateBookingExternalId']);
+        Route::delete('/guests/{id}', [App\Http\Controllers\v1\GuestsController::class, 'destroyForOmnistack']);
+        Route::delete('/bookings/{id}', [App\Http\Controllers\v1\BookingController::class, 'destroyForOmnistack']);
+    });
+
+    Route::group(['prefix' => 'chats-os'], function () {
+        Route::get('/', [App\Http\Controllers\v1\ChatController::class, 'listChatsForOmnistack']);
+        Route::post('/{id}/external-id', [App\Http\Controllers\v1\ChatController::class, 'updateChatExternalId']);
+        Route::delete('/{id}', [App\Http\Controllers\v1\ChatController::class, 'destroyForOmnistack']);
+    });
+
+
+    Route::group(['prefix' => 'campaigns-os'], function () {
+        Route::get('/', [App\Http\Controllers\v1\CampaignController::class, 'listCampaignsForOmnistack']);
+        Route::post('/{id}/external-id', [App\Http\Controllers\v1\CampaignController::class, 'updateCampaignExternalId']);
+        Route::delete('/{id}', [App\Http\Controllers\v1\CampaignController::class, 'destroyForOmnistack']);
+    });
+
+    Route::group(['prefix' => 'promotions-os'], function () {
+        Route::get('/', [App\Http\Controllers\v1\PromotionsController::class, 'listPromotionsForOmnistack']);
+        Route::post('/{id}/external-id', [App\Http\Controllers\v1\PromotionsController::class, 'updatePromotionExternalId']);
+        Route::delete('/{id}', [App\Http\Controllers\v1\PromotionsController::class, 'destroyPromotionForOmnistack']);
+    });
+
+    Route::group(['prefix' => 'discounts-os'], function () {
+        Route::get('/', [App\Http\Controllers\v1\PromotionsController::class, 'listDiscountsForOmnistack']);
+        Route::post('/{id}/external-id', [App\Http\Controllers\v1\PromotionsController::class, 'updateDiscountExternalId']);
+        Route::delete('/{id}', [App\Http\Controllers\v1\PromotionsController::class, 'destroyDiscountForOmnistack']);
     });
 });
 
