@@ -434,10 +434,12 @@ class AccommodationController extends Controller
         $facilities = Facility::getFacilitiesGroupedByCategory();
 
         $icsUrl = $rentalUnit->getIcsUrl();
+        $icsUrlHubAndSpoke = $rentalUnit->getIcsHubAndSpokeUrl();
         return response()->json([
             'rental_unit' => $responseRentalUnit,
             'url' => $url,
             'ics_url' => $icsUrl,
+            'ics_url_hub_spoke' => $icsUrlHubAndSpoke,
             'message' => 'Rental Unit retrieved successfully',
             'facilities' => $facilities,
             'languages' => Language::all(),

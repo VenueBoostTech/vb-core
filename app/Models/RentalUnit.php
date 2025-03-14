@@ -158,6 +158,18 @@ class RentalUnit extends Model
         ]);
     }
 
+    public function getIcsHubAndSpokeUrl()
+    {
+        if (!$this->ics_token) {
+            $this->generateIcsToken();
+        }
+        $obfuscatedId = $this->obfuscateId();
+        return route('rental-unit.ics-complete', [
+            'obfuscatedId' => $obfuscatedId,
+            'token' => $this->ics_token
+        ]);
+    }
+
     private function obfuscateId()
     {
         $timestamp = now()->timestamp;

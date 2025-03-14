@@ -4,6 +4,8 @@ namespace App\Http\Controllers\v3;
 
 use App\Exceptions\CustomException;
 use App\Http\Controllers\Controller;
+use App\Jobs\FinalizeSyncJob;
+use App\Jobs\SyncProductBatchJob;
 use App\Models\ActivityRetail;
 use App\Models\Brand;
 use App\Models\Collection;
@@ -1411,7 +1413,7 @@ class InventorySyncController extends Controller
                     // break; // No more data to process
                     return response()->json(['message' => 'No more data to process'], 500);
                 }
-                
+
                 error_log("page $page");
 
                 $variations = $bybestData['data'];
@@ -1445,7 +1447,7 @@ class InventorySyncController extends Controller
                             $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
 
                             // $product = Product::withTrashed()->where('bybest_id', $item['product_id'])->first();
-                            
+
                             $attrOption = VbStoreProductVariant::updateOrCreate(
                                 ['bybest_id' => $item['id']],
                                 [
@@ -2319,6 +2321,146 @@ class InventorySyncController extends Controller
             'skipped_count' => $skippedCount,
             'total_pages' => isset($bybestData['total_pages']) ? $bybestData['total_pages'] : null,
             'current_page' => isset($bybestData['current_page']) ? $bybestData['current_page'] : null
+        ], 200);
+    }
+
+
+    /**
+     * Trigger a parallel product sync operation
+     */
+    /**
+     * Trigger a parallel product sync operation
+     */
+    public function parallelProductSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        // Get sync parameters
+        $totalPages = $request->input('total_pages', null);
+        $concurrency = $request->input('concurrency', 5); // Number of parallel jobs
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // If total pages not provided, get it from the API
+            if (!$totalPages) {
+                $response = Http::withHeaders([
+                    'X-App-Key' => $this->bybestApiKey
+                ])->get($this->bybestApiUrl . 'products-sync', [
+                    'page' => 1,
+                    'per_page' => 1 // We just need pagination info
+                ]);
+
+                if (!$response->successful()) {
+                    return response()->json(['message' => 'Failed to fetch pagination data from API'], 500);
+                }
+
+                $data = $response->json();
+                $totalPages = $data['total_pages'] ?? 1;
+            }
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-sync-' . $batchId, // Generate a unique slug
+                'type' => 'product',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue - making sure to use the right pivot attributes
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch jobs in batches to limit concurrency
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                SyncProductBatchJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+
+                // Update progress after each batch
+                if ($dispatchedCount % 10 == 0 || $page == $totalPages) {
+                    \Log::info("Dispatched sync jobs", [
+                        'batch_id' => $batchId,
+                        'dispatched' => $dispatchedCount,
+                        'total_pages' => $totalPages
+                    ]);
+                }
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5)); // Give time for all sync jobs to complete
+
+            return response()->json([
+                'message' => 'Parallel product sync initiated successfully',
+                'batch_id' => $batchId,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            \Log::error('Error initiating parallel sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Check the status of a running sync operation
+     */
+    public function checkSyncStatus(Request $request)
+    {
+        $batchId = $request->input('batch_id');
+
+        if (!$batchId) {
+            return response()->json(['message' => 'Batch ID is required'], 400);
+        }
+
+        $syncRecord = InventorySync::where('batch_id', $batchId)->first();
+
+        if (!$syncRecord) {
+            return response()->json(['message' => 'Sync record not found'], 404);
+        }
+
+        // Calculate progress
+        $progress = ($syncRecord->processed_pages / max(1, $syncRecord->total_pages)) * 100;
+
+        return response()->json([
+            'batch_id' => $batchId,
+            'status' => $syncRecord->status,
+            'total_pages' => $syncRecord->total_pages,
+            'processed_pages' => $syncRecord->processed_pages,
+            'progress_percentage' => round($progress, 2),
+            'started_at' => $syncRecord->started_at,
+            'completed_at' => $syncRecord->completed_at,
+            'elapsed_time' => $syncRecord->completed_at ?
+                $syncRecord->started_at->diffInSeconds($syncRecord->completed_at) :
+                ($syncRecord->started_at ? now()->diffInSeconds($syncRecord->started_at) : 0)
         ], 200);
     }
 }

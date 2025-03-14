@@ -393,6 +393,63 @@ class CalendarConnectionController extends Controller
             ->header('Content-Disposition', 'attachment; filename="' . $rentalUnit->name . '.ics"');
     }
 
+    public function generateIcsComplete($obfuscatedId, $token): \Illuminate\Http\Response|\Illuminate\Contracts\Foundation\Application|\Illuminate\Contracts\Routing\ResponseFactory
+    {
+        $rentalUnitId = RentalUnit::deobfuscateId($obfuscatedId);
+        $rentalUnit = RentalUnit::where('id', $rentalUnitId)
+            ->where('ics_token', $token)
+            ->firstOrFail();
+
+        $calendar = Calendar::create($rentalUnit->name)
+            ->refreshInterval(5)
+            ->productIdentifier('VenueBoost');
+
+        // Retrieve native bookings for the next two years
+        $twoYearsFromNow = now()->addYears(2);
+        $bookings = Booking::where('rental_unit_id', $rentalUnit->id)
+            ->where('check_out_date', '>=', now())
+            ->where('check_in_date', '<=', $twoYearsFromNow)
+            ->orderBy('check_in_date')
+            ->get();
+
+        // Add native bookings to calendar
+        foreach ($bookings as $booking) {
+            $event = Event::create()
+                ->name('Blocked') // Use 'Blocked' instead of 'Booked'
+                ->uniqueIdentifier('native-' . $booking->id) // Prefix with 'native-' to avoid ID conflicts
+                ->startsAt(Carbon::parse($booking->check_in_date))
+                ->endsAt(Carbon::parse($booking->check_out_date));
+
+            $calendar->event($event);
+        }
+
+        // Retrieve third-party bookings for the next two years
+        $thirdPartyBookings = ThirdPartyBooking::where('rental_unit_id', $rentalUnit->id)
+            ->where('end_date', '>=', now())
+            ->where('start_date', '<=', $twoYearsFromNow)
+            ->orderBy('start_date')
+            ->get();
+
+        // Add third-party bookings to calendar
+        foreach ($thirdPartyBookings as $booking) {
+            $event = Event::create()
+                ->name($booking->title) // Use the original title from the third-party
+                ->uniqueIdentifier('third-party-' . $booking->id) // Prefix with 'third-party-' to avoid ID conflicts
+                ->startsAt(Carbon::parse($booking->start_date))
+                ->endsAt(Carbon::parse($booking->end_date));
+
+            if (!empty($booking->description)) {
+                $event->description($booking->description);
+            }
+
+            $calendar->event($event);
+        }
+
+        return response($calendar->get())
+            ->header('Content-Type', 'text/calendar; charset=utf-8')
+            ->header('Content-Disposition', 'attachment; filename="' . $rentalUnit->name . '-complete.ics"');
+    }
+
     public function logs(Request $request, $rentalUnitId): \Illuminate\Http\JsonResponse
     {
 
