@@ -24,11 +24,25 @@ class RefreshCalendarConnections extends Command
     public function handle()
     {
         $connections = [
-            ['rentalUnitId' => 2, 'connectionId' => 11],
-            ['rentalUnitId' => 4, 'connectionId' => 10],
-            ['rentalUnitId' => 5, 'connectionId' => 5],
-            ['rentalUnitId' => 7, 'connectionId' => 6],
-            ['rentalUnitId' => 8, 'connectionId' => 7],
+            // Rental unit 2
+            ['rentalUnitId' => 2, 'connectionId' => 11], // Airbnb connection
+            ['rentalUnitId' => 2, 'connectionId' => 15], // Booking.com connection
+
+            // Rental unit 4
+            ['rentalUnitId' => 4, 'connectionId' => 10], // Airbnb connection
+            ['rentalUnitId' => 4, 'connectionId' => 16], // Booking.com connection
+
+            // Rental unit 5
+            ['rentalUnitId' => 5, 'connectionId' => 5], // Airbnb connection
+            ['rentalUnitId' => 5, 'connectionId' => 12], // Booking.com connection
+
+            // Rental unit 7
+            ['rentalUnitId' => 7, 'connectionId' => 6], // Airbnb connection
+            ['rentalUnitId' => 7, 'connectionId' => 14], // Booking.com connection
+
+            // Rental unit 8
+            ['rentalUnitId' => 8, 'connectionId' => 7], // Airbnb connection
+            ['rentalUnitId' => 8, 'connectionId' => 13], // Booking.com connection
         ];
 
         foreach ($connections as $connection) {

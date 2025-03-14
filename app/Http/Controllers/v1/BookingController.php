@@ -38,7 +38,7 @@ class BookingController extends Controller
 {
 
     // Add static property to control mail/SMS sending
-    private static $activateMS = false;  // Set to false by default
+    private static $activateMS = true;  // Set to false by default
 
     public function index(Request $request): \Illuminate\Http\JsonResponse
     {
