@@ -469,6 +469,9 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::post('/bybest-sliders/', 'App\Http\Controllers\v3\BbWebSyncController@slidersSync');
             Route::post('/bybest-mainmenus/', 'App\Http\Controllers\v3\BbWebSyncController@mainMenuSync');
 
+            Route::post('/parallel-product-sync','App\Http\Controllers\v3\InventorySyncController@parallelProductSync');
+            Route::get('/sync-status', 'App\Http\Controllers\v3\InventorySyncController@checkSyncStatus');
+
         });
 
         Route::group(['prefix' => 'venue'], function () {
@@ -2127,6 +2130,9 @@ Route::post('api/v1/white-label/bb/bkt-webhook', 'App\Http\Controllers\v3\Whitel
 
 Route::get('api/v1/calendar/{obfuscatedId}/{token}.ics', [CalendarConnectionController::class, 'generateIcs'])
     ->name('rental-unit.ics');
+
+Route::get('api/v1/calendar-complete/{obfuscatedId}/{token}.ics', [CalendarConnectionController::class, 'generateIcsComplete'])
+    ->name('rental-unit.ics-complete');
 
 
 

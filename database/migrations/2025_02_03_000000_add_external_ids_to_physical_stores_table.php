@@ -1,4 +1,3 @@
-// database/migrations/2025_02_03_000000_add_external_ids_to_physical_stores_table.php
 <?php
 
 use Illuminate\Database\Migrations\Migration;
