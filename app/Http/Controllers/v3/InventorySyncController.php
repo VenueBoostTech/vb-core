@@ -2,16 +2,22 @@
 
 namespace App\Http\Controllers\v3;
 
-use App\Exceptions\CustomException;
 use App\Http\Controllers\Controller;
 use App\Jobs\FinalizeSyncJob;
+use App\Jobs\ProductAttributeSyncJob;
+use App\Jobs\ProductCategorySyncJob;
+use App\Jobs\ProductCollectionSyncJob;
+use App\Jobs\ProductGallerySyncJob;
+use App\Jobs\ProductGroupSyncJob;
+use App\Jobs\ProductStockSyncJob;
+use App\Jobs\ProductVariantAttributeSyncJob;
+use App\Jobs\ProductVariantSyncJob;
 use App\Jobs\SyncProductBatchJob;
 use App\Models\ActivityRetail;
 use App\Models\Brand;
 use App\Models\Collection;
 use App\Models\Group;
 use App\Models\InventorySync;
-use App\Models\Photo;
 use App\Models\Product;
 use App\Models\Category;
 use App\Models\InventoryRetail;
@@ -31,11 +37,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
-use GuzzleHttp\Promise;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
-use App\Jobs\UploadCollectionPhotoJob;
 use App\Jobs\UploadPhotoJob;
 
 
@@ -258,6 +260,7 @@ class InventorySyncController extends Controller
     }
 
 
+    // Validated
     private function syncCategory($bybest_category, $venue_id)
     {
         $categoryName = $bybest_category['name'] ?? null;
@@ -278,6 +281,7 @@ class InventorySyncController extends Controller
 
 
 
+    // Validated
     private function syncProduct($bybest_product, $category_id, $venue_id)
     {
         $brand = Brand::firstOrCreate(
@@ -309,12 +313,12 @@ class InventorySyncController extends Controller
             'is_for_retail' => true,
             'article_no' => $bybest_product['article_no'],
             'restaurant_id' => $venue_id,
-            'product_id' => $bybest_product['id'],
+            'bybest_id' => $bybest_product['id'],
         ];
 
 
         $product = Product::updateOrCreate(
-            ['id' => $bybest_product['id']],  // Remove restaurant_id from here
+            ['id' => $bybest_product['id']],
             $product_data
         );
 
@@ -328,7 +332,7 @@ class InventorySyncController extends Controller
     private function syncInventoryRetail($bybest_product, $product_id, $venue_id): void
     {
         try {
-                    // Find existing inventory record by SKU and Venue
+            // Find existing inventory record by SKU and Venue
             $existing_inventory = InventoryRetail::where('sku', $bybest_product['product_sku'] ?? '')
                 ->where('venue_id', $venue_id)
                 ->first();
@@ -385,10 +389,11 @@ class InventorySyncController extends Controller
                 ]);
             }
         } catch (\Throwable $th) {
-            dd($th);
+        // do nothing
         }
     }
 
+    // Validated
     public function collectionSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
@@ -398,122 +403,113 @@ class InventorySyncController extends Controller
         // Get parameters from request with default values
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        // $batchSize = $request->input('batch_size', 50);
         $skippedCount = 0;
         $processedCount = 0;
 
-        // do {
-            try {
+        try {
 
-                $response = Http::withHeaders([
-                    'X-App-Key' => $this->bybestApiKey
-                ])->get(
-                    $this->bybestApiUrl . 'collection-sync',
-                [
-                    'page' => $page,
-                    'per_page' => $perPage
-                ]);
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get(
+                $this->bybestApiUrl . 'collection-sync',
+            [
+                'page' => $page,
+                'per_page' => $perPage
+            ]);
 
-                if (!$response->successful()) {
-                    return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
-                }
-
-                $bybestCollections = $response->json();
-
-                if (empty($bybestCollections) || !isset($bybestCollections['data'])) {
-                    // break; // No more collections to process
-                    return response()->json(['message' => 'No more data to process'], 500);
-                }
-
-                $collections = $bybestCollections['data']; // Assuming 'data' contains the actual collections
-
-                // foreach (array_chunk($collections, $batchSize) as $batch) {
-                    // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($collections as $bybestCollection) {
-                            DB::beginTransaction();
-                            try {
-                                \Log::info('Processing collection', ['collection' => $bybestCollection]);
-
-                                // Make sure the required fields are available
-                                if (!isset($bybestCollection['id'])) {
-                                    \Log::error('Collection missing id', ['collection' => $bybestCollection]);
-                                    $skippedCount++;
-                                    continue;
-                                }
-
-
-                                $json_name = json_decode($bybestCollection['name']);
-                                $json_desc = json_decode($bybestCollection['description']);
-
-
-                                $name = (isset($json_name->en) && isset($json_name->en) != null) ? $json_name->en : '';
-                                $name_al = (isset($json_name->sq) && isset($json_name->sq) != null) ? $json_name->sq : '';
-                                $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
-                                $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
-
-
-                                $collection = Collection::withTrashed()->updateOrCreate(
-                                    ['bybest_id' => $bybestCollection['id']],
-                                    [
-                                        'name' => $name,
-                                        'name_al' => $name_al,
-                                        'description' => $desc,
-                                        'description_al' => $desc_al,
-                                        'slug' => $bybestCollection['collection_url'],
-                                        //'logo_path' => 'https://admin.bybest.shop/storage/collections/' . $bybestCollection['photo'],
-                                        'venue_id' => $venue->id,
-                                        'bybest_id' => $bybestCollection['id'],
-                                        'created_at' => $bybestCollection['created_at'],
-                                        'updated_at' => $bybestCollection['updated_at'],
-                                        'deleted_at' => $bybestCollection['deleted_at'] ? Carbon::parse($bybestCollection['deleted_at']) : null
-                                    ]
-                                );
-
-                                // Dispatch job for photo upload
-                                if ($collection->wasRecentlyCreated && $bybestCollection['photo']) {
-                                    \Log::info('Dispatching UploadCollectionPhotoJob', [
-                                        'collection_id' => $collection->id,
-                                        'photo_url' => $bybestCollection['photo'],
-                                    ]);
-
-                                    UploadPhotoJob::dispatch($collection, 'https://admin.bybest.shop/storage/collections/' . $bybestCollection['photo'], 'logo_path', $venue);
-                                }
-
-                                $processedCount++;
-                                DB::commit();
-                            } catch (\Exception $e) {
-                                $skippedCount++;
-                                DB::rollBack();
-                            }
-                        }
-                    // });
-                // }
-
-                \Log::info("Processed {$processedCount} collections so far.");
-
-                // $page++;
-            } catch (\Throwable $th) {
-                \Log::error('Error in collection sync', [
-                    'error' => $th->getMessage(),
-                    'trace' => $th->getTraceAsString()
-                ]);
-                return response()->json([
-                    "message" => "Error in collection sync",
-                    "error" => $th->getMessage()
-                ], 503);
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
             }
-        // } while (count($collections) == $perPage); // Use $collections here
+
+            $bybestCollections = $response->json();
+
+            if (empty($bybestCollections) || !isset($bybestCollections['data'])) {
+                // break; // No more collections to process
+                return response()->json(['message' => 'No more data to process'], 500);
+            }
+
+            $collections = $bybestCollections['data'];
+
+                    foreach ($collections as $bybestCollection) {
+                        DB::beginTransaction();
+                        try {
+                            \Log::info('Processing collection', ['collection' => $bybestCollection]);
+
+                            // Make sure the required fields are available
+                            if (!isset($bybestCollection['id'])) {
+                                \Log::error('Collection missing id', ['collection' => $bybestCollection]);
+                                $skippedCount++;
+                                continue;
+                            }
+
+
+                            $json_name = json_decode($bybestCollection['name']);
+                            $json_desc = json_decode($bybestCollection['description']);
+
+
+                            $name = (isset($json_name->en) && isset($json_name->en) != null) ? $json_name->en : '';
+                            $name_al = (isset($json_name->sq) && isset($json_name->sq) != null) ? $json_name->sq : '';
+                            $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
+                            $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
+
+
+                            $collection = Collection::withTrashed()->updateOrCreate(
+                                ['bybest_id' => $bybestCollection['id']],
+                                [
+                                    'name' => $name,
+                                    'name_al' => $name_al,
+                                    'description' => $desc,
+                                    'description_al' => $desc_al,
+                                    'slug' => $bybestCollection['collection_url'],
+                                    'venue_id' => $venue->id,
+                                    'bybest_id' => $bybestCollection['id'],
+                                    'created_at' => $bybestCollection['created_at'],
+                                    'updated_at' => $bybestCollection['updated_at'],
+                                    'deleted_at' => $bybestCollection['deleted_at'] ? Carbon::parse($bybestCollection['deleted_at']) : null
+                                ]
+                            );
+
+                            // Dispatch job for photo upload
+                            if ($collection->wasRecentlyCreated && $bybestCollection['photo']) {
+                                \Log::info('Dispatching UploadCollectionPhotoJob', [
+                                    'collection_id' => $collection->id,
+                                    'photo_url' => $bybestCollection['photo'],
+                                ]);
+
+                                UploadPhotoJob::dispatch($collection, 'https://admin.bybest.shop/storage/collections/' . $bybestCollection['photo'], 'logo_path', $venue);
+                            }
+
+                            $processedCount++;
+                            DB::commit();
+                        } catch (\Exception $e) {
+                            $skippedCount++;
+                            DB::rollBack();
+                        }
+                    }
+
+            \Log::info("Processed {$processedCount} collections so far.");
+
+        } catch (\Throwable $th) {
+            \Log::error('Error in collection sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+            return response()->json([
+                "message" => "Error in collection sync",
+                "error" => $th->getMessage()
+            ], 503);
+        }
 
         return response()->json([
             'message' => 'Collections sync completed successfully',
             'processed_count' => $processedCount,
             'skipped_count' => $skippedCount,
-            'total_pages' => isset($bybestCollections['total_pages']) ? $bybestCollections['total_pages'] : null,
-            'current_page' => isset($bybestCollections['current_page']) ? $bybestCollections['current_page'] : null
+            'total_pages' => $bybestCollections['total_pages'] ?? null,
+            'current_page' => $bybestCollections['current_page'] ?? null
         ], 200);
     }
 
-    public function productSync(Request $request)
+    public function productSync(Request $request): \Illuminate\Http\JsonResponse
     {
         $venue = $this->venueService->adminAuthCheck();
         if (!@$venue->id) {
@@ -521,165 +517,159 @@ class InventorySyncController extends Controller
         }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        // $batchSize = $request->input('batch_size', 50);
         $skippedCount = 0;
         $processedCount = 0;
 
         ini_set('max_execution_time', 3000000);
-        // do {
-            try {
 
-                error_log("log page $page");
+        try {
 
-                $response = Http::withHeaders([
-                    'X-App-Key' => $this->bybestApiKey
-                ])->get($this->bybestApiUrl . 'products-sync', [
-                    'page' => $page,
-                    'per_page' => $perPage
-                ]);
+            error_log("log page $page");
 
-                if (!$response->successful()) {
-                    return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
-                }
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'products-sync', [
+                'page' => $page,
+                'per_page' => $perPage
+            ]);
 
-                $bybestData = $response->json();
-
-                if (empty($bybestData) || !isset($bybestData['data'])) {
-                    return response()->json(['message' => 'No more data to process'], 500);
-                }
-
-                $products = $bybestData['data'];
-
-                $brandIds = Brand::withTrashed()->pluck('bybest_id','id')->toArray();
-                if (count($brandIds) > 0) {
-                    $brandIds = array_filter($brandIds);
-                    if (count($brandIds) == 0) {
-                        return response()->json(['message' => 'No brands are exists'], 500);
-                    }
-                }
-
-                // foreach (array_chunk($products, $batchSize) as $batch) {
-                    foreach ($products as $item) {
-                        // DB::transaction(function () use ($item, $venue, &$skippedCount, &$processedCount) {
-                            DB::beginTransaction();
-                            try {
-                                \Log::info('Processing product', ['item' => $item]);
-
-                                // Make sure the required fields are available
-                                if (!isset($item['id'])) {
-                                    \Log::error('Product missing id', ['item' => $item]);
-                                    $skippedCount++;
-                                    continue;
-                                }
-                                error_log("Processing product " . $item['id']);
-
-                                $json_title = json_decode($item['product_name']);
-                                $json_shortdesc = json_decode($item['product_short_description']);
-                                $json_desc = json_decode($item['product_long_description']);
-
-                                $title = (isset($json_title->en) && $json_title->en != null) ? $json_title->en : '';
-                                $title_al = (isset($json_title->sq) && isset($json_title->en) != null) ? $json_title->sq : '';
-                                $shortdesc = (isset($json_shortdesc->en) && isset($json_shortdesc->en) != null) ? $json_shortdesc->en : '';
-                                $shortdesc_al = (isset($json_shortdesc->sq) && isset($json_shortdes->sq) != null) ? $json_shortdesc->sq : '';
-                                $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
-                                $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
-
-                                // $brand = Brand::withTrashed()->where('bybest_id', $item['brand_id'])->first();
-                                $synced_product = Product::withTrashed()->updateOrCreate(
-                                    ['bybest_id' => $item['id']],
-                                    [
-                                        'title' => $title,
-                                        'title_al' => $title_al,
-                                        'description' => $desc,
-                                        'description_al' => $desc_al,
-                                        'short_description' => $shortdesc,
-                                        'short_description_al' => $shortdesc_al,
-                                        //'image_path' => 'https://admin.bybest.shop/storage/products/' . $item['product_image'],
-                                        'image_thumbnail_path' => null,
-                                        'price' => $item['regular_price'],
-                                        'order_method' => null,
-                                        'available' => $item['product_status'] == 1 ? 1 : 0,
-                                        'is_for_retail' => 0,
-                                        'article_no' => $item['article_no'],
-                                        'additional_code' => null,
-                                        'sale_price' => $item['sale_price'],
-                                        'date_sale_start' => $item['date_sale_start'],
-                                        'date_sale_end' => $item['date_sale_end'],
-                                        'product_url' => $item['product_url'],
-                                        'product_type' => $item['product_type'] == 1 ? 'single' : 'variable',
-                                        'weight' => $item['weight'],
-                                        'length' => $item['length'],
-                                        'width' => $item['width'],
-                                        'height' => $item['height'],
-                                        'unit_measure' => null,
-                                        'scan_time' => null,
-                                        'featured' => $item['featured'],
-                                        'is_best_seller' => $item['is_best_seller'],
-                                        'product_tags' => $item['product_tags'],
-                                        'product_sku' => $item['product_sku'],
-                                        'sku_alpha' => $item['sku_alpha'],
-                                        'currency_alpha' => $item['currency_alpha'],
-                                        'tax_code_alpha' => $item['tax_code_alpha'],
-                                        'price_without_tax_alpha' => $item['price_without_tax_alpha'],
-                                        'unit_code_alpha' => $item['unit_code_alpha'],
-                                        'warehouse_alpha' => $item['warehouse_alpha'],
-                                        'bb_points' => $item['bb_points'],
-                                        'product_status' => $item['product_status'],
-                                        'enable_stock' => $item['enable_stock'],
-                                        'product_stock_status' => $item['product_stock_status'],
-                                        'sold_invidually' => $item['sold_invidually'],
-                                        'stock_quantity' => $item['stock_quantity'],
-                                        'low_quantity' => $item['low_quantity'],
-                                        'shipping_class' => $item['shipping_class'],
-                                        'purchase_note' => $item['purchase_note'],
-                                        'menu_order' => $item['menu_order'],
-                                        'allow_back_order' => $item['allow_back_order'],
-                                        'allow_customer_review' => $item['allow_customer_review'],
-                                        'syncronize_at' => $item['syncronize_at'],
-                                        'brand_id' => array_search($item['brand_id'], $brandIds) !== false ? array_search($item['brand_id'], $brandIds) : null,
-                                        'restaurant_id' => $venue->id,
-                                        'bybest_id' => $item['id'],
-                                        'third_party_product_id' => null,
-                                        'created_at' => $item['created_at'],
-                                        'updated_at' => $item['updated_at'],
-                                        'deleted_at' => $item['deleted_at']
-                                    ]
-                                );
-
-                                // Dispatch job for photo upload
-                                if ($item['product_image']) {
-                                    \Log::info('Dispatching UploadPhotoJob', [
-                                        'product_id' => $synced_product->id,
-                                        'photo_url' => $item['product_image'],
-                                    ]);
-                                    UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
-                                }
-                                $processedCount++;
-                                DB::commit();
-                            } catch (\Exception $e) {
-                                $skippedCount++;
-                                DB::rollBack();
-                            }
-                        // });
-                    }
-                // }
-
-                \Log::info("Processed {$processedCount} products so far.");
-
-                // $page++;
-            } catch (\Throwable $th) {
-                \Log::error('Error in product sync', [
-                    'error' => $th->getMessage(),
-                    'trace' => $th->getTraceAsString()
-                ]);
-
-                error_log('Error in product sync' . $th->getMessage());
-                return response()->json([
-                    "message" => "Error in products sync",
-                    "error" => $th->getMessage()
-                ], 503);
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
             }
-        // } while (count($products) == $perPage);
+
+            $bybestData = $response->json();
+
+            if (empty($bybestData) || !isset($bybestData['data'])) {
+                return response()->json(['message' => 'No more data to process'], 500);
+            }
+
+            $products = $bybestData['data'];
+
+            $brandIds = Brand::withTrashed()->pluck('bybest_id','id')->toArray();
+            if (count($brandIds) > 0) {
+                $brandIds = array_filter($brandIds);
+                if (count($brandIds) == 0) {
+                    return response()->json(['message' => 'No brands are exists'], 500);
+                }
+            }
+
+                foreach ($products as $item) {
+                        DB::beginTransaction();
+                        try {
+                            \Log::info('Processing product', ['item' => $item]);
+
+                            // Make sure the required fields are available
+                            if (!isset($item['id'])) {
+                                \Log::error('Product missing id', ['item' => $item]);
+                                $skippedCount++;
+                                continue;
+                            }
+                            error_log("Processing product " . $item['id']);
+
+                            $json_title = json_decode($item['product_name']);
+                            $json_shortdesc = json_decode($item['product_short_description']);
+                            $json_desc = json_decode($item['product_long_description']);
+
+                            $title = (isset($json_title->en) && $json_title->en != null) ? $json_title->en : '';
+                            $title_al = (isset($json_title->sq) && isset($json_title->en) != null) ? $json_title->sq : '';
+                            $shortdesc = (isset($json_shortdesc->en) && isset($json_shortdesc->en) != null) ? $json_shortdesc->en : '';
+                            $shortdesc_al = (isset($json_shortdesc->sq) && isset($json_shortdes->sq) != null) ? $json_shortdesc->sq : '';
+                            $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
+                            $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
+
+                            // $brand = Brand::withTrashed()->where('bybest_id', $item['brand_id'])->first();
+                            $synced_product = Product::withTrashed()->updateOrCreate(
+                                ['bybest_id' => $item['id']],
+                                [
+                                    'title' => $title,
+                                    'title_al' => $title_al,
+                                    'description' => $desc,
+                                    'description_al' => $desc_al,
+                                    'short_description' => $shortdesc,
+                                    'short_description_al' => $shortdesc_al,
+                                    'image_thumbnail_path' => null,
+                                    'price' => $item['regular_price'],
+                                    'order_method' => null,
+                                    'available' => $item['product_status'] == 1 ? 1 : 0,
+                                    'is_for_retail' => 0,
+                                    'article_no' => $item['article_no'],
+                                    'additional_code' => null,
+                                    'sale_price' => $item['sale_price'],
+                                    'date_sale_start' => $item['date_sale_start'],
+                                    'date_sale_end' => $item['date_sale_end'],
+                                    'product_url' => $item['product_url'],
+                                    'product_type' => $item['product_type'] == 1 ? 'single' : 'variable',
+                                    'weight' => $item['weight'],
+                                    'length' => $item['length'],
+                                    'width' => $item['width'],
+                                    'height' => $item['height'],
+                                    'unit_measure' => null,
+                                    'scan_time' => null,
+                                    'featured' => $item['featured'],
+                                    'is_best_seller' => $item['is_best_seller'],
+                                    'product_tags' => $item['product_tags'],
+                                    'product_sku' => $item['product_sku'],
+                                    'sku_alpha' => $item['sku_alpha'],
+                                    'currency_alpha' => $item['currency_alpha'],
+                                    'tax_code_alpha' => $item['tax_code_alpha'],
+                                    'price_without_tax_alpha' => $item['price_without_tax_alpha'],
+                                    'unit_code_alpha' => $item['unit_code_alpha'],
+                                    'warehouse_alpha' => $item['warehouse_alpha'],
+                                    'bb_points' => $item['bb_points'],
+                                    'product_status' => $item['product_status'],
+                                    'enable_stock' => $item['enable_stock'],
+                                    'product_stock_status' => $item['product_stock_status'],
+                                    'sold_invidually' => $item['sold_invidually'],
+                                    'stock_quantity' => $item['stock_quantity'],
+                                    'low_quantity' => $item['low_quantity'],
+                                    'shipping_class' => $item['shipping_class'],
+                                    'purchase_note' => $item['purchase_note'],
+                                    'menu_order' => $item['menu_order'],
+                                    'allow_back_order' => $item['allow_back_order'],
+                                    'allow_customer_review' => $item['allow_customer_review'],
+                                    'syncronize_at' => $item['syncronize_at'],
+                                    'brand_id' => array_search($item['brand_id'], $brandIds) !== false ? array_search($item['brand_id'], $brandIds) : null,
+                                    'restaurant_id' => $venue->id,
+                                    'bybest_id' => $item['id'],
+                                    'third_party_product_id' => null,
+                                    'created_at' => $item['created_at'],
+                                    'updated_at' => $item['updated_at'],
+                                    'deleted_at' => $item['deleted_at']
+                                ]
+                            );
+
+                            // Dispatch job for photo upload
+                            if ($item['product_image']) {
+                                \Log::info('Dispatching UploadPhotoJob', [
+                                    'product_id' => $synced_product->id,
+                                    'photo_url' => $item['product_image'],
+                                ]);
+                                UploadPhotoJob::dispatch($synced_product, 'https://admin.bybest.shop/storage/products/' . $item['product_image'], 'image_path', $venue);
+                            }
+                            $processedCount++;
+                            DB::commit();
+                        } catch (\Exception $e) {
+                            $skippedCount++;
+                            DB::rollBack();
+                        }
+
+                }
+
+            \Log::info("Processed {$processedCount} products so far.");
+
+        } catch (\Throwable $th) {
+            \Log::error('Error in product sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            error_log('Error in product sync' . $th->getMessage());
+            return response()->json([
+                "message" => "Error in products sync",
+                "error" => $th->getMessage()
+            ], 503);
+        }
+
 
         return response()->json([
             'message' => 'Products sync completed successfully',
@@ -700,134 +690,133 @@ class InventorySyncController extends Controller
         $processedCount = 0;
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        $batchSize = $request->input('batch_size', 50);
         ini_set('max_execution_time', 3000000);
 
-        // do {
-            try {
 
-                $response = Http::withHeaders([
-                    'X-App-Key' => $this->bybestApiKey
-                ])->get($this->bybestApiUrl . 'brands-sync', [
-                    'page' => $page,
-                    'per_page' => $perPage
-                ]);
+        try {
+
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'brands-sync', [
+                'page' => $page,
+                'per_page' => $perPage
+            ]);
 
 
-                if (!$response->successful()) {
-                    return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
-                }
-
-                $bybestData = $response->json();
-
-                if (empty($bybestData) || !isset($bybestData['data'])) {
-                    // break; // No more data to process
-                    return response()->json(['message' => 'No more data to process'], 500);
-                }
-
-                $brands = $bybestData['data'];
-
-                // foreach (array_chunk($brands, $batchSize) as $batch) {
-                    // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
-                        foreach ($brands as $item) {
-                            DB::beginTransaction();
-                            try {
-                                \Log::info('Processing product', ['item' => $item]);
-
-                                // Make sure the required fields are available
-                                if (!isset($item['id'])) {
-                                    \Log::error('Product missing id', ['item' => $item]);
-                                    $skippedCount++;
-                                    continue;
-                                }
-
-                                $json_shortdesc = json_decode($item['short_description']);
-                                $json_desc = json_decode($item['long_description']);
-
-                                $shortdesc = (isset($json_shortdesc->en) && isset($json_shortdesc->en) != null) ? $json_shortdesc->en : '';
-                                $shortdesc_al = (isset($json_shortdesc->sq) && isset($json_shortdesc->sq) != null) ? $json_shortdesc->sq : '';
-                                $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
-                                $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
-
-                                $synced_brand = Brand::withTrashed()->updateOrCreate(
-                                    ['bybest_id' => $item['id']],
-                                    [
-                                        'title' => $item['brand_name'],
-                                        'description' => $desc,
-                                        'description_al' => $desc_al,
-                                        'short_description' => $shortdesc,
-                                        'short_description_al' => $shortdesc_al,
-                                        //'logo_path' => 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_color'],
-                                        //'white_logo_path' => 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_white'],
-                                        //'sidebar_logo_path' => 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_sidebar'],
-                                        'venue_id' => $venue->id,
-                                        'url' => $item['brand_url'],
-                                        'total_stock' => 0,
-                                        'parent_id' => null,
-                                        'bybest_id' => $item['id'],
-                                        'keywords' => $item['keywords'],
-                                        'more_info' => $item['more_info'],
-                                        'brand_order_no' => $item['brand_order_no'],
-                                        'status_no' => $item['status_no'],
-                                        'created_at' => $item['created_at'],
-                                        'updated_at' => $item['updated_at'],
-                                        'deleted_at' => $item['deleted_at']
-                                    ]
-                                );
-
-                                // Dispatch job for photo upload
-                                if ($item['brand_logo_color']) {
-
-                                    \Log::info('Dispatching UploadPhotoJob', [
-                                        'brand_id' => $synced_brand->id,
-                                        'photo_url' => $item['brand_logo_color'],
-                                    ]);
-
-                                    UploadPhotoJob::dispatch($synced_brand, 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_color'], 'logo_path', $venue);
-                                }
-                                if ($item['brand_logo_white']) {
-
-                                    \Log::info('Dispatching UploadPhotoJob', [
-                                        'brand_id' => $synced_brand->id,
-                                        'photo_url' => $item['brand_logo_white'],
-                                    ]);
-
-                                    UploadPhotoJob::dispatch($synced_brand, 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_white'], 'white_logo_path', $venue);
-                                }
-                                if ($item['brand_logo_sidebar']) {
-
-                                    \Log::info('Dispatching UploadPhotoJob', [
-                                        'brand_id' => $synced_brand->id,
-                                        'photo_url' => $item['brand_logo_sidebar'],
-                                    ]);
-
-                                    UploadPhotoJob::dispatch($synced_brand, 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_sidebar'], 'sidebar_logo_path', $venue);
-                                }
-                                $processedCount++;
-                                DB::commit();
-                            } catch (\Exception $e) {
-                                $skippedCount++;
-                                DB::rollBack();
-                            }
-                        }
-                    // });
-                // }
-
-                \Log::info("Processed {$processedCount} brands so far.");
-
-                // $page++;
-            } catch (\Throwable $th) {
-                \Log::error('Error in brands sync', [
-                    'error' => $th->getMessage(),
-                    'trace' => $th->getTraceAsString()
-                ]);
-
-                return response()->json([
-                    "message" => "Error in brands sync",
-                    "error" => $th->getMessage()
-                ], 503);
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
             }
-        // } while (count($brands) == $perPage);
+
+            $bybestData = $response->json();
+
+            if (empty($bybestData) || !isset($bybestData['data'])) {
+                // break; // No more data to process
+                return response()->json(['message' => 'No more data to process'], 500);
+            }
+
+            $brands = $bybestData['data'];
+
+            // foreach (array_chunk($brands, $batchSize) as $batch) {
+                // DB::transaction(function () use ($batch, $venue, &$skippedCount, &$processedCount) {
+                    foreach ($brands as $item) {
+                        DB::beginTransaction();
+                        try {
+                            \Log::info('Processing product', ['item' => $item]);
+
+                            // Make sure the required fields are available
+                            if (!isset($item['id'])) {
+                                \Log::error('Product missing id', ['item' => $item]);
+                                $skippedCount++;
+                                continue;
+                            }
+
+                            $json_shortdesc = json_decode($item['short_description']);
+                            $json_desc = json_decode($item['long_description']);
+
+                            $shortdesc = (isset($json_shortdesc->en) && isset($json_shortdesc->en) != null) ? $json_shortdesc->en : '';
+                            $shortdesc_al = (isset($json_shortdesc->sq) && isset($json_shortdesc->sq) != null) ? $json_shortdesc->sq : '';
+                            $desc = (isset($json_desc->en) && isset($json_desc->en) != null) ? $json_desc->en : '';
+                            $desc_al = (isset($json_desc->sq) && isset($json_desc->sq) != null) ? $json_desc->sq : '';
+
+                            $synced_brand = Brand::withTrashed()->updateOrCreate(
+                                ['bybest_id' => $item['id']],
+                                [
+                                    'title' => $item['brand_name'],
+                                    'description' => $desc,
+                                    'description_al' => $desc_al,
+                                    'short_description' => $shortdesc,
+                                    'short_description_al' => $shortdesc_al,
+                                    //'logo_path' => 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_color'],
+                                    //'white_logo_path' => 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_white'],
+                                    //'sidebar_logo_path' => 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_sidebar'],
+                                    'venue_id' => $venue->id,
+                                    'url' => $item['brand_url'],
+                                    'total_stock' => 0,
+                                    'parent_id' => null,
+                                    'bybest_id' => $item['id'],
+                                    'keywords' => $item['keywords'],
+                                    'more_info' => $item['more_info'],
+                                    'brand_order_no' => $item['brand_order_no'],
+                                    'status_no' => $item['status_no'],
+                                    'created_at' => $item['created_at'],
+                                    'updated_at' => $item['updated_at'],
+                                    'deleted_at' => $item['deleted_at']
+                                ]
+                            );
+
+                            // Dispatch job for photo upload
+                            if ($item['brand_logo_color']) {
+
+                                \Log::info('Dispatching UploadPhotoJob', [
+                                    'brand_id' => $synced_brand->id,
+                                    'photo_url' => $item['brand_logo_color'],
+                                ]);
+
+                                UploadPhotoJob::dispatch($synced_brand, 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_color'], 'logo_path', $venue);
+                            }
+                            if ($item['brand_logo_white']) {
+
+                                \Log::info('Dispatching UploadPhotoJob', [
+                                    'brand_id' => $synced_brand->id,
+                                    'photo_url' => $item['brand_logo_white'],
+                                ]);
+
+                                UploadPhotoJob::dispatch($synced_brand, 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_white'], 'white_logo_path', $venue);
+                            }
+                            if ($item['brand_logo_sidebar']) {
+
+                                \Log::info('Dispatching UploadPhotoJob', [
+                                    'brand_id' => $synced_brand->id,
+                                    'photo_url' => $item['brand_logo_sidebar'],
+                                ]);
+
+                                UploadPhotoJob::dispatch($synced_brand, 'https://admin.bybest.shop/storage/brands/' . $item['brand_logo_sidebar'], 'sidebar_logo_path', $venue);
+                            }
+                            $processedCount++;
+                            DB::commit();
+                        } catch (\Exception $e) {
+                            $skippedCount++;
+                            DB::rollBack();
+                        }
+                    }
+                // });
+            // }
+
+            \Log::info("Processed {$processedCount} brands so far.");
+
+            // $page++;
+        } catch (\Throwable $th) {
+            \Log::error('Error in brands sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                "message" => "Error in brands sync",
+                "error" => $th->getMessage()
+            ], 503);
+        }
+
 
         return response()->json([
             'message' => 'brands sync completed successfully',
@@ -846,7 +835,6 @@ class InventorySyncController extends Controller
         }
         $page = $request->input('page', 1);
         $perPage = $request->input('per_page', 100);
-        $batchSize = $request->input('batch_size', 50);
         $skippedCount = 0;
         $processedCount = 0;
 
@@ -2331,6 +2319,9 @@ class InventorySyncController extends Controller
     /**
      * Trigger a parallel product sync operation
      */
+    /**
+     * Trigger a parallel product sync operation
+     */
     public function parallelProductSync(Request $request)
     {
         $venue = $this->venueService->adminAuthCheck();
@@ -2338,49 +2329,49 @@ class InventorySyncController extends Controller
             return response()->json(['message' => 'Venue not found.'], 500);
         }
 
-        // Get sync parameters
-        $totalPages = $request->input('total_pages', null);
-        $concurrency = $request->input('concurrency', 5); // Number of parallel jobs
         $perPage = $request->input('per_page', 1000);
         $batchId = uniqid('sync_');
 
         try {
-            // If total pages not provided, get it from the API
-            if (!$totalPages) {
-                $response = Http::withHeaders([
-                    'X-App-Key' => $this->bybestApiKey
-                ])->get($this->bybestApiUrl . 'products-sync', [
-                    'page' => 1,
-                    'per_page' => 1 // We just need pagination info
-                ]);
+            // Get pagination info using the same per_page that will be used for processing
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'products-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
 
-                if (!$response->successful()) {
-                    return response()->json(['message' => 'Failed to fetch pagination data from API'], 500);
-                }
-
-                $data = $response->json();
-                $totalPages = $data['total_pages'] ?? 1;
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
             }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'];
+
+            Log::info("Starting parallel sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
 
             // Create a sync record to track progress
             $syncRecord = InventorySync::create([
                 'name' => 'Product Sync ' . date('Y-m-d H:i:s'),
-                'slug' => 'product-sync-' . $batchId, // Generate a unique slug
+                'slug' => 'product-sync-' . $batchId,
                 'type' => 'product',
                 'status' => 'processing',
-                'total_pages' => $totalPages,
+                'total_pages' => $totalPages, // Set the correct page count
                 'processed_pages' => 0,
                 'batch_id' => $batchId,
                 'started_at' => now(),
             ]);
 
-            // Associate with venue - making sure to use the right pivot attributes
+            // Associate with venue
             $syncRecord->venues()->attach($venue->id, [
                 'status' => 'processing',
                 'last_sync_at' => now()
             ]);
 
-            // Dispatch jobs in batches to limit concurrency
+            // Dispatch one job per page (around 12 jobs for 11,143 products at 1,000 per page)
             $dispatchedCount = 0;
 
             for ($page = 1; $page <= $totalPages; $page++) {
@@ -2394,31 +2385,23 @@ class InventorySyncController extends Controller
                 );
 
                 $dispatchedCount++;
-
-                // Update progress after each batch
-                if ($dispatchedCount % 10 == 0 || $page == $totalPages) {
-                    \Log::info("Dispatched sync jobs", [
-                        'batch_id' => $batchId,
-                        'dispatched' => $dispatchedCount,
-                        'total_pages' => $totalPages
-                    ]);
-                }
             }
 
             // Create a final job to mark sync as complete
             FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
-                ->delay(now()->addMinutes(5)); // Give time for all sync jobs to complete
+                ->delay(now()->addMinutes(5));
 
             return response()->json([
                 'message' => 'Parallel product sync initiated successfully',
                 'batch_id' => $batchId,
+                'per_page' => $perPage,
                 'total_pages' => $totalPages,
                 'jobs_dispatched' => $dispatchedCount,
                 'sync_id' => $syncRecord->id
             ], 200);
 
         } catch (\Throwable $th) {
-            \Log::error('Error initiating parallel sync', [
+            Log::error('Error initiating parallel sync', [
                 'error' => $th->getMessage(),
                 'trace' => $th->getTraceAsString()
             ]);
@@ -2462,5 +2445,766 @@ class InventorySyncController extends Controller
                 $syncRecord->started_at->diffInSeconds($syncRecord->completed_at) :
                 ($syncRecord->started_at ? now()->diffInSeconds($syncRecord->started_at) : 0)
         ], 200);
+    }
+
+
+    /**
+     * Trigger a parallel sync operation for product variants
+     */
+    public function parallelProductVariantsSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'productvariation-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product variants sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Variants Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-variants-sync-' . $batchId,
+                'type' => 'product-variants',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductVariantSyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product variants sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product variants sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product variants sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger a parallel sync operation for product attributes
+     */
+    public function parallelProductAttributesSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'productattr-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product attributes sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Attributes Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-attributes-sync-' . $batchId,
+                'type' => 'product-attributes',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductAttributeSyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product attributes sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product attributes sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product attributes sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger a parallel sync operation for product variant attributes
+     */
+    public function parallelProductVariantAttributesSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'product-variant-attributes', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product variant attributes sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Variant Attributes Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-variant-attributes-sync-' . $batchId,
+                'type' => 'product-variant-attributes',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductVariantAttributeSyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product variant attributes sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product variant attributes sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product variant attributes sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger a parallel sync operation for product groups
+     */
+    public function parallelProductGroupsSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'productgroups-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product groups sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Groups Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-groups-sync-' . $batchId,
+                'type' => 'product-groups',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductGroupSyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product groups sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product groups sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product groups sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger a parallel sync operation for product categories
+     */
+    public function parallelProductCategoriesSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'productcategory-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product categories sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Categories Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-categories-sync-' . $batchId,
+                'type' => 'product-categories',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductCategorySyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product categories sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product categories sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product categories sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger a parallel sync operation for product collections
+     */
+    public function parallelProductCollectionsSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'productcollection-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product collections sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Collections Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-collections-sync-' . $batchId,
+                'type' => 'product-collections',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductCollectionSyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product collections sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product collections sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product collections sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger a parallel sync operation for product gallery
+     */
+    public function parallelProductGallerySync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'productgallery-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product gallery sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Gallery Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-gallery-sync-' . $batchId,
+                'type' => 'product-gallery',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductGallerySyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product gallery sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product gallery sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product gallery sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Trigger a parallel sync operation for product stock
+     */
+    public function parallelProductStockSync(Request $request)
+    {
+        $venue = $this->venueService->adminAuthCheck();
+        if (!@$venue->id) {
+            return response()->json(['message' => 'Venue not found.'], 500);
+        }
+
+        $perPage = $request->input('per_page', 1000);
+        $batchId = uniqid('sync_');
+
+        try {
+            // Get pagination info
+            $response = Http::withHeaders([
+                'X-App-Key' => $this->bybestApiKey
+            ])->get($this->bybestApiUrl . 'product-stock-sync', [
+                'page' => 1,
+                'per_page' => $perPage
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json(['message' => 'Failed to fetch data from ByBest API'], 500);
+            }
+
+            $data = $response->json();
+            $totalPages = $data['total_pages'] ?? 1;
+
+            Log::info("Starting parallel product stock sync", [
+                'per_page' => $perPage,
+                'total_pages' => $totalPages
+            ]);
+
+            // Create a sync record to track progress
+            $syncRecord = InventorySync::create([
+                'name' => 'Product Stock Sync ' . date('Y-m-d H:i:s'),
+                'slug' => 'product-stock-sync-' . $batchId,
+                'type' => 'product-stock',
+                'status' => 'processing',
+                'total_pages' => $totalPages,
+                'processed_pages' => 0,
+                'batch_id' => $batchId,
+                'started_at' => now(),
+            ]);
+
+            // Associate with venue
+            $syncRecord->venues()->attach($venue->id, [
+                'status' => 'processing',
+                'last_sync_at' => now()
+            ]);
+
+            // Dispatch one job per page
+            $dispatchedCount = 0;
+
+            for ($page = 1; $page <= $totalPages; $page++) {
+                ProductStockSyncJob::dispatch(
+                    $page,
+                    $perPage,
+                    $venue->id,
+                    $this->bybestApiUrl,
+                    $this->bybestApiKey,
+                    $batchId
+                );
+
+                $dispatchedCount++;
+            }
+
+            // Create a final job to mark sync as complete
+            FinalizeSyncJob::dispatch($batchId, $syncRecord->id)
+                ->delay(now()->addMinutes(5))
+                ->onQueue('finalize-sync');
+
+            return response()->json([
+                'message' => 'Parallel product stock sync initiated successfully',
+                'batch_id' => $batchId,
+                'per_page' => $perPage,
+                'total_pages' => $totalPages,
+                'jobs_dispatched' => $dispatchedCount,
+                'sync_id' => $syncRecord->id
+            ], 200);
+
+        } catch (\Throwable $th) {
+            Log::error('Error initiating parallel product stock sync', [
+                'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Error initiating parallel product stock sync',
+                'error' => $th->getMessage()
+            ], 500);
+        }
     }
 }

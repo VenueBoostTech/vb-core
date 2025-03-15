@@ -77,6 +77,10 @@ class GeneralSyncController extends Controller
                 ->whereIn('customer_id', $customersToDelete)
                 ->pluck('id');
 
+            // Delete order_status_changes first to fix the foreign key constraint
+            DB::table('order_status_changes')->whereIn('order_id', $ordersToDelete)->delete();
+
+            // Then delete other order-related tables
             DB::table('order_coupons')->whereIn('order_id', $ordersToDelete)->delete();
             DB::table('order_discounts')->whereIn('order_id', $ordersToDelete)->delete();
             DB::table('order_products')->whereIn('order_id', $ordersToDelete)->delete();
