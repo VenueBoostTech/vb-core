@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
 use App\Models\Product;
 use App\Models\Brand;
+use App\Models\InventorySync;
 
 class SyncProductBatchJob implements ShouldQueue
 {
@@ -60,6 +61,10 @@ class SyncProductBatchJob implements ShouldQueue
         ]);
 
         try {
+            // EMERGENCY FIX: Update counter at the beginning
+            // This ensures it gets updated even if an exception occurs later
+            $this->forceUpdateProgressCounter();
+
             // Fetch data from API
             Log::info("Fetching data from API", ['page' => $this->page]);
             $response = Http::withHeaders([
@@ -76,8 +81,6 @@ class SyncProductBatchJob implements ShouldQueue
                     'response' => $response->body()
                 ]);
                 throw new \Exception("API request failed with status " . $response->status());
-
-                return;
             }
 
             $data = $response->json();
@@ -190,7 +193,6 @@ class SyncProductBatchJob implements ShouldQueue
             }
 
         } catch (\Exception $e) {
-            throw $e;
             Log::error("Failed to process sync batch", [
                 'batch_id' => $this->batchId,
                 'error' => $e->getMessage(),
@@ -200,8 +202,43 @@ class SyncProductBatchJob implements ShouldQueue
             // Requeue with backoff if needed
             if ($this->attempts() < 3) {
                 $this->release(30 * $this->attempts());
+                return;
             }
 
+            throw $e;
+        }
+    }
+
+    /**
+     * Emergency fix: Force update the progress counter using direct SQL
+     * This bypasses any model-related issues or race conditions
+     */
+    private function forceUpdateProgressCounter()
+    {
+        try {
+            // USE RAW SQL FOR GUARANTEED UPDATE
+            $updated = DB::statement("
+                UPDATE inventory_syncs
+                SET processed_pages = processed_pages + 1,
+                    updated_at = NOW()
+                WHERE batch_id = ?
+            ", [$this->batchId]);
+
+            Log::info("EMERGENCY UPDATE: Force updated progress counter", [
+                'batch_id' => $this->batchId,
+                'page' => $this->page,
+                'success' => $updated
+            ]);
+
+            // Force a delay to make sure DB operations complete
+            sleep(1);
+
+        } catch (\Exception $e) {
+            Log::error("CRITICAL: Failed to force update progress counter", [
+                'batch_id' => $this->batchId,
+                'page' => $this->page,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 

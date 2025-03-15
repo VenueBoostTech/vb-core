@@ -472,6 +472,16 @@ Route::middleware(['admin_api_key'])->prefix('v1')->group(function () {
             Route::post('/parallel-product-sync','App\Http\Controllers\v3\InventorySyncController@parallelProductSync');
             Route::get('/sync-status', 'App\Http\Controllers\v3\InventorySyncController@checkSyncStatus');
 
+            Route::post('/parallel-sync/products', 'App\Http\Controllers\v3\InventorySyncController@parallelProductSync');
+            Route::post('/parallel-sync/variants', 'App\Http\Controllers\v3\InventorySyncController@parallelProductVariantsSync');
+            Route::post('/parallel-sync/attributes', 'App\Http\Controllers\v3\InventorySyncController@parallelProductAttributesSync');
+            Route::post('/parallel-sync/variant-attributes', 'App\Http\Controllers\v3\InventorySyncController@parallelProductVariantAttributesSync');
+            Route::post('/parallel-sync/groups', 'App\Http\Controllers\v3\InventorySyncController@parallelProductGroupsSync');
+            Route::post('/parallel-sync/categories', 'App\Http\Controllers\v3\InventorySyncController@parallelProductCategoriesSync');
+            Route::post('/parallel-sync/collections', 'App\Http\Controllers\v3\InventorySyncController@parallelProductCollectionsSync');
+            Route::post('/parallel-sync/gallery', 'App\Http\Controllers\v3\InventorySyncController@parallelProductGallerySync');
+            Route::post('/parallel-sync/stock', 'App\Http\Controllers\v3\InventorySyncController@parallelProductStockSync');
+
         });
 
         Route::group(['prefix' => 'venue'], function () {
